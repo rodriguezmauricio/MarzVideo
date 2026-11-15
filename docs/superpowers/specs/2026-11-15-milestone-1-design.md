@@ -1,6 +1,6 @@
 # Marz Recorder — Milestone 1 Design
 
-**Status:** DRAFT — not yet approved by Mauricio. Nothing gets scaffolded until he approves it.
+**Status:** APPROVED by Mauricio on 2026-11-15, as written. Next: implementation plan.
 **Date:** 2026-11-15
 **Full product spec:** `docs/product-spec.md`
 

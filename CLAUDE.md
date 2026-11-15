@@ -11,14 +11,14 @@ Windows-first screen recorder + non-destructive editor (Tauri 2, Rust, React/TS)
 ## Current status
 
 - Repo contains docs only. No code, no scaffold yet.
-- The Milestone 1 design is a **draft awaiting Mauricio's approval**.
+- The Milestone 1 design is **approved** (2026-11-15). Work now happens locally on Windows
+  (`C:\Users\conta\source\repos\MarzVideo`); Node, pnpm, FFmpeg, VS C++ tools and Rust are installed.
 
 ## Next steps (in order)
 
-1. Walk Mauricio through the M1 design; get approval or changes.
-2. Write the implementation plan (superpowers:writing-plans).
-3. On Windows: spike capture first (design doc, "Technical calls" 3–5) before building on it.
-4. Scaffold the monorepo and start M1 build order.
+1. Write the implementation plan (superpowers:writing-plans).
+2. On Windows: spike capture first (design doc, "Technical calls" 3–5) before building on it.
+3. Scaffold the monorepo and start M1 build order.
 
 ## Rules
 

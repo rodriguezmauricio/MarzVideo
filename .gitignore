@@ -1,9 +1,6 @@
-node_modules/
-dist/
+node_modules
+dist
+samples/
 target/
-*.marz/
-!fixtures/**/*.marz/
-.env
-.env.*
-.DS_Store
-Thumbs.db
+.superpowers/
+*.log
