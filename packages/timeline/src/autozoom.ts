@@ -1,4 +1,4 @@
-import type { MarzEvent, Zoom } from "@marz/format";
+import type { ClickEvent, MarzEvent, Zoom } from "@marz/format";
 import { lockAspect } from "./zoom";
 
 export type AutoZoomOptions = {
@@ -24,7 +24,7 @@ export function suggestZooms(
   const minGapUs = opts.minGapUs ?? 800_000;
 
   const downs = events
-    .filter((e) => e.type === "click" && e.state === "down")
+    .filter((e): e is ClickEvent => e.type === "click" && e.state === "down")
     .sort((a, b) => a.tUs - b.tUs);
 
   const clusters: (typeof downs)[] = [];
