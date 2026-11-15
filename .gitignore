@@ -1,0 +1,9 @@
+node_modules/
+dist/
+target/
+*.marz/
+!fixtures/**/*.marz/
+.env
+.env.*
+.DS_Store
+Thumbs.db
