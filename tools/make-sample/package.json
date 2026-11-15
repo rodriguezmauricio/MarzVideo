@@ -1,0 +1,11 @@
+{
+  "name": "@marz/make-sample",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "make-sample": "tsx make-sample.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": { "@marz/format": "workspace:*" }
+}
