@@ -69,3 +69,45 @@ describe("frameAt", () => {
     expect(sy + sh).toBeLessThanOrEqual(1000);
   });
 });
+
+describe("frameAt letterboxing (source aspect differs from output aspect)", () => {
+  const wide = (zooms: Zoom[] = []) =>
+    parseProject({
+      version: 1, id: "p", name: "n", createdAt: "2026-11-15T00:00:00Z", durationUs: 10_000_000,
+      source: { width: 2560, height: 1600 , fps: 30 },
+      tracks: { screen: { file: "screen.mp4", offsetUs: 0 } },
+      output: { width: 1920, height: 1080, fps: 30 },
+      edits: { zooms, cuts: [], cursor: { hidden: false }, clicks: { effect: "none" } },
+    });
+
+  test("a 16:10 source with no zoom is pillarboxed, not stretched", () => {
+    const f = frameAt(wide(), [], 1_000_000);
+    expect(f.dstRect).toEqual({ dx: 96, dy: 0, dw: 1728, dh: 1080 });
+  });
+
+  test("a source with the output aspect fills the output", () => {
+    expect(frameAt(project(), [], 1_000_000).dstRect).toEqual({ dx: 0, dy: 0, dw: 1000, dh: 500 });
+  });
+
+  test("the cursor is placed inside the letterboxed picture", () => {
+    const f = frameAt(wide(), [cur(1, 1280, 800)], 1_000_000);
+    expect(f.cursor!.x).toBeCloseTo(960);
+    expect(f.cursor!.y).toBeCloseTo(540);
+    const corner = frameAt(wide(), [cur(1, 0, 0)], 1_000_000);
+    expect(corner.cursor).toEqual({ x: 96, y: 0 });
+  });
+
+  test("a 16:9-wide source is letterboxed top and bottom", () => {
+    const ultra = parseProject({
+      version: 1, id: "p", name: "n", createdAt: "2026-11-15T00:00:00Z", durationUs: 1,
+      source: { width: 3440, height: 1000, fps: 30 },
+      tracks: { screen: { file: "s.mp4", offsetUs: 0 } },
+      output: { width: 1920, height: 1080, fps: 30 },
+    });
+    const { dx, dy, dw, dh } = frameAt(ultra, [], 0).dstRect;
+    expect(dx).toBe(0);
+    expect(dw).toBe(1920);
+    expect(dy).toBeCloseTo((1080 - dh) / 2);
+    expect(dw / dh).toBeCloseTo(3.44);
+  });
+});

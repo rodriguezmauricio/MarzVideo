@@ -1,6 +1,12 @@
-node_modules
-dist
-samples/
+node_modules/
+dist/
 target/
+*.marz/
+!fixtures/**/*.marz/
+.env
+.env.*
+.DS_Store
+Thumbs.db
+samples/
 .superpowers/
 *.log

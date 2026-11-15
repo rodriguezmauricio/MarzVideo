@@ -15,6 +15,7 @@ export function createHttpStorage(projectName: string): ProjectStorage {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: text,
+        keepalive: true, // lets the final save on page close finish
       });
       if (!res.ok) throw new Error(`Could not save project.json (${res.status})`);
     },

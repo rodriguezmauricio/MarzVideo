@@ -18,6 +18,8 @@ export function App() {
   const project = useEditorStore((s) => s.project);
   const playheadUs = useEditorStore((s) => s.playheadUs);
   const load = useEditorStore((s) => s.load);
+  const warning = useEditorStore((s) => s.warning);
+  const saveStatus = useEditorStore((s) => s.saveStatus);
 
   useEffect(() => {
     void load(new URLSearchParams(location.search).get("project") ?? "demo");
@@ -66,7 +68,14 @@ export function App() {
         <span className="tabular-nums text-zinc-400" data-testid="clock">
           {fmt(playheadUs)} / {fmt(project.durationUs)}
         </span>
+        <span
+          data-testid="save-status"
+          className={`ml-auto text-xs ${saveStatus === "error" ? "text-red-400" : "text-zinc-500"}`}
+        >
+          {{ saved: "All changes saved", unsaved: "Unsaved changes", saving: "Saving...", error: "Save failed, retrying" }[saveStatus]}
+        </span>
       </header>
+      {warning && <div className="border-b border-amber-900 bg-amber-950 px-4 py-1.5 text-xs text-amber-200">{warning}</div>}
       <Toolbar />
       <div className="flex min-h-0 flex-1">
         <Preview />

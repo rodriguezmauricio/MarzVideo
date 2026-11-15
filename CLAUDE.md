@@ -10,15 +10,28 @@ Windows-first screen recorder + non-destructive editor (Tauri 2, Rust, React/TS)
 
 ## Current status
 
-- Repo contains docs only. No code, no scaffold yet.
-- The Milestone 1 design is **approved** (2026-11-15). Work now happens locally on Windows
+- The Milestone 1 design is **approved** (2026-11-15). Work happens locally on Windows
   (`C:\Users\conta\source\repos\MarzVideo`); Node, pnpm, FFmpeg, VS C++ tools and Rust are installed.
+- **Done:** M1 build order steps 1 to 3 (plan: `docs/superpowers/plans/2026-11-15-m1-format-and-editor.md`).
+  `packages/format`, `packages/timeline`, `packages/compositor`, `tools/make-sample`, and the browser
+  editor in `apps/desktop` (synced playback, timeline, zoom and cut blocks, auto zoom, undo/redo, autosave).
+  Checked in a browser (Edge via Playwright) against the sample project.
+- **Not done:** capture engine, Tauri shell, recorder toolbar, export (steps 4 to 6). No Rust code exists yet.
+
+## Run it
+
+```
+pnpm install
+pnpm sample                          # writes samples/demo.marz (gitignored)
+pnpm --filter @marz/desktop dev      # open http://localhost:5173/?project=demo
+pnpm test && pnpm typecheck
+```
 
 ## Next steps (in order)
 
-1. Write the implementation plan (superpowers:writing-plans).
-2. On Windows: spike capture first (design doc, "Technical calls" 3–5) before building on it.
-3. Scaffold the monorepo and start M1 build order.
+1. On Windows: spike capture first (design doc, "Technical calls" 3 to 5) before building on it.
+2. Write the plan for the capture engine, then Tauri shell, recorder toolbar and export.
+3. Known gaps from the final review, to schedule: see "Deferred" in `docs/LEARNINGS.md`.
 
 ## Rules
 

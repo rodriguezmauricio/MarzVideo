@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef } from "react";
 import { drawFrame, frameAt } from "@marz/compositor";
 import { keptSegments } from "@marz/timeline";
 import { useEditorStore } from "../state/editorStore";
-import { nextPlaybackTime } from "../playback/clock";
+import { nextPlaybackTime, playbackEnded, startTimeForPlay } from "../playback/clock";
 import { ZoomOverlay } from "./ZoomOverlay";
 
 const AUDIO_DRIFT_S = 0.04;
@@ -77,29 +77,29 @@ export function Preview() {
       return;
     }
 
-    const start = nextPlaybackTime(live.current.segs, useEditorStore.getState().playheadUs);
+    const start = startTimeForPlay(live.current.segs, useEditorStore.getState().playheadUs);
     if (start === null) {
       useEditorStore.getState().pause();
       return;
     }
     seekMedia(start);
-    void video.play();
+    void video.play().catch(() => useEditorStore.getState().pause());
     if (audio && mic) void audio.play().catch(() => {});
 
     let raf = 0;
     const loop = () => {
       const srcUs = Math.round(video.currentTime * 1e6) + screenOffset;
-      const next = nextPlaybackTime(live.current.segs, srcUs);
-      if (next === null) {
+      if (playbackEnded(live.current.segs, srcUs, video.ended)) {
         useEditorStore.getState().pause();
         useEditorStore.getState().seek(live.current.project.durationUs);
         return;
       }
+      const next = nextPlaybackTime(live.current.segs, srcUs) ?? srcUs;
       if (next !== srcUs) seekMedia(next);
       if (audio && mic) {
         const want = (next - mic.offsetUs) / 1e6;
-        if (want >= 0 && audio.paused && !video.paused) void audio.play().catch(() => {});
-        if (want >= 0 && Math.abs(audio.currentTime - want) > AUDIO_DRIFT_S) audio.currentTime = want;
+        if (want >= 0 && !audio.ended && audio.paused && !video.paused) void audio.play().catch(() => {});
+        if (want >= 0 && !audio.ended && Math.abs(audio.currentTime - want) > AUDIO_DRIFT_S) audio.currentTime = want;
       }
       useEditorStore.getState().tick(next);
       draw();

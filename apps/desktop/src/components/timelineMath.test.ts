@@ -30,3 +30,19 @@ describe("timelineMath", () => {
     expect(snapUs(42, [], 10_000)).toBe(42);
   });
 });
+
+import { handleWidthPx, timelineWidthPx } from "./timelineMath";
+
+describe("timeline scale", () => {
+  test("handle width shrinks on small blocks so the middle stays grabbable", () => {
+    expect(handleWidthPx(200)).toBe(8);
+    expect(handleWidthPx(12)).toBe(4);
+    expect(handleWidthPx(4)).toBe(1);
+  });
+  test("timeline width is the viewport times the zoom factor, clamped to 1..60", () => {
+    expect(timelineWidthPx(1000, 1)).toBe(1000);
+    expect(timelineWidthPx(1000, 4)).toBe(4000);
+    expect(timelineWidthPx(1000, 0.2)).toBe(1000);
+    expect(timelineWidthPx(1000, 500)).toBe(60_000);
+  });
+});

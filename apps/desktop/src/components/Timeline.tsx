@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { updateCut, updateZoom } from "@marz/timeline";
 import { MIN_US } from "../state/actions";
 import { useEditorStore, type Selection } from "../state/editorStore";
-import { pxToUs, snapUs, usToPx } from "./timelineMath";
+import { handleWidthPx, MAX_TIMELINE_ZOOM, pxToUs, snapUs, timelineWidthPx, usToPx } from "./timelineMath";
 
 type Kind = "zoom" | "cut";
 type Mode = "move" | "start" | "end";
@@ -29,7 +29,10 @@ export function Timeline() {
   const apply = useEditorStore((s) => s.apply);
 
   const trackRef = useRef<HTMLDivElement>(null);
-  const [width, setWidth] = useState(800);
+  const viewportRef = useRef<HTMLDivElement>(null);
+  const [viewport, setViewport] = useState(800);
+  const [zoomFactor, setZoomFactor] = useState(1);
+  const playing = useEditorStore((s) => s.playing);
   type Draft = Range & { kind: Kind; id: string };
   const [draft, setDraftState] = useState<Draft | null>(null);
   // Latest draft in a ref too: pointerup can arrive before React re-renders after the last pointermove.
@@ -42,17 +45,41 @@ export function Timeline() {
   const scrubbing = useRef(false);
 
   useEffect(() => {
-    const el = trackRef.current;
+    const el = viewportRef.current;
     if (!el) return;
-    const ro = new ResizeObserver(() => setWidth(el.clientWidth));
+    const ro = new ResizeObserver(() => setViewport(el.clientWidth));
     ro.observe(el);
-    setWidth(el.clientWidth);
+    setViewport(el.clientWidth);
     return () => ro.disconnect();
   }, []);
 
   const D = project.durationUs;
+  const width = timelineWidthPx(viewport, zoomFactor);
   const pps = width / (D / 1e6);
   const x = (us: number) => usToPx(us, pps);
+
+  // While playing, keep the playhead in view when the timeline is zoomed in.
+  useEffect(() => {
+    const el = viewportRef.current;
+    if (!playing || !el) return;
+    const px = usToPx(playheadUs, pps);
+    if (px < el.scrollLeft || px > el.scrollLeft + el.clientWidth - 20) el.scrollLeft = px - el.clientWidth / 3;
+  }, [playheadUs, playing, pps]);
+
+  // Ctrl+wheel zooms the timeline. Native listener: React's onWheel is passive and cannot preventDefault.
+  useEffect(() => {
+    const el = viewportRef.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      if (!e.ctrlKey) return;
+      e.preventDefault();
+      setZoomFactor((z) => Math.min(MAX_TIMELINE_ZOOM, Math.max(1, z * (e.deltaY < 0 ? 1.25 : 1 / 1.25))));
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  }, []);
+
+  const zoomBy = (f: number) => setZoomFactor((z) => Math.min(MAX_TIMELINE_ZOOM, Math.max(1, z * f)));
   const rangeOf = (kind: Kind, id: string, r: Range): Range =>
     draft && draft.kind === kind && draft.id === id ? draft : r;
 
@@ -113,20 +140,35 @@ export function Timeline() {
   const ticks: number[] = [];
   for (let s = 0; s <= D / 1e6; s += stepS) ticks.push(s);
 
-  const Handle = ({ kind, id, mode, orig }: { kind: Kind; id: string; mode: Mode; orig: Range }) => (
+  // A plain render helper, not a component: a component defined here would remount on every render and drop the drag.
+  const handle = (kind: Kind, id: string, mode: Mode, orig: Range, blockPx: number) => (
     <div
+      key={mode}
+      data-testid={`handle-${kind}-${id}-${mode}`}
       onPointerDown={(e) => onBlockDown(e, kind, id, mode, orig)}
       onPointerMove={onBlockMove}
       onPointerUp={onBlockUp}
-      className={`absolute top-0 h-full w-2 cursor-ew-resize ${mode === "start" ? "left-0" : "right-0"}`}
+      className={`absolute top-0 h-full cursor-ew-resize ${mode === "start" ? "left-0" : "right-0"}`}
+      style={{ width: handleWidthPx(blockPx) }}
     />
   );
 
   return (
     <div className="shrink-0 border-t border-zinc-800 bg-zinc-950 px-4 pb-3 pt-2 select-none">
+      <div className="mb-1 flex items-center justify-end gap-1 text-xs text-zinc-400">
+        <span>Timeline zoom</span>
+        <button type="button" title="Zoom timeline out (Ctrl+wheel)" aria-label="Zoom timeline out"
+          onClick={() => zoomBy(1 / 1.5)} className="h-6 w-6 rounded bg-zinc-800 hover:bg-zinc-700">-</button>
+        <button type="button" title="Zoom timeline in (Ctrl+wheel)" aria-label="Zoom timeline in"
+          onClick={() => zoomBy(1.5)} className="h-6 w-6 rounded bg-zinc-800 hover:bg-zinc-700">+</button>
+        <button type="button" title="Fit the whole recording" aria-label="Fit timeline"
+          onClick={() => setZoomFactor(1)} className="h-6 rounded bg-zinc-800 px-2 hover:bg-zinc-700">Fit</button>
+      </div>
+      <div ref={viewportRef} className="overflow-x-auto">
       <div
         ref={trackRef}
         className="relative"
+        style={{ width }}
         onPointerDown={(e) => {
           select(null);
           scrubbing.current = true;
@@ -136,7 +178,7 @@ export function Timeline() {
         onPointerMove={(e) => scrubbing.current && seekFromEvent(e.clientX)}
         onPointerUp={() => (scrubbing.current = false)}
       >
-        <div className="relative h-6 border-b border-zinc-800 text-[10px] text-zinc-500">
+        <div className="relative h-6 overflow-hidden border-b border-zinc-800 text-[10px] text-zinc-500">
           {ticks.map((s) => (
             <div key={s} className="absolute top-0 h-full border-l border-zinc-700 pl-1" style={{ left: x(s * 1e6) }}>
               {s}s
@@ -159,8 +201,8 @@ export function Timeline() {
                 style={{ left: x(r.startUs), width: Math.max(4, x(r.endUs - r.startUs)) }}
               >
                 <span className="pointer-events-none px-2">Zoom</span>
-                <Handle kind="zoom" id={z.id} mode="start" orig={z} />
-                <Handle kind="zoom" id={z.id} mode="end" orig={z} />
+                {handle("zoom", z.id, "start", z, x(r.endUs - r.startUs))}
+                {handle("zoom", z.id, "end", z, x(r.endUs - r.startUs))}
               </div>
             );
           })}
@@ -181,8 +223,8 @@ export function Timeline() {
                 style={{ left: x(r.startUs), width: Math.max(4, x(r.endUs - r.startUs)), background: HATCH }}
               >
                 <span className="pointer-events-none px-2">Cut</span>
-                <Handle kind="cut" id={c.id} mode="start" orig={c} />
-                <Handle kind="cut" id={c.id} mode="end" orig={c} />
+                {handle("cut", c.id, "start", c, x(r.endUs - r.startUs))}
+                {handle("cut", c.id, "end", c, x(r.endUs - r.startUs))}
               </div>
             );
           })}
@@ -195,6 +237,7 @@ export function Timeline() {
         >
           <div className="-ml-1 h-2 w-2 rounded-full bg-white" />
         </div>
+      </div>
       </div>
     </div>
   );

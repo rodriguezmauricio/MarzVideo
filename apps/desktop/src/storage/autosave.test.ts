@@ -42,3 +42,33 @@ test("a failing save does not break later saves", async () => {
   await vi.advanceTimersByTimeAsync(100);
   expect(save).toHaveBeenCalledTimes(2);
 });
+
+test("a failed save stays pending so flush retries it", async () => {
+  const save = vi.fn().mockRejectedValueOnce(new Error("disk")).mockResolvedValue(undefined);
+  const a = createAutosave(save, 100);
+  a.schedule();
+  await vi.advanceTimersByTimeAsync(100);
+  expect(save).toHaveBeenCalledTimes(1);
+  await a.flush();
+  expect(save).toHaveBeenCalledTimes(2);
+});
+
+test("a failed save is retried automatically", async () => {
+  const save = vi.fn().mockRejectedValueOnce(new Error("disk")).mockResolvedValue(undefined);
+  const a = createAutosave(save, 100);
+  a.schedule();
+  await vi.advanceTimersByTimeAsync(100);
+  await vi.advanceTimersByTimeAsync(100);
+  expect(save).toHaveBeenCalledTimes(2);
+});
+
+test("status goes saving, saved, and error on failure", async () => {
+  const seen: string[] = [];
+  const save = vi.fn().mockRejectedValueOnce(new Error("disk")).mockResolvedValue(undefined);
+  const a = createAutosave(save, 100, (s) => seen.push(s));
+  a.schedule();
+  await vi.advanceTimersByTimeAsync(100);
+  expect(seen).toEqual(["unsaved", "saving", "error"]);
+  await vi.advanceTimersByTimeAsync(100);
+  expect(seen).toEqual(["unsaved", "saving", "error", "saving", "saved"]);
+});

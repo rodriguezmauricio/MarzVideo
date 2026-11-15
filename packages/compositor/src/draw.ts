@@ -8,7 +8,10 @@ export function drawFrame(
   out: { width: number; height: number },
 ): void {
   const { sx, sy, sw, sh } = spec.srcRect;
-  ctx.drawImage(source, sx, sy, sw, sh, 0, 0, out.width, out.height);
+  const { dx, dy, dw, dh } = spec.dstRect;
+  ctx.fillStyle = "#000000";
+  ctx.fillRect(0, 0, out.width, out.height);
+  ctx.drawImage(source, sx, sy, sw, sh, dx, dy, dw, dh);
   if (!spec.cursor) return;
 
   const s = out.height / 1080;

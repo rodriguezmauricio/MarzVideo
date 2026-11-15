@@ -15,3 +15,12 @@ export function snapUs(us: number, targets: number[], thresholdUs: number): numb
   }
   return best;
 }
+
+/** Resize-handle width for a block `blockPx` wide: never so big that the middle cannot be grabbed. */
+export const handleWidthPx = (blockPx: number): number => Math.max(1, Math.min(8, Math.floor(blockPx / 3)));
+
+export const MAX_TIMELINE_ZOOM = 60;
+
+/** Full timeline width for a viewport and a zoom factor (1 = whole recording fits). */
+export const timelineWidthPx = (viewportPx: number, zoomFactor: number): number =>
+  viewportPx * Math.min(MAX_TIMELINE_ZOOM, Math.max(1, zoomFactor));

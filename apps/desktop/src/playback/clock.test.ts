@@ -37,3 +37,31 @@ describe("nextPlaybackTime", () => {
     expect(nextPlaybackTime(s, 8_500_000)).toBeNull();
   });
 });
+
+import { playbackEnded, startTimeForPlay } from "./clock";
+
+describe("playbackEnded", () => {
+  const segs = keptSegments(D, [cut("a", 2_000_000, 5_000_000)]);
+  test("ended when the clock is past the last segment", () => {
+    expect(playbackEnded(segs, D, false)).toBe(true);
+  });
+  test("ended when the video element ended even if the clock is short of the duration", () => {
+    expect(playbackEnded(segs, D - 50_000, true)).toBe(true);
+  });
+  test("not ended mid-video", () => {
+    expect(playbackEnded(segs, 1_000_000, false)).toBe(false);
+  });
+});
+
+describe("startTimeForPlay", () => {
+  const segs = keptSegments(D, [cut("a", 0, 1_000_000)]);
+  test("resumes from the playhead when there is more to play", () => {
+    expect(startTimeForPlay(segs, 4_000_000)).toBe(4_000_000);
+  });
+  test("restarts from the first kept time when the playhead is at the end", () => {
+    expect(startTimeForPlay(segs, D)).toBe(1_000_000);
+  });
+  test("returns null when nothing is kept", () => {
+    expect(startTimeForPlay([], 0)).toBeNull();
+  });
+});

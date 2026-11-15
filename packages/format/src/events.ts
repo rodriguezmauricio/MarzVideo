@@ -65,7 +65,7 @@ export function parseEvents(text: string): { header: EventsHeader; events: MarzE
     const type = (raw as { type?: unknown } | null)?.type;
     if (typeof type !== "string" || !(type in KNOWN)) continue; // unknown types are ignored
     const parsed = KNOWN[type as keyof typeof KNOWN].safeParse(raw);
-    if (!parsed.success) throw new FormatError(`events.jsonl: line ${i + 1} is not a valid ${type} event`);
+    if (!parsed.success) continue; // an odd event (e.g. an unlisted mouse button) must not make the recording unopenable
     events.push(parsed.data as MarzEvent);
   }
   return { header, events };

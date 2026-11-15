@@ -32,7 +32,7 @@ describe("parseEvents", () => {
     expect(events).toHaveLength(1);
   });
 
-  test("throws on a bad middle line", () => {
+  test("throws on a middle line that is not JSON", () => {
     expect(() => parseEvents(`${header}\n{oops}\n{"tUs":2,"type":"cursor","x":1,"y":2}`)).toThrowError(FormatError);
   });
 
@@ -48,5 +48,22 @@ describe("parseEvents", () => {
   test("tolerates CRLF line endings", () => {
     const { events } = parseEvents(`${header}\r\n{"tUs":2,"type":"cursor","x":1,"y":2}\r\n`);
     expect(events).toHaveLength(1);
+  });
+});
+
+describe("parseEvents tolerance for odd events", () => {
+  test("a click with an unknown button is skipped, the rest of the file still loads", () => {
+    const text = [
+      header,
+      '{"tUs":1000,"type":"click","button":"x1","state":"down","x":1,"y":2}',
+      '{"tUs":2000,"type":"cursor","x":3,"y":4}',
+    ].join("\n");
+    const { events } = parseEvents(text);
+    expect(events.map((e) => e.type)).toEqual(["cursor"]);
+  });
+
+  test("an event with a non-integer time is skipped", () => {
+    const text = [header, '{"tUs":1.5,"type":"cursor","x":1,"y":2}', '{"tUs":2000,"type":"cursor","x":3,"y":4}'].join("\n");
+    expect(parseEvents(text).events).toHaveLength(1);
   });
 });

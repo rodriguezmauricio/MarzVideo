@@ -8,3 +8,13 @@ export function nextPlaybackTime(segs: Segment[], srcUs: number): number | null 
   }
   return null;
 }
+
+/** True when playback has nothing left to play: the clock ran out of kept time, or the video element itself ended. */
+export function playbackEnded(segs: Segment[], srcUs: number, videoEnded: boolean): boolean {
+  return videoEnded || nextPlaybackTime(segs, srcUs) === null;
+}
+
+/** Where Play should start: the playhead if there is more to play, otherwise the first kept time; null if nothing is kept. */
+export function startTimeForPlay(segs: Segment[], playheadUs: number): number | null {
+  return nextPlaybackTime(segs, playheadUs) ?? segs[0]?.srcStartUs ?? null;
+}

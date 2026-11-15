@@ -1,9 +1,10 @@
 import { create } from "zustand";
-import { parseEvents, parseProject, serializeProject, type MarzEvent, type Project } from "@marz/format";
+import { parseProject, serializeProject, type MarzEvent, type Project } from "@marz/format";
 import { History, type Command } from "@marz/timeline";
-import { createAutosave } from "../storage/autosave";
+import { createAutosave, type SaveStatus } from "../storage/autosave";
 import { createHttpStorage } from "../storage/httpStorage";
 import type { ProjectStorage } from "../storage/types";
+import { loadEventsOrEmpty } from "./loadEvents";
 
 export type Selection = { kind: "zoom" | "cut"; id: string } | null;
 
@@ -23,6 +24,9 @@ type EditorState = {
   /** Playhead in SOURCE time (microseconds). The timeline shows source time with cuts as blocks. */
   playheadUs: number;
   playing: boolean;
+  /** Shown to the user when the recording opened but something was missing (e.g. no events file). */
+  warning: string | null;
+  saveStatus: SaveStatus;
   selection: Selection;
   select: (sel: Selection) => void;
   /** Bumped by seek so the player knows a jump was requested, as opposed to a normal playback tick. */
@@ -48,6 +52,8 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   history: null,
   playheadUs: 0,
   playing: false,
+  warning: null,
+  saveStatus: "saved",
   selection: null,
   select: (selection) => set({ selection }),
   seekRequest: { us: 0, n: 0 },
@@ -57,10 +63,9 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     try {
       const storage = createHttpStorage(name);
       const project = parseProject(JSON.parse(await storage.readText("project.json")));
-      const { events } = parseEvents(await storage.readText("events.jsonl"));
-      events.sort((a, b) => a.tUs - b.tUs);
+      const { events, warning } = await loadEventsOrEmpty(() => storage.readText("events.jsonl"));
       const history = new History(project);
-      autosave = createAutosave(() => storage.writeProjectJson(serializeProject(history.current)), AUTOSAVE_DELAY_MS);
+      autosave = createAutosave(() => storage.writeProjectJson(serializeProject(history.current)), AUTOSAVE_DELAY_MS, (saveStatus) => set({ saveStatus }));
       history.subscribe(() => {
         const sel = get().selection;
         const p = history.current;
@@ -69,7 +74,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         set({ project: p, selection: stillThere ? sel : null });
         autosave?.schedule();
       });
-      set({ status: "ready", storage, project, events, history, playheadUs: 0, playing: false, selection: null });
+      set({ status: "ready", storage, project, events, warning, saveStatus: "saved", history, playheadUs: 0, playing: false, selection: null });
     } catch (err) {
       set({ status: "error", error: err instanceof Error ? err.message : String(err) });
     }
