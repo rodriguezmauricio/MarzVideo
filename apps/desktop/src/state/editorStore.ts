@@ -1,8 +1,17 @@
 import { create } from "zustand";
-import { parseEvents, parseProject, type MarzEvent, type Project } from "@marz/format";
+import { parseEvents, parseProject, serializeProject, type MarzEvent, type Project } from "@marz/format";
 import { History, type Command } from "@marz/timeline";
+import { createAutosave } from "../storage/autosave";
 import { createHttpStorage } from "../storage/httpStorage";
 import type { ProjectStorage } from "../storage/types";
+
+export type Selection = { kind: "zoom" | "cut"; id: string } | null;
+
+const AUTOSAVE_DELAY_MS = 2000;
+let autosave: ReturnType<typeof createAutosave> | null = null;
+
+/** Save any pending edit right now (used before the page closes). */
+export const flushAutosave = (): Promise<void> => autosave?.flush() ?? Promise.resolve();
 
 type EditorState = {
   status: "idle" | "loading" | "ready" | "error";
@@ -14,6 +23,8 @@ type EditorState = {
   /** Playhead in SOURCE time (microseconds). The timeline shows source time with cuts as blocks. */
   playheadUs: number;
   playing: boolean;
+  selection: Selection;
+  select: (sel: Selection) => void;
   /** Bumped by seek so the player knows a jump was requested, as opposed to a normal playback tick. */
   seekRequest: { us: number; n: number };
   load: (name: string) => Promise<void>;
@@ -37,6 +48,8 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   history: null,
   playheadUs: 0,
   playing: false,
+  selection: null,
+  select: (selection) => set({ selection }),
   seekRequest: { us: 0, n: 0 },
 
   async load(name) {
@@ -47,8 +60,16 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       const { events } = parseEvents(await storage.readText("events.jsonl"));
       events.sort((a, b) => a.tUs - b.tUs);
       const history = new History(project);
-      history.subscribe(() => set({ project: history.current }));
-      set({ status: "ready", storage, project, events, history, playheadUs: 0, playing: false });
+      autosave = createAutosave(() => storage.writeProjectJson(serializeProject(history.current)), AUTOSAVE_DELAY_MS);
+      history.subscribe(() => {
+        const sel = get().selection;
+        const p = history.current;
+        const stillThere =
+          !sel || (sel.kind === "zoom" ? p.edits.zooms : p.edits.cuts).some((x) => x.id === sel.id);
+        set({ project: p, selection: stillThere ? sel : null });
+        autosave?.schedule();
+      });
+      set({ status: "ready", storage, project, events, history, playheadUs: 0, playing: false, selection: null });
     } catch (err) {
       set({ status: "error", error: err instanceof Error ? err.message : String(err) });
     }

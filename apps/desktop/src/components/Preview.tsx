@@ -3,6 +3,7 @@ import { drawFrame, frameAt } from "@marz/compositor";
 import { keptSegments } from "@marz/timeline";
 import { useEditorStore } from "../state/editorStore";
 import { nextPlaybackTime } from "../playback/clock";
+import { ZoomOverlay } from "./ZoomOverlay";
 
 const AUDIO_DRIFT_S = 0.04;
 
@@ -11,6 +12,10 @@ export function Preview() {
   const storage = useEditorStore((s) => s.storage)!;
   const playing = useEditorStore((s) => s.playing);
   const seekRequest = useEditorStore((s) => s.seekRequest);
+  const selection = useEditorStore((s) => s.selection);
+  const selectedZoom = selection?.kind === "zoom" ? project.edits.zooms.find((z) => z.id === selection.id) : undefined;
+  // While a zoom is selected (and not playing) show the full frame so its area can be edited on the canvas.
+  const editingZoom = selectedZoom && !playing ? selectedZoom : undefined;
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -21,8 +26,8 @@ export function Preview() {
   const mic = project.tracks.mic;
 
   // Latest values for the animation loop without restarting it.
-  const live = useRef({ project, segs });
-  live.current = { project, segs };
+  const live = useRef({ project, segs, editing: false });
+  live.current = { project, segs, editing: !!editingZoom };
 
   const draw = () => {
     const canvas = canvasRef.current;
@@ -30,10 +35,11 @@ export function Preview() {
     if (!canvas || !video || video.readyState < 2) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
-    const { project: p } = live.current;
+    const { project: p, editing } = live.current;
     const srcUs = Math.round(video.currentTime * 1e6) + screenOffset;
     const { events } = useEditorStore.getState();
-    drawFrame(ctx, video, frameAt(p, events, srcUs), p.output);
+    const shown = editing ? { ...p, edits: { ...p.edits, zooms: [] } } : p;
+    drawFrame(ctx, video, frameAt(shown, events, srcUs), p.output);
   };
 
   const seekMedia = (srcUs: number) => {
@@ -58,7 +64,7 @@ export function Preview() {
       video?.removeEventListener("loadeddata", draw);
     };
   }, []);
-  useEffect(draw, [project]);
+  useEffect(draw, [project, editingZoom?.id]);
 
   // Play / pause and the frame loop.
   useEffect(() => {
@@ -116,13 +122,18 @@ export function Preview() {
 
   return (
     <div className="flex min-h-0 flex-1 items-center justify-center bg-black p-4">
-      <canvas
-        ref={canvasRef}
-        width={project.output.width}
-        height={project.output.height}
-        className="max-h-full max-w-full rounded-md shadow-lg"
-        style={{ aspectRatio: `${project.output.width} / ${project.output.height}` }}
-      />
+      <div
+        className="relative"
+        style={{ aspectRatio: `${project.output.width} / ${project.output.height}`, maxHeight: "100%", maxWidth: "100%" }}
+      >
+        <canvas
+          ref={canvasRef}
+          width={project.output.width}
+          height={project.output.height}
+          className="h-full w-full rounded-md shadow-lg"
+        />
+        {editingZoom && <ZoomOverlay key={editingZoom.id} zoom={editingZoom} />}
+      </div>
       <video
         ref={videoRef}
         src={storage.fileUrl(project.tracks.screen.file)}
