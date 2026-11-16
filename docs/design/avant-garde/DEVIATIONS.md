@@ -29,7 +29,7 @@ Checked 2026-11-16 with 1440 x 900 Edge screenshots of the four M1 editor states
 ## Tokens and assets
 
 - **Two tokens added** to `tokens.css`: `--thumb-line` (#3a3935, thumbnail border, volume track) and `--wave` (#A8A69F, mic bars). Both values were already in section 6 of `DESIGN-SYSTEM.md`, now listed in section 3.
-- **Fonts load from Google Fonts** (`apps/desktop/index.html`), no new package. Before the Tauri shell ships they must be bundled locally, because the desktop app has to work offline.
+- **Fonts are bundled** in `apps/desktop/src/assets/fonts` (latin and latin-ext woff2 from Google Fonts, SIL Open Font License, licences beside them), declared in `src/styles/fonts.css`. No network needed. Cyrillic and Vietnamese subsets are left out; those characters fall back to the stack in `tokens.css`.
 
 ## Not checked
 
