@@ -3,6 +3,7 @@ import { drawFrame, frameAt } from "@marz/compositor";
 import { keptSegments } from "@marz/timeline";
 import { useEditorStore } from "../state/editorStore";
 import { nextPlaybackTime, playbackEnded, startTimeForPlay } from "../playback/clock";
+import { mmss } from "./timecode";
 import { ZoomOverlay } from "./ZoomOverlay";
 
 const AUDIO_DRIFT_S = 0.04;
@@ -120,20 +121,28 @@ export function Preview() {
     }
   }, [mic?.volume, mic?.muted]);
 
+  const selectedCut = selection?.kind === "cut" ? project.edits.cuts.find((c) => c.id === selection.id) : undefined;
+  const caption = selectedZoom
+    ? "Press Play to see the result"
+    : selectedCut
+      ? "This part is skipped when you export"
+      : "Full frame. Select a zoom or cut on the timeline to edit it";
+
   return (
-    <div className="flex min-h-0 flex-1 items-center justify-center bg-black p-4">
-      <div
-        className="relative"
-        style={{ aspectRatio: `${project.output.width} / ${project.output.height}`, maxHeight: "100%", maxWidth: "100%" }}
-      >
-        <canvas
-          ref={canvasRef}
-          width={project.output.width}
-          height={project.output.height}
-          className="h-full w-full rounded-md shadow-lg"
-        />
+    <div className="pv-wrap" style={{ "--ar": `${project.output.width} / ${project.output.height}` } as React.CSSProperties}>
+      <div className="pv-frame">
+        <canvas ref={canvasRef} width={project.output.width} height={project.output.height} />
         {editingZoom && <ZoomOverlay key={editingZoom.id} zoom={editingZoom} />}
+        {selectedCut && (
+          <>
+            <div className="pv-cut" data-testid="preview-cut" />
+            <div className="pv-chip">
+              Cut {mmss(selectedCut.startUs)} to {mmss(selectedCut.endUs)}. Removed from export
+            </div>
+          </>
+        )}
       </div>
+      <div className="pv-cap">{caption}</div>
       <video
         ref={videoRef}
         src={storage.fileUrl(project.tracks.screen.file)}

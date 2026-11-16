@@ -6,6 +6,11 @@
 - [2026-11-15] [claude] Vitest does not type-check. Run `pnpm typecheck` as well as `pnpm test`; it caught a narrowing error the tests missed.
 - [2026-11-15] [claude] Source frames that are not 16:9 (16:10 laptops, region captures) are letterboxed by `frameAt().dstRect`; zoom rects stay aspect-locked so zooming fills the output.
 
+- [2026-11-16] [claude] This checkout's node_modules were symlinks into a deleted folder (Desktop/MarzVideo), so tsc and vitest were missing. Fix: `CI=true pnpm install --prefer-offline --frozen-lockfile` (no TTY, so pnpm needs CI=true to purge).
+- [2026-11-16] [claude] The `.dc.html` mockups render in Edge without support.js: replace `{{accent}}` with the hex and screenshot `.win`. Their computed styles are the reference (e.g. `.win button { padding: 0 }` beats `.lr2` padding).
+- [2026-11-16] [claude] design-check flags `el.blur()` and words like "rounded" in comments. Use a `design-check-ignore` comment with a reason rather than renaming the DOM call.
+- [2026-11-16] [claude] Fonts come from Google Fonts in index.html: bundle them locally before the Tauri shell, the desktop app must work offline.
+
 ## Deferred from the M1 editor review (minor, not fixed)
 
 - Mic offset above 40 ms: audio starts at once then jumps back, so the first stretch is heard twice (`Preview.tsx`).

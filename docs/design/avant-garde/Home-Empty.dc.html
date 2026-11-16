@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Home, empty</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@500;700&family=Martian+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+:root{--accent:#D4FF3A}
+.win{--ink:#0B0B0A;--paper:#ECEAE4;--faint:#9A988F;--line:rgba(236,234,228,.24);--rec:#E0352B;position:relative;width:1440px;height:900px;overflow:hidden;background:var(--ink);color:var(--paper);font:400 11px/1.3 'Martian Mono',ui-monospace,Consolas,monospace;letter-spacing:.04em;text-transform:uppercase}
+.win *{box-sizing:border-box}
+.win button{font:inherit;color:inherit;background:none;border:0;padding:0;letter-spacing:inherit;text-transform:inherit;text-align:inherit;cursor:pointer}
+.win a{text-decoration:underline;text-underline-offset:3px}
+.disp{font-family:'Familjen Grotesk','Helvetica Neue',Arial,sans-serif;font-weight:700}
+.lr2{width:100%;height:34px;display:flex;align-items:center;justify-content:space-between;padding:0 10px;border-top:1px solid var(--line)}
+.lr2.on{background:var(--accent);color:var(--ink);font-weight:500}
+.lr2 .hk{color:var(--faint)}.lr2.on .hk{color:var(--ink)}
+.hd{position:absolute;width:12px;height:12px;background:var(--paper);border:2px solid var(--ink)}
+.ink .cell{height:68px;padding:10px 0 0 0}.ink .cell:nth-child(even){padding-left:14px}
+.ink .cell i{display:block;font-style:normal;color:#4A4944;font-size:10px}
+.ink .cell b{display:block;margin-top:6px;font-family:'Familjen Grotesk','Helvetica Neue',Arial,sans-serif;font-size:30px;line-height:1;font-weight:700;text-transform:none;letter-spacing:-.02em}
+.ink .mut{color:#4A4944}
+.bx{height:22px;padding:0 10px;border:1px solid var(--line);display:flex;align-items:center}
+.lr{display:flex;border-bottom:1px solid var(--line);padding-left:24px}
+.lb{width:216px;flex:none;display:flex;align-items:center}
+.tk{position:relative;width:1176px;flex:none}
+.blk{position:absolute;top:6px;height:32px;display:flex;align-items:center;padding:0 12px;font-size:10px;font-weight:500}
+.blk span{white-space:nowrap;overflow:hidden}
+.blk.zoom{background:var(--accent);color:var(--ink)}
+.blk.sug{border:1px dashed var(--accent);color:var(--accent)}
+.blk .g{position:absolute;top:50%;transform:translateY(-50%);width:3px;height:14px;background:var(--ink)}
+.blk.sug .g{background:var(--accent)}
+.blk .g.l{left:4px}.blk .g.r{right:4px}
+.blk.sel{box-shadow:0 0 0 2px var(--ink),0 0 0 4px var(--paper)}
+
+.tg{width:34px;height:18px;border:1px solid var(--paper);position:relative;flex:none}
+.tg i{position:absolute;top:2px;left:2px;width:12px;height:12px;background:var(--paper)}
+.tg.on{background:var(--accent);border-color:var(--accent)}.tg.on i{left:18px;background:var(--ink)}
+.ink .tg{border-color:var(--ink)}.ink .tg i{background:var(--ink)}.ink .tg.on{background:var(--ink)}.ink .tg.on i{background:var(--accent)}
+.bar{position:absolute;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:16px;padding:10px 12px 10px 16px;background:var(--ink);border:1px solid var(--paper);z-index:20;white-space:nowrap}
+.mode{display:flex;align-items:center;gap:8px;height:40px;padding:0 16px;border-right:1px solid var(--line)}
+.mode.on{background:var(--accent);color:var(--ink);font-weight:500}
+.sepv{width:1px;height:28px;background:var(--line);flex:none}
+.hrw{display:flex;align-items:center;height:68px;border-top:1px solid var(--line);padding:0 24px}
+.fb{display:flex;align-items:center;justify-content:center;gap:8px;height:42px;padding:0 16px;font-weight:500}
+.pb{display:inline-flex;align-items:center;gap:8px;height:44px;padding:0 14px;border:1px solid var(--line);position:relative}
+.pb.on{background:var(--accent);color:var(--ink);border-color:var(--accent);font-weight:500}
+.pb b{font-weight:500;display:inline-grid;place-items:center;width:20px;height:20px;border:1px solid currentColor}
+.tip{position:absolute;bottom:52px;left:0;background:var(--paper);color:var(--ink);padding:7px 10px;white-space:nowrap;font-weight:500}
+.sc{position:absolute;left:24px;right:24px}
+</style>
+</helmet>
+<div class="win" style="--accent:{{accent}};height:900px">
+<div style="position:absolute;left:24px;top:0;width:1393px;height:900px;background-image:repeating-linear-gradient(90deg,rgba(236,234,228,.1) 0 1px,transparent 1px 116px)" aria-hidden="true"></div>
+<div style="position:absolute;left:0;top:0;width:1440px;height:44px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;padding:0 24px;z-index:3"><b style="font-weight:500;display:flex;align-items:center;gap:10px"><i style="width:14px;height:14px;background:var(--accent)"></i>Marz Recorder</b><button style="height:30px;padding:0 14px;border:1px solid var(--paper);display:flex;align-items:center;gap:8px"><svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" style="flex:none;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:square;stroke-linejoin:miter;"><circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/></svg>Settings</button></div>
+<h1 class="disp" style="position:absolute;left:18px;top:70px;margin:0;font-size:230px;line-height:.8;letter-spacing:-.05em;text-transform:none;white-space:nowrap">Nothing<br>yet.</h1>
+<div style="position:absolute;left:24px;top:470px;width:600px;line-height:1.6">Press Ctrl+Shift+R from anywhere to start. Your recordings appear here, ready to edit.</div>
+<div style="position:absolute;left:24px;top:540px;display:flex"><button class="fb" style="width:300px;height:60px;background:var(--accent);color:var(--ink);justify-content:space-between;font-size:13px"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" style="flex:none;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:square;stroke-linejoin:miter;fill:currentColor;stroke:none;"><circle cx="12" cy="12" r="6"/></svg>New recording<span style="font-size:10px">Ctrl+Shift+R</span></button><button class="fb" style="width:200px;height:60px;border:1px solid var(--paper);border-left:0;font-size:13px"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" style="flex:none;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:square;stroke-linejoin:miter;"><path d="M3 7h6l2 2h10v10H3z"/></svg>Open a project</button></div>
+<div style="position:absolute;left:760px;top:520px;width:656px;border-bottom:1px solid var(--line);z-index:2;background:var(--ink)"><div style="height:28px;color:var(--faint)">Every recording is saved as separate tracks</div><div style="display:flex;align-items:center;height:56px;border-top:1px solid var(--line)"><span style="width:120px;color:var(--faint)">Screen</span><div style="flex:1;height:36px;border:1px dashed #5A5953;display:flex;align-items:center;padding-left:12px;color:var(--faint)">Appears here after you record</div></div><div style="display:flex;align-items:center;height:56px;border-top:1px solid var(--line)"><span style="width:120px;color:var(--faint)">Mic</span><div style="flex:1;height:36px;border:1px dashed #5A5953;display:flex;align-items:center;padding-left:12px;color:var(--faint)">Appears here after you record</div></div><div style="display:flex;align-items:center;height:56px;border-top:1px solid var(--line)"><span style="width:120px;color:var(--faint)">Clicks</span><div style="flex:1;height:36px;border:1px dashed #5A5953;display:flex;align-items:center;padding-left:12px;color:var(--faint)">Appears here after you record</div></div></div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"accent":{"editor":"color","default":"#D4FF3A"},"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+renderVals() { return { accent: this.props.accent ?? '#D4FF3A' }; }
+}
+</script>
+</body>
+</html>

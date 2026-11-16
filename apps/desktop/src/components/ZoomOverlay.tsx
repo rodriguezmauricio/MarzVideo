@@ -8,12 +8,6 @@ type Drag = { mode: "move" | Corner; nx0: number; ny0: number; orig: Rect };
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 const CORNERS: Corner[] = ["nw", "ne", "sw", "se"];
-const CORNER_POS: Record<Corner, string> = {
-  nw: "-left-1.5 -top-1.5 cursor-nwse-resize",
-  ne: "-right-1.5 -top-1.5 cursor-nesw-resize",
-  sw: "-bottom-1.5 -left-1.5 cursor-nesw-resize",
-  se: "-bottom-1.5 -right-1.5 cursor-nwse-resize",
-};
 
 /** Draggable zoom area drawn over the full (unzoomed) frame. The rect always keeps the output aspect ratio. */
 export function ZoomOverlay({ zoom }: { zoom: Zoom }) {
@@ -79,36 +73,21 @@ export function ZoomOverlay({ zoom }: { zoom: Zoom }) {
   };
 
   return (
-    <div
-      ref={ref}
-      data-testid="zoom-overlay"
-      className="absolute inset-0 overflow-hidden rounded-md"
-      onPointerMove={onMove}
-      onPointerUp={end}
-    >
+    <div ref={ref} data-testid="zoom-overlay" className="zo" onPointerMove={onMove} onPointerUp={end}>
       <div
         data-testid="zoom-rect"
         onPointerDown={(e) => start(e, "move")}
-        className="absolute cursor-move border-2 border-dashed border-white"
+        className="zo-rect"
         style={{
           left: `${rect.x * 100}%`,
           top: `${rect.y * 100}%`,
           width: `${rect.w * 100}%`,
           height: `${rect.h * 100}%`,
-          boxShadow: "0 0 0 9999px rgba(0,0,0,0.55)",
         }}
       >
         {CORNERS.map((c) => (
-          <div
-            key={c}
-            data-testid={`handle-${c}`}
-            onPointerDown={(e) => start(e, c)}
-            className={`absolute h-3 w-3 rounded-sm border border-zinc-900 bg-white ${CORNER_POS[c]}`}
-          />
+          <div key={c} data-testid={`handle-${c}`} onPointerDown={(e) => start(e, c)} className={`zo-hd ${c}`} />
         ))}
-      </div>
-      <div className="pointer-events-none absolute left-2 top-2 rounded bg-zinc-900/80 px-2 py-1 text-xs text-zinc-200">
-        Editing zoom area. Press Play to see the result.
       </div>
     </div>
   );

@@ -1,0 +1,90 @@
+{
+ "v": 3,
+ "createdOnFiles": {
+  "v": 1,
+  "at": "2026-11-16T12:00:00Z"
+ },
+ "title": "Marz Recorder, avant-garde",
+ "launch": {
+  "view": "canvas"
+ },
+ "pages": [],
+ "boards": {
+  "Main.dc.html": {
+   "x": 0,
+   "y": 0,
+   "w": 1440,
+   "h": 900,
+   "title": "Editor, zoom selected"
+  },
+  "Editor-Nothing-Selected.dc.html": {
+   "x": 1520,
+   "y": 0,
+   "w": 1440,
+   "h": 900,
+   "title": "Editor, nothing selected"
+  },
+  "Editor-Cut-Selected.dc.html": {
+   "x": 0,
+   "y": 1020,
+   "w": 1440,
+   "h": 900,
+   "title": "Editor, cut selected, no events file"
+  },
+  "Timeline-Lanes.dc.html": {
+   "x": 1520,
+   "y": 1020,
+   "w": 1440,
+   "h": 900,
+   "title": "Timeline, lanes expanded"
+  },
+  "Home.dc.html": {
+   "x": 0,
+   "y": 2040,
+   "w": 1440,
+   "h": 900,
+   "title": "Home"
+  },
+  "Home-Empty.dc.html": {
+   "x": 1520,
+   "y": 2040,
+   "w": 1440,
+   "h": 900,
+   "title": "Home, empty"
+  },
+  "Recorder-Setup.dc.html": {
+   "x": 0,
+   "y": 3060,
+   "w": 1440,
+   "h": 900,
+   "title": "Recorder, before recording"
+  },
+  "Recorder-Recording.dc.html": {
+   "x": 1520,
+   "y": 3060,
+   "w": 1440,
+   "h": 900,
+   "title": "Recorder, while recording"
+  },
+  "States.dc.html": {
+   "x": 0,
+   "y": 4080,
+   "w": 1440,
+   "h": 640,
+   "title": "States"
+  }
+ },
+ "order": [
+  "Main.dc.html",
+  "Editor-Nothing-Selected.dc.html",
+  "Editor-Cut-Selected.dc.html",
+  "Timeline-Lanes.dc.html",
+  "Home.dc.html",
+  "Home-Empty.dc.html",
+  "Recorder-Setup.dc.html",
+  "Recorder-Recording.dc.html",
+  "States.dc.html"
+ ],
+ "notes": {},
+ "designSystems": []
+}

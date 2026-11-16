@@ -2,39 +2,40 @@ import { useEditorStore } from "../state/editorStore";
 import { addCutAtPlayhead, addZoomAtPlayhead, deleteSelection, runAutoZoom } from "../state/actions";
 import { Icon, type IconName } from "./Icon";
 
-function ToolButton(props: {
+function LedgerRow(props: {
   icon: IconName;
   label: string;
   hotkey: string;
   onClick: () => void;
   disabled?: boolean;
-  accent?: boolean;
+  on?: boolean;
 }) {
   return (
     <button
       type="button"
       onClick={props.onClick}
       disabled={props.disabled}
-      title={`${props.label} (${props.hotkey})`}
       aria-label={props.label}
-      className={`flex h-9 items-center gap-2 rounded-md px-3 text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-35 ${
-        props.accent
-          ? "bg-sky-500 font-medium text-zinc-950 hover:bg-sky-400"
-          : "bg-zinc-800 text-zinc-100 hover:bg-zinc-700"
-      }`}
+      aria-keyshortcuts={props.hotkey}
+      className={`lr2${props.on ? " on" : ""}`}
     >
-      <Icon name={props.icon} />
-      <span>{props.label}</span>
+      <span className="lbl">
+        <Icon name={props.icon} />
+        {props.label}
+      </span>
+      <span className="hk">{props.hotkey}</span>
     </button>
   );
 }
 
-export function Toolbar() {
+/** The tool ledger: a vertical list of rows (or one horizontal row when the lanes are expanded). */
+export function Toolbar({ horizontal = false }: { horizontal?: boolean }) {
   const playing = useEditorStore((s) => s.playing);
   const togglePlay = useEditorStore((s) => s.togglePlay);
   const history = useEditorStore((s) => s.history)!;
   const project = useEditorStore((s) => s.project);
   const selection = useEditorStore((s) => s.selection);
+  const noEvents = useEditorStore((s) => s.events.length === 0);
   const undo = useEditorStore((s) => s.undo);
   const redo = useEditorStore((s) => s.redo);
 
@@ -42,16 +43,14 @@ export function Toolbar() {
   void project;
 
   return (
-    <div className="flex items-center gap-2 border-b border-zinc-800 px-4 py-2">
-      <ToolButton icon={playing ? "pause" : "play"} label={playing ? "Pause" : "Play"} hotkey="Space" onClick={togglePlay} accent />
-      <div className="mx-2 h-6 w-px bg-zinc-800" />
-      <ToolButton icon="zoom" label="Add zoom" hotkey="Z" onClick={addZoomAtPlayhead} />
-      <ToolButton icon="cut" label="Add cut" hotkey="C" onClick={addCutAtPlayhead} />
-      <ToolButton icon="auto" label="Auto zoom" hotkey="A" onClick={runAutoZoom} />
-      <ToolButton icon="trash" label="Delete" hotkey="Del" onClick={deleteSelection} disabled={!selection} />
-      <div className="mx-2 h-6 w-px bg-zinc-800" />
-      <ToolButton icon="undo" label="Undo" hotkey="Ctrl+Z" onClick={undo} disabled={!history.canUndo} />
-      <ToolButton icon="redo" label="Redo" hotkey="Ctrl+Shift+Z" onClick={redo} disabled={!history.canRedo} />
-    </div>
+    <nav className={horizontal ? "ledger-h" : "ledger"} aria-label="Tools">
+      <LedgerRow icon={playing ? "pause" : "play"} label="Play / pause" hotkey="Space" onClick={togglePlay} on />
+      <LedgerRow icon="zoomadd" label="Add zoom" hotkey="Z" onClick={addZoomAtPlayhead} />
+      <LedgerRow icon="cut" label="Add cut" hotkey="C" onClick={addCutAtPlayhead} />
+      <LedgerRow icon="auto" label="Auto zoom" hotkey="A" onClick={runAutoZoom} disabled={noEvents} />
+      <LedgerRow icon="trash" label="Delete" hotkey="Del" onClick={deleteSelection} disabled={!selection} />
+      <LedgerRow icon="undo" label="Undo" hotkey="Ctrl+Z" onClick={undo} disabled={!history.canUndo} />
+      <LedgerRow icon="redo" label="Redo" hotkey="Ctrl+Shift+Z" onClick={redo} disabled={!history.canRedo} />
+    </nav>
   );
 }

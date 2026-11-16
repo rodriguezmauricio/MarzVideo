@@ -1,0 +1,94 @@
+/* Marz Recorder design tokens. Single source of truth.
+   Copy to apps/desktop/src/styles/tokens.css and import it first in index.css.
+   Change the accent HERE ONLY. Never write a hex colour anywhere else in the app. */
+
+:root {
+  /* colour */
+  --ink: #0b0b0a;                    /* page background; text on paper */
+  --paper: #eceae4;                 /* text on ink; inverted panels (inspector, Home hero) */
+  --accent: #d4ff3a;                 /* THE one accent. Placeholder until the brand kit exists */
+  --accent-ink: #0b0b0a;             /* text on accent */
+  --rec: #e0352b;                    /* recording and cuts ONLY */
+  --rec-ink: #ffffff;                /* text on rec */
+  --faint: #9a988f;                  /* secondary text on ink (>= 4.5:1) */
+  --faint-on-paper: #4a4944;         /* secondary text on paper (>= 7:1) */
+  --line: rgba(236, 234, 228, 0.24); /* ruled lines on ink */
+  --line-on-paper: #0b0b0a;          /* ruled lines on paper are solid ink, 1px */
+  --grid: rgba(236, 234, 228, 0.1);  /* 12-column grid lines on ink */
+  --grid-on-paper: rgba(11, 11, 10, 0.12);
+  --dim: rgba(11, 11, 10, 0.62);     /* outside-of-zoom dimming on the preview */
+  --later: #5a5953;                  /* dashed "Later" lane outlines */
+  --thumb-line: #3a3935;             /* 1px border of timeline thumbnails, mic volume track */
+  --wave: #a8a69f;                   /* mic waveform bars */
+
+  /* type */
+  --font-display: "Familjen Grotesk", "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "Martian Mono", ui-monospace, Consolas, monospace;
+  /* paid upgrade, if the files are ever supplied: put these first
+     "ABC Monument Grotesk" (display), "ABC Diatype Semi Mono" (mono) */
+
+  /* layout (px, designed at 1440 x 900) */
+  --margin: 24px;
+  --col-pitch: 116px;     /* 12 columns */
+  --strip-h: 44px;        /* top strip */
+  --row-h: 34px;          /* ledger row, timeline header */
+  --ruler-h: 28px;
+  --gutter-w: 216px;      /* timeline label gutter; tracks start at x = 240 */
+  --pps: 7.3;             /* timeline pixels per second at Fit (160 s = 1168 px) */
+}
+
+/* Tailwind v4: wipe the default theme so rounded-*, shadow-*, blur-*, slate/blue/etc. DO NOT EXIST.
+   If a class is not defined here, it cannot be used. This is the main anti-drift lock. */
+@theme {
+  --color-*: initial;
+  --radius-*: initial;
+  --shadow-*: initial;
+  --inset-shadow-*: initial;
+  --drop-shadow-*: initial;
+  --blur-*: initial;
+  --font-*: initial;
+  --ease-*: initial;
+  --animate-*: initial;
+
+  --color-ink: var(--ink);
+  --color-paper: var(--paper);
+  --color-accent: var(--accent);
+  --color-accent-ink: var(--accent-ink);
+  --color-rec: var(--rec);
+  --color-rec-ink: var(--rec-ink);
+  --color-faint: var(--faint);
+  --color-faint-paper: var(--faint-on-paper);
+  --color-line: var(--line);
+  --color-transparent: transparent;
+  --color-current: currentColor;
+
+  --font-display: "Familjen Grotesk", "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "Martian Mono", ui-monospace, Consolas, monospace;
+}
+
+/* base */
+html, body, #root { margin: 0; height: 100%; }
+body {
+  background: var(--ink);
+  color: var(--paper);
+  font: 400 11px/1.3 var(--font-mono);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;       /* labels are written in sentence case in source, shown in caps */
+  -webkit-font-smoothing: antialiased;
+}
+*, *::before, *::after { box-sizing: border-box; border-radius: 0; box-shadow: none; }
+button { font: inherit; color: inherit; background: none; border: 0; padding: 0; letter-spacing: inherit; text-transform: inherit; text-align: inherit; cursor: pointer; }
+a { color: inherit; text-decoration: underline; text-underline-offset: 3px; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.on-paper :focus-visible { outline-color: var(--ink); }
+.display { font-family: var(--font-display); font-weight: 700; text-transform: none; }
+
+/* 12-column grid overlay, behind everything: render once at the app root */
+.grid-lines {
+  position: absolute; top: 0; bottom: 0; left: var(--margin); width: calc(var(--col-pitch) * 12 + 1px);
+  background-image: repeating-linear-gradient(90deg, var(--grid) 0 1px, transparent 1px var(--col-pitch));
+  pointer-events: none; z-index: 0;
+}
+
+/* reduced motion: the design has no transitions, keep it that way */
+*, *::before, *::after { transition: none !important; animation: none !important; }

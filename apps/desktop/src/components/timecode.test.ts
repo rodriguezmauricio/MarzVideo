@@ -1,0 +1,25 @@
+import { describe, expect, test } from "vitest";
+import { count, mmss, mmsst, parseTimeUs, seconds1 } from "./timecode";
+
+describe("timecode", () => {
+  test("formats mm:ss and mm:ss.t", () => {
+    expect(mmss(63_400_000)).toBe("01:03");
+    expect(mmss(160_000_000)).toBe("02:40");
+    expect(mmsst(58_000_000)).toBe("00:58.0");
+    expect(mmsst(98_960_000)).toBe("01:39.0");
+    expect(seconds1(12_000_000)).toBe("12.0 s");
+  });
+
+  test("parses what the inspector shows, and plain seconds", () => {
+    expect(parseTimeUs("01:32.0")).toBe(92_000_000);
+    expect(parseTimeUs("0.4 s")).toBe(400_000);
+    expect(parseTimeUs("7.5")).toBe(7_500_000);
+    expect(parseTimeUs("abc")).toBeNull();
+    expect(parseTimeUs("")).toBeNull();
+  });
+
+  test("counts with plurals", () => {
+    expect(count(1, "cut")).toBe("1 cut");
+    expect(count(3, "zoom")).toBe("3 zooms");
+  });
+});

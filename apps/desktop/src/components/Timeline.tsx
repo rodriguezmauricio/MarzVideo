@@ -2,7 +2,11 @@ import { useEffect, useRef, useState } from "react";
 import { updateCut, updateZoom } from "@marz/timeline";
 import { MIN_US } from "../state/actions";
 import { useEditorStore, type Selection } from "../state/editorStore";
+import { Icon } from "./Icon";
+import { MicWave, ScreenThumbs } from "./Lanes";
+import { count, mmss } from "./timecode";
 import { handleWidthPx, MAX_TIMELINE_ZOOM, pxToUs, snapUs, timelineWidthPx, usToPx } from "./timelineMath";
+import { zoomLabels } from "./zoomLabels";
 
 type Kind = "zoom" | "cut";
 type Mode = "move" | "start" | "end";
@@ -11,17 +15,19 @@ type Drag = { kind: Kind; id: string; mode: Mode; startX: number; orig: Range };
 
 const SNAP_PX = 8;
 const TICK_STEPS_S = [1, 2, 5, 10, 15, 30, 60, 120, 300];
-const ORIGIN_CLASS = {
-  live: "bg-emerald-500/70 border-emerald-300",
-  auto: "bg-violet-500/70 border-violet-300",
-  manual: "bg-sky-500/70 border-sky-300",
-} as const;
-const HATCH = "repeating-linear-gradient(45deg, rgba(239,68,68,.55) 0 6px, rgba(239,68,68,.25) 6px 12px)";
+/** Space after the end of the recording (room for the last ruler label) plus the 24px right margin. */
+const TAIL_PX = 32;
+const LATER_LANES = ["Camera", "System audio", "Layout", "Drawing", "Captions"];
+const ROWS = {
+  fit: { ruler: 28, screen: 52, mic: 44, zoom: 44, later: 22 },
+  expanded: { ruler: 28, screen: 80, mic: 72, zoom: 56, later: 44 },
+};
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 
-export function Timeline() {
+export function Timeline({ expanded, onToggleLanes }: { expanded: boolean; onToggleLanes: () => void }) {
   const project = useEditorStore((s) => s.project)!;
+  const storage = useEditorStore((s) => s.storage)!;
   const playheadUs = useEditorStore((s) => s.playheadUs);
   const selection = useEditorStore((s) => s.selection);
   const seek = useEditorStore((s) => s.seek);
@@ -47,9 +53,10 @@ export function Timeline() {
   useEffect(() => {
     const el = viewportRef.current;
     if (!el) return;
-    const ro = new ResizeObserver(() => setViewport(el.clientWidth));
+    const measure = () => setViewport(Math.max(100, el.clientWidth - TAIL_PX));
+    const ro = new ResizeObserver(measure);
     ro.observe(el);
-    setViewport(el.clientWidth);
+    measure();
     return () => ro.disconnect();
   }, []);
 
@@ -137,8 +144,13 @@ export function Timeline() {
   };
 
   const stepS = TICK_STEPS_S.find((s) => s * pps >= 70) ?? TICK_STEPS_S[TICK_STEPS_S.length - 1]!;
-  const ticks: number[] = [];
-  for (let s = 0; s <= D / 1e6; s += stepS) ticks.push(s);
+  const ruler = [];
+  for (let s = 0; s <= D / 1e6 + 1e-9; s += stepS) {
+    ruler.push(<i key={`M${s}`} className="tick tick-major" style={{ left: x(s * 1e6) }} />);
+    ruler.push(<span key={`L${s}`} className="tick-lbl" style={{ left: x(s * 1e6) + 4 }}>{mmss(s * 1e6)}</span>);
+    const half = s + stepS / 2;
+    if (half <= D / 1e6) ruler.push(<i key={`m${s}`} className="tick tick-minor" style={{ left: x(half * 1e6) }} />);
+  }
 
   // A plain render helper, not a component: a component defined here would remount on every render and drop the drag.
   const handle = (kind: Kind, id: string, mode: Mode, orig: Range, blockPx: number) => (
@@ -148,97 +160,144 @@ export function Timeline() {
       onPointerDown={(e) => onBlockDown(e, kind, id, mode, orig)}
       onPointerMove={onBlockMove}
       onPointerUp={onBlockUp}
-      className={`absolute top-0 h-full cursor-ew-resize ${mode === "start" ? "left-0" : "right-0"}`}
-      style={{ width: handleWidthPx(blockPx) }}
+      className="grab"
+      style={{ width: handleWidthPx(blockPx), [mode === "start" ? "left" : "right"]: 0 }}
     />
   );
 
+  const rows = expanded ? ROWS.expanded : ROWS.fit;
+  const labels = zoomLabels(project.edits.zooms);
+  const mic = project.tracks.mic;
+  const nAuto = project.edits.zooms.filter((z) => z.origin === "auto").length;
+  const nOwn = project.edits.zooms.length - nAuto;
+
   return (
-    <div className="shrink-0 border-t border-zinc-800 bg-zinc-950 px-4 pb-3 pt-2 select-none">
-      <div className="mb-1 flex items-center justify-end gap-1 text-xs text-zinc-400">
-        <span>Timeline zoom</span>
-        <button type="button" title="Zoom timeline out (Ctrl+wheel)" aria-label="Zoom timeline out"
-          onClick={() => zoomBy(1 / 1.5)} className="h-6 w-6 rounded bg-zinc-800 hover:bg-zinc-700">-</button>
-        <button type="button" title="Zoom timeline in (Ctrl+wheel)" aria-label="Zoom timeline in"
-          onClick={() => zoomBy(1.5)} className="h-6 w-6 rounded bg-zinc-800 hover:bg-zinc-700">+</button>
-        <button type="button" title="Fit the whole recording" aria-label="Fit timeline"
-          onClick={() => setZoomFactor(1)} className="h-6 rounded bg-zinc-800 px-2 hover:bg-zinc-700">Fit</button>
+    <section className="tl" aria-label="Timeline">
+      <div className="tl-head">
+        <b>Timeline</b>
+        <span className="tl-ctl">
+          <span className="bx">Zoom</span>
+          <button type="button" className="bx" aria-label="Zoom timeline out" data-tip="Zoom out / Ctrl+wheel"
+            onClick={() => zoomBy(1 / 1.5)}>-</button>
+          <button type="button" className="bx" aria-label="Zoom timeline in" data-tip="Zoom in / Ctrl+wheel"
+            onClick={() => zoomBy(1.5)}>+</button>
+          <button type="button" className="bx" aria-label="Fit timeline" data-tip="Fit the whole recording"
+            onClick={() => setZoomFactor(1)}>Fit</button>
+          <button type="button" className="bx bx-lanes" aria-pressed={expanded} onClick={onToggleLanes}>
+            <Icon name="layers" size={13} />
+            {expanded ? "Hide lanes" : "Show lanes"}
+          </button>
+        </span>
       </div>
-      <div ref={viewportRef} className="overflow-x-auto">
-      <div
-        ref={trackRef}
-        className="relative"
-        style={{ width }}
-        onPointerDown={(e) => {
-          select(null);
-          scrubbing.current = true;
-          e.currentTarget.setPointerCapture(e.pointerId);
-          seekFromEvent(e.clientX);
-        }}
-        onPointerMove={(e) => scrubbing.current && seekFromEvent(e.clientX)}
-        onPointerUp={() => (scrubbing.current = false)}
-      >
-        <div className="relative h-6 overflow-hidden border-b border-zinc-800 text-[10px] text-zinc-500">
-          {ticks.map((s) => (
-            <div key={s} className="absolute top-0 h-full border-l border-zinc-700 pl-1" style={{ left: x(s * 1e6) }}>
-              {s}s
-            </div>
+      <div className="tl-body">
+        <div className="tl-gutter">
+          <div className="lb" style={{ height: rows.ruler }} />
+          <div className="lb" style={{ height: rows.screen }}>Screen</div>
+          <div className="lb" style={{ height: rows.mic }}>
+            Mic
+            {expanded && mic && (
+              <span className="lb-vol" aria-label="Mic volume">
+                <span><i style={{ width: `${Math.round(Math.min(1, Math.max(0, mic.volume)) * 100)}%` }} /></span>
+                {Math.round(mic.volume * 100)}%
+              </span>
+            )}
+          </div>
+          <div className="lb" style={{ height: rows.zoom }}>Zoom</div>
+          {LATER_LANES.map((name) => (
+            <div key={name} className="lb later" style={{ height: rows.later }}>{name}</div>
           ))}
         </div>
-
-        <div className="relative mt-2 h-9 rounded bg-zinc-900/60" title="Zooms">
-          {project.edits.zooms.map((z) => {
-            const r = rangeOf("zoom", z.id, z);
-            const sel = selection?.kind === "zoom" && selection.id === z.id;
-            return (
-              <div
-                key={z.id}
-                data-testid={`zoom-${z.id}`}
-                onPointerDown={(e) => onBlockDown(e, "zoom", z.id, "move", z)}
-                onPointerMove={onBlockMove}
-                onPointerUp={onBlockUp}
-                className={`absolute top-1 h-7 cursor-grab rounded border text-[10px] leading-7 text-white ${ORIGIN_CLASS[z.origin]} ${sel ? "ring-2 ring-white" : ""}`}
-                style={{ left: x(r.startUs), width: Math.max(4, x(r.endUs - r.startUs)) }}
-              >
-                <span className="pointer-events-none px-2">Zoom</span>
-                {handle("zoom", z.id, "start", z, x(r.endUs - r.startUs))}
-                {handle("zoom", z.id, "end", z, x(r.endUs - r.startUs))}
+        <div ref={viewportRef} className="tl-scroll">
+          <div
+            ref={trackRef}
+            className="tl-tracks"
+            style={{ width: width + TAIL_PX }}
+            onPointerDown={(e) => {
+              select(null);
+              scrubbing.current = true;
+              e.currentTarget.setPointerCapture(e.pointerId);
+              seekFromEvent(e.clientX);
+            }}
+            onPointerMove={(e) => scrubbing.current && seekFromEvent(e.clientX)}
+            onPointerUp={() => (scrubbing.current = false)}
+          >
+            <div className="tk" style={{ height: rows.ruler }}>{ruler}</div>
+            <div className="tk" style={{ height: rows.screen }}>
+              <ScreenThumbs url={storage.fileUrl(project.tracks.screen.file)} durationUs={D}
+                widthPx={x(D)} pps={pps} rowH={rows.screen} />
+            </div>
+            <div className="tk" style={{ height: rows.mic }}>
+              {mic && <MicWave url={storage.fileUrl(mic.file)} offsetUs={mic.offsetUs} widthPx={x(D)} pps={pps} rowH={rows.mic} />}
+            </div>
+            <div className="tk" style={{ height: rows.zoom }}>
+              {project.edits.zooms.map((z) => {
+                const r = rangeOf("zoom", z.id, z);
+                const sel = selection?.kind === "zoom" && selection.id === z.id;
+                const w = Math.max(4, x(r.endUs - r.startUs));
+                return (
+                  <div
+                    key={z.id}
+                    data-testid={`zoom-${z.id}`}
+                    onPointerDown={(e) => onBlockDown(e, "zoom", z.id, "move", z)}
+                    onPointerMove={onBlockMove}
+                    onPointerUp={onBlockUp}
+                    className={`blk ${z.origin === "auto" ? "blk-sug" : "blk-zoom"}${sel ? " sel" : ""}`}
+                    style={{ left: x(r.startUs), width: w, height: rows.zoom - 12 }}
+                  >
+                    <i className="g l" />
+                    <span>{labels.get(z.id)}</span>
+                    <i className="g r" />
+                    {handle("zoom", z.id, "start", z, w)}
+                    {handle("zoom", z.id, "end", z, w)}
+                  </div>
+                );
+              })}
+            </div>
+            {LATER_LANES.map((name) => (
+              <div key={name} className="tk tk-later" style={{ height: rows.later }} aria-hidden="true">
+                <div className="later-box">Later</div>
               </div>
-            );
-          })}
-        </div>
+            ))}
 
-        <div className="relative mt-1 h-9 rounded bg-zinc-900/60" title="Cuts">
-          {project.edits.cuts.map((c) => {
-            const r = rangeOf("cut", c.id, c);
-            const sel = selection?.kind === "cut" && selection.id === c.id;
-            return (
-              <div
-                key={c.id}
-                data-testid={`cut-${c.id}`}
-                onPointerDown={(e) => onBlockDown(e, "cut", c.id, "move", c)}
-                onPointerMove={onBlockMove}
-                onPointerUp={onBlockUp}
-                className={`absolute top-1 h-7 cursor-grab rounded border border-red-300 text-[10px] leading-7 text-white ${sel ? "ring-2 ring-white" : ""}`}
-                style={{ left: x(r.startUs), width: Math.max(4, x(r.endUs - r.startUs)), background: HATCH }}
-              >
-                <span className="pointer-events-none px-2">Cut</span>
-                {handle("cut", c.id, "start", c, x(r.endUs - r.startUs))}
-                {handle("cut", c.id, "end", c, x(r.endUs - r.startUs))}
-              </div>
-            );
-          })}
-        </div>
+            {project.edits.cuts.map((c) => {
+              const r = rangeOf("cut", c.id, c);
+              const sel = selection?.kind === "cut" && selection.id === c.id;
+              const left = x(r.startUs);
+              const w = Math.max(4, x(r.endUs - r.startUs));
+              return (
+                <div key={c.id}>
+                  <div className={`cutband${sel ? " sel" : ""}`} style={{ left, width: w }} />
+                  <div
+                    data-testid={`cut-${c.id}`}
+                    onPointerDown={(e) => onBlockDown(e, "cut", c.id, "move", c)}
+                    onPointerMove={onBlockMove}
+                    onPointerUp={onBlockUp}
+                    className="cutcap"
+                    style={{ left, width: w }}
+                  >
+                    <span>Cut</span>
+                    {handle("cut", c.id, "start", c, w)}
+                    {handle("cut", c.id, "end", c, w)}
+                  </div>
+                </div>
+              );
+            })}
 
-        <div
-          data-testid="playhead"
-          className="pointer-events-none absolute top-0 h-full w-px bg-white"
-          style={{ left: x(playheadUs) }}
-        >
-          <div className="-ml-1 h-2 w-2 rounded-full bg-white" />
+            <div data-testid="playhead" className="ph" style={{ left: x(playheadUs) }}>
+              <i />
+            </div>
+          </div>
         </div>
       </div>
+      <div className="tl-foot">
+        <span>
+          {count(nOwn, "zoom")} / {count(project.edits.cuts.length, "cut")} / {nAuto} suggested
+        </span>
+        <span>
+          <Icon name="lock" size={12} />
+          Dashed lanes are reserved for a later version
+        </span>
       </div>
-    </div>
+    </section>
   );
 }
