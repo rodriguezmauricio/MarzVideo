@@ -58,6 +58,12 @@ impl<S: FrameSink> CfrWriter<S> {
     /// Write `frame` at slot `idx`, first repeating the previous frame for every missed slot.
     /// Returns the number of repeats written. `idx` must be after the last written slot.
     pub fn push(&mut self, idx: u64, frame: Vec<u8>) -> io::Result<u64> {
+        self.push_recycle(idx, frame).map(|(repeats, _)| repeats)
+    }
+
+    /// Like `push`, and also hands back the buffer of the frame it replaced, so a capture loop can
+    /// reuse it instead of allocating a new one per frame.
+    pub fn push_recycle(&mut self, idx: u64, frame: Vec<u8>) -> io::Result<(u64, Option<Vec<u8>>)> {
         if idx < self.next {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
@@ -74,8 +80,7 @@ impl<S: FrameSink> CfrWriter<S> {
         }
         self.sink.write(&frame)?;
         self.next = idx + 1;
-        self.last = Some(frame);
-        Ok(repeats)
+        Ok((repeats, self.last.replace(frame)))
     }
 
     /// Pad with the last frame up to and including slot `end_idx`. Returns the repeats written.
@@ -154,6 +159,14 @@ mod tests {
         assert_eq!(w.push(0, vec![1]).unwrap(), 0);
         assert_eq!(w.push(3, vec![2]).unwrap(), 2);
         assert_eq!(w.sink.0, vec![vec![1], vec![1], vec![1], vec![2]]);
+    }
+
+    #[test]
+    fn push_recycle_returns_the_replaced_buffer() {
+        let mut w = CfrWriter::new(Collect::default());
+        assert_eq!(w.push_recycle(0, vec![1]).unwrap(), (0, None));
+        assert_eq!(w.push_recycle(2, vec![2]).unwrap(), (1, Some(vec![1])));
+        assert_eq!(w.sink.0, vec![vec![1], vec![1], vec![2]]);
     }
 
     #[test]

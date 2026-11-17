@@ -7,15 +7,12 @@ pub mod ffmpeg;
 pub mod mic_timeline;
 pub mod project;
 pub mod recover;
+pub mod region;
 pub mod slots;
 #[cfg(windows)]
 pub mod win;
 
 use std::fmt;
-
-// Dependencies are declared now and used by later tasks; silence the unused-dependency lint until then.
-#[cfg(windows)]
-use {wasapi as _, windows as _, windows_capture as _};
 
 #[derive(Debug)]
 pub enum CaptureError {
