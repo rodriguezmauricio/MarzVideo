@@ -160,6 +160,9 @@ normalized 0–1 relative to the source frame, so edits survive resolution/proxy
 Calls 3–5 are unverified until tried on the Windows machine; the first local session should spike
 them before anything is built on top.
 
+**Spiked 2026-11-16: calls 3 to 5 hold** on Windows (60 fps CFR at 1080p, mic drift about 1 ms over
+3 min, own window and cursor excluded). Two required changes and the numbers: `docs/spikes/2026-11-16-capture-spike.md`.
+
 ## M1 build order
 
 1. `packages/format` + sample project generator.

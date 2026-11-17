@@ -25,3 +25,9 @@
 - No committed Playwright tests: the browser checks were run by hand.
 - Pin down for the recorder: how `durationUs` relates to the track lengths, and which mouse `button` values it writes.
 - `drawFrame` should scale by the media's real pixel size, not `project.source`, before proxies arrive.
+
+- [2026-11-16] [claude] WGC's default minimum update interval snaps to every 3rd refresh on a 165 Hz screen, so capture gets 55 fps. Request half a frame (8.3 ms for 60 fps) and slot frames by timestamp; that holds 60 fps CFR.
+- [2026-11-16] [claude] WGC `SystemRelativeTime` and the WASAPI packet `u64QPCPosition` are both QPC in 100 ns units, so screen, mic and input events share one clock with no conversion beyond units.
+- [2026-11-16] [claude] The first WASAPI packet arrives up to 0.7 s after Start, and the mic drops about 20 ms once shortly after (no discontinuity flag). Warm up both tracks before taking t0, and pad mic gaps from the QPC position.
+- [2026-11-16] [claude] A low-level mouse hook does not see `SetCursorPos` moves (scripts, remote tools). Poll `GetCursorPos` on a timer as well, or the cursor track freezes.
+- [2026-11-16] [claude] `h264_nvenc` accepts BGRA on stdin directly, so the FFmpeg sidecar does no CPU colour conversion (about a quarter of one core at 1080p60).

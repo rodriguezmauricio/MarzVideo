@@ -18,7 +18,9 @@ Windows-first screen recorder + non-destructive editor (Tauri 2, Rust, React/TS)
   editor in `apps/desktop` (synced playback, timeline, zoom and cut blocks, auto zoom, undo/redo, autosave).
   Checked in a browser (Edge via Playwright) against the sample project.
 - **Done:** editor restyled to the Editorial Brutalism design (2026-11-16). Deviations: `docs/design/avant-garde/DEVIATIONS.md`.
-- **Not done:** capture engine, Tauri shell, recorder toolbar, export (steps 4 to 6). No Rust code exists yet.
+- **Done:** capture spike (2026-11-16): `crates/capture` is throwaway spike code; findings and numbers in
+  `docs/spikes/2026-11-16-capture-spike.md`. The capture approach holds on Windows.
+- **Not done:** capture engine, Tauri shell, recorder toolbar, export (steps 4 to 6).
 
 ## Design rules (binding, read DESIGN-SYSTEM.md before touching any UI)
 
@@ -44,9 +46,8 @@ pnpm test && pnpm typecheck
 
 ## Next steps (in order)
 
-1. On Windows: spike capture first (design doc, "Technical calls" 3 to 5) before building on it.
-2. Write the plan for the capture engine, then Tauri shell, recorder toolbar and export.
-3. Known gaps from the final review, to schedule: see "Deferred" in `docs/LEARNINGS.md`.
+1. Write the plan for the capture engine, then Tauri shell, recorder toolbar and export.
+2. Known gaps from the final review, to schedule: see "Deferred" in `docs/LEARNINGS.md`.
 
 ## Rules
 
