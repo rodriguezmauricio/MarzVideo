@@ -1,3 +1,4 @@
+import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { create } from "zustand";
 import { isTauri } from "../platform";
@@ -25,7 +26,9 @@ export const useAppStore = create<AppState>((set) => ({
   ...initial(),
   openProject: (dir) => set({ screen: "editor", dir }),
   async goHome() {
-    await flushAutosave();
+    // A failed save keeps the editor open: the strip shows "Save failed. Retrying..." and the
+    // edit is retried; leaving now would drop it.
+    if (!(await flushAutosave())) return;
     set({ screen: "home", dir: null });
   },
 }));
@@ -37,5 +40,15 @@ export function openStoppedRecordings(): void {
   void listen<string>("recorder://open-project", async (e) => {
     await flushAutosave();
     useAppStore.getState().openProject(e.payload);
+  });
+}
+
+/** In the app: closing the window saves the last edit first. Rust holds the close and sends
+ *  `app://flush`; the page saves and asks Rust to close. If the save fails, the window stays while
+ *  the retry runs; Rust closes it after 3 s either way (src-tauri/src/close.rs). */
+export function saveBeforeClose(): void {
+  if (!isTauri()) return;
+  void listen("app://flush", async () => {
+    if (await flushAutosave()) await invoke("close_main");
   });
 }

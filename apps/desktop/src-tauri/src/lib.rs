@@ -1,5 +1,6 @@
 //! Marz Recorder desktop shell: a Tauri 2 window around the editor.
 
+mod close;
 mod export;
 mod projects;
 mod recorder;
@@ -14,7 +15,10 @@ pub fn run() {
         .manage(recorder::Recorder::default())
         .manage(recording::Recording::default())
         .manage(export::Exports::default())
+        .manage(close::Closing::default())
+        .on_window_event(close::on_window_event)
         .invoke_handler(tauri::generate_handler![
+            close::close_main,
             projects::projects_dir,
             projects::list_projects,
             projects::pick_project,
@@ -42,6 +46,7 @@ pub fn run() {
             export::export_chunk,
             export::export_finish,
             export::export_cancel,
+            export::export_cancel_all,
             export::show_in_folder,
         ])
         .build(tauri::generate_context!())

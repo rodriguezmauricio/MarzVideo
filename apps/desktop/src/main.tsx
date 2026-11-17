@@ -2,9 +2,10 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import "./index.css";
 import { App } from "./App";
-import { openStoppedRecordings } from "./state/appStore";
+import { openStoppedRecordings, saveBeforeClose } from "./state/appStore";
 
 openStoppedRecordings();
+saveBeforeClose();
 
 // Dev only: `?export=memory` runs the export pipeline into memory (Task 15 check). Not in the build.
 if (import.meta.env.DEV) {

@@ -119,3 +119,12 @@ test("flush with no new edit still waits for the save in flight", async () => {
   await f;
   expect(save).toHaveBeenCalledTimes(1);
 });
+
+test("flush tells whether everything is saved", async () => {
+  const save = vi.fn().mockRejectedValueOnce(new Error("disk")).mockResolvedValue(undefined);
+  const a = createAutosave(save, 2000);
+  expect(await a.flush()).toBe(true); // nothing pending
+  a.schedule();
+  expect(await a.flush()).toBe(false); // the save failed; it stays pending
+  expect(await a.flush()).toBe(true);
+});

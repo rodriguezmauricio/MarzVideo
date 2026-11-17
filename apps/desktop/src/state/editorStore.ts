@@ -10,8 +10,9 @@ export type Selection = { kind: "zoom" | "cut"; id: string } | null;
 const AUTOSAVE_DELAY_MS = 2000;
 let autosave: ReturnType<typeof createAutosave> | null = null;
 
-/** Save any pending edit right now (used before the page closes). */
-export const flushAutosave = (): Promise<void> => autosave?.flush() ?? Promise.resolve();
+/** Save any pending edit right now (before leaving the project or closing the window). True when
+ *  everything is saved. */
+export const flushAutosave = (): Promise<boolean> => autosave?.flush() ?? Promise.resolve(true);
 
 type EditorState = {
   status: "idle" | "loading" | "ready" | "error";

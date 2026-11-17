@@ -47,11 +47,13 @@ export function createAutosave(save: () => Promise<void>, delayMs: number, onSta
       onStatus?.("unsaved");
       arm();
     },
-    /** Save any pending edit now, after the save in flight (if any) has finished. */
-    async flush(): Promise<void> {
+    /** Save any pending edit now, after the save in flight (if any) has finished. True when
+     *  everything is saved; false when the save failed (it stays pending and is retried). */
+    async flush(): Promise<boolean> {
       if (timer !== undefined) clearTimeout(timer);
       timer = undefined;
       await saveNow();
+      return !pending;
     },
   };
 }
