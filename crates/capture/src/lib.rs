@@ -14,8 +14,6 @@ pub mod win;
 use std::fmt;
 
 // Dependencies are declared now and used by later tasks; silence the unused-dependency lint until then.
-use serde as _;
-use serde_json as _;
 #[cfg(windows)]
 use {wasapi as _, windows as _, windows_capture as _};
 
