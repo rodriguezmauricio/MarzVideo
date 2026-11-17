@@ -52,6 +52,11 @@ pub struct Rect {
     pub h: u32,
 }
 
+pub const SCREEN_NOT_FOUND: &str = "Could not find this screen. Move the window to a screen and try again.";
+
+/// Lock order: `meter` before `monitor`. The meter lock is held across stop, start and store so
+/// meter starts never overlap, and `close_all` clears the monitor under it so a start that was
+/// waiting sees the recorder closed and refuses.
 #[derive(Default)]
 pub struct Recorder {
     monitor: Mutex<Option<RecMonitor>>,
@@ -100,7 +105,7 @@ pub async fn open_recorder(app: AppHandle, state: State<'_, Recorder>) -> Result
         None => main.primary_monitor().map_err(err)?.ok_or("No monitor was found.")?,
     };
     let (pos, size) = (*tmon.position(), *tmon.size());
-    let index = platform::capture_index(pos.x, pos.y).unwrap_or(0);
+    let index = platform::capture_index(pos.x, pos.y).ok_or(SCREEN_NOT_FOUND)?;
     let mon = RecMonitor {
         index,
         name: tmon.name().cloned().unwrap_or_else(|| format!("Display {}", index + 1)),
@@ -111,10 +116,39 @@ pub async fn open_recorder(app: AppHandle, state: State<'_, Recorder>) -> Result
         scale: tmon.scale_factor(),
     };
     *state.monitor.lock().map_err(err)? = Some(mon.clone());
+    match build_windows(&app, &mon) {
+        Ok(overlay) => {
+            // If the overlay goes away by any route (Alt+F4 too), the recorder closes and Home comes back.
+            let handle = app.clone();
+            overlay.on_window_event(move |e| {
+                if let tauri::WindowEvent::Destroyed = e {
+                    close_all(&handle);
+                }
+            });
+            overlay.show().map_err(err)?;
+            main.hide().map_err(err)?;
+            Ok(())
+        }
+        Err(e) => {
+            // Leave nothing half open, so the next open_recorder starts clean.
+            for label in [BAR, OVERLAY] {
+                if let Some(w) = app.get_webview_window(label) {
+                    let _ = w.destroy();
+                }
+            }
+            if let Ok(mut m) = state.monitor.lock() {
+                *m = None;
+            }
+            Err(e)
+        }
+    }
+}
 
-    let overlay = WebviewWindowBuilder::new(&app, OVERLAY, WebviewUrl::App("recorder.html".into()))
+/// Build the overlay and the bar, both excluded from capture right after creation.
+fn build_windows(app: &AppHandle, mon: &RecMonitor) -> Result<WebviewWindow, String> {
+    let overlay = WebviewWindowBuilder::new(app, OVERLAY, WebviewUrl::App("recorder.html".into()))
         .title("Marz Recorder region")
-        .initialization_script(init_script(&mon))
+        .initialization_script(init_script(mon))
         .transparent(true)
         .decorations(false)
         .shadow(false)
@@ -128,9 +162,9 @@ pub async fn open_recorder(app: AppHandle, state: State<'_, Recorder>) -> Result
     overlay.set_position(tauri::PhysicalPosition::new(mon.x, mon.y)).map_err(err)?;
     overlay.set_size(tauri::PhysicalSize::new(mon.width, mon.height)).map_err(err)?;
 
-    let bar = WebviewWindowBuilder::new(&app, BAR, WebviewUrl::App("bar.html".into()))
+    let bar = WebviewWindowBuilder::new(app, BAR, WebviewUrl::App("bar.html".into()))
         .title("Marz Recorder")
-        .initialization_script(init_script(&mon))
+        .initialization_script(init_script(mon))
         .transparent(true)
         .decorations(false)
         .shadow(false)
@@ -142,32 +176,26 @@ pub async fn open_recorder(app: AppHandle, state: State<'_, Recorder>) -> Result
         .map_err(err)?;
     platform::exclude(&bar)?;
     // The bar shows itself once it knows its size (`fit_bar`).
-    let (x, y, w, h) = bar_placement(&mon, 900.0, 110.0, 24.0);
+    let (x, y, w, h) = bar_placement(mon, 900.0, 110.0, 24.0);
     bar.set_position(tauri::PhysicalPosition::new(x, y)).map_err(err)?;
     bar.set_size(tauri::PhysicalSize::new(w, h)).map_err(err)?;
 
-    // If the overlay goes away by any route (Alt+F4 too), the recorder closes and Home comes back.
-    let handle = app.clone();
-    overlay.on_window_event(move |e| {
-        if let tauri::WindowEvent::Destroyed = e {
-            close_all(&handle);
-        }
-    });
-    overlay.show().map_err(err)?;
-    main.hide().map_err(err)?;
-    Ok(())
+    Ok(overlay)
 }
 
 fn close_all(app: &AppHandle) {
     let state = app.state::<Recorder>();
-    meter::stop(&state);
+    {
+        let mut meter = state.meter.lock().unwrap_or_else(|p| p.into_inner());
+        meter::stop(&mut meter);
+        if let Ok(mut m) = state.monitor.lock() {
+            *m = None;
+        }
+    }
     for label in [BAR, OVERLAY] {
         if let Some(w) = app.get_webview_window(label) {
             let _ = w.destroy();
         }
-    }
-    if let Ok(mut m) = state.monitor.lock() {
-        *m = None;
     }
     if let Some(main) = app.get_webview_window("main") {
         let _ = main.show();
@@ -213,21 +241,22 @@ pub fn fit_bar(window: WebviewWindow, state: State<'_, Recorder>, w: f64, h: f64
 /// Open `mic_id` (None = default) for the meter; emits `recorder://level` (0..1) to the bar every 50 ms.
 #[tauri::command(async)]
 pub fn start_mic_meter(app: AppHandle, state: State<'_, Recorder>, mic_id: Option<String>) -> Result<(), String> {
-    meter::stop(&state);
-    let run = meter::start(app, mic_id)?;
-    *state.meter.lock().map_err(err)? = Some(run);
+    let mut meter = state.meter.lock().map_err(err)?;
+    meter::stop(&mut meter);
+    monitor(&state)?; // closed recorder: no meter
+    *meter = Some(meter::start(app, mic_id)?);
     Ok(())
 }
 
 #[tauri::command(async)]
 pub fn stop_mic_meter(state: State<'_, Recorder>) {
-    meter::stop(&state);
+    meter::stop(&mut state.meter.lock().unwrap_or_else(|p| p.into_inner()));
 }
 
 /// Stub until Task 13 wires the session. Stops the meter as the real start will.
 #[tauri::command(async)]
 pub fn start_recording(state: State<'_, Recorder>) -> Result<(), String> {
-    meter::stop(&state);
+    meter::stop(&mut *state.meter.lock().map_err(err)?);
     Err("Recording is wired in the next step.".into())
 }
 
@@ -270,24 +299,41 @@ mod platform {
 }
 
 mod meter {
-    use super::{Recorder, BAR};
-    use std::sync::atomic::{AtomicBool, Ordering};
+    use super::BAR;
+    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
     use std::sync::Arc;
     use std::thread::JoinHandle;
+    #[cfg(windows)]
     use std::time::Duration;
+    #[cfg(windows)]
     use tauri::{AppHandle, Emitter};
 
+    /// Meter threads alive right now (logged in debug builds, to catch leaks).
+    static LIVE: AtomicUsize = AtomicUsize::new(0);
+
+    /// One running meter. Dropping it stops and joins the thread, so a replaced run never leaks.
     pub struct Run {
         stop: Arc<AtomicBool>,
-        thread: JoinHandle<()>,
+        thread: Option<JoinHandle<()>>,
     }
 
-    pub fn stop(state: &Recorder) {
-        let run = state.meter.lock().ok().and_then(|mut m| m.take());
-        if let Some(run) = run {
-            run.stop.store(true, Ordering::SeqCst);
-            let _ = run.thread.join();
+    impl Drop for Run {
+        fn drop(&mut self) {
+            self.stop.store(true, Ordering::SeqCst);
+            if let Some(t) = self.thread.take() {
+                let _ = t.join();
+            }
         }
+    }
+
+    /// Stop the run in `slot`, if any (the caller holds the meter lock).
+    pub fn stop(slot: &mut Option<Run>) {
+        drop(slot.take());
+    }
+
+    #[cfg_attr(not(debug_assertions), allow(dead_code))]
+    pub fn live() -> usize {
+        LIVE.load(Ordering::SeqCst)
     }
 
     #[cfg(windows)]
@@ -295,6 +341,9 @@ mod meter {
         let handle = marz_capture::win::mic::start_meter(mic_id.as_deref()).map_err(|e| e.to_string())?;
         let stop = Arc::new(AtomicBool::new(false));
         let flag = stop.clone();
+        LIVE.fetch_add(1, Ordering::SeqCst);
+        #[cfg(debug_assertions)]
+        eprintln!("marz-meter: started, live runs {}", live());
         let thread = std::thread::Builder::new()
             .name("marz-meter".into())
             .spawn(move || {
@@ -304,14 +353,46 @@ mod meter {
                     std::thread::sleep(Duration::from_millis(50));
                 }
                 handle.stop();
+                LIVE.fetch_sub(1, Ordering::SeqCst);
+                #[cfg(debug_assertions)]
+                eprintln!("marz-meter: stopped, live runs {}", live());
             })
-            .map_err(|e| e.to_string())?;
-        Ok(Run { stop, thread })
+            .map_err(|e| {
+                LIVE.fetch_sub(1, Ordering::SeqCst);
+                e.to_string()
+            })?;
+        Ok(Run { stop, thread: Some(thread) })
     }
 
     #[cfg(not(windows))]
-    pub fn start(_app: AppHandle, _mic_id: Option<String>) -> Result<Run, String> {
+    pub fn start(_app: tauri::AppHandle, _mic_id: Option<String>) -> Result<Run, String> {
         Err("The microphone meter needs Windows.".into())
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        #[test]
+        fn a_replaced_or_stopped_run_ends_its_thread() {
+            let ended = Arc::new(AtomicBool::new(false));
+            let stop = Arc::new(AtomicBool::new(false));
+            let (flag, done) = (stop.clone(), ended.clone());
+            let thread = std::thread::spawn(move || {
+                while !flag.load(Ordering::SeqCst) {
+                    std::thread::yield_now();
+                }
+                done.store(true, Ordering::SeqCst);
+            });
+            let mut slot = Some(Run { stop, thread: Some(thread) });
+            stop_slot_for_test(&mut slot);
+            assert!(slot.is_none());
+            assert!(ended.load(Ordering::SeqCst), "the thread was joined");
+        }
+
+        fn stop_slot_for_test(slot: &mut Option<Run>) {
+            stop(slot);
+        }
     }
 }
 

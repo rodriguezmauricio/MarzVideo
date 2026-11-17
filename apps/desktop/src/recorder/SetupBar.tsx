@@ -32,10 +32,16 @@ export function SetupBar({ placed = false }: { placed?: boolean }) {
   const mic = mics.find((m) => m.id === s.micId) ?? mics.find((m) => m.default) ?? mics[0] ?? null;
   const micId = mic?.id ?? null;
 
-  // The meter follows the picked mic during setup.
+  // The meter follows the picked mic during setup. Each start replaces the running meter in Rust
+  // (serialized there), so the cleanup only drops a stale result; it does not send a stop that
+  // could overtake the next start. Closing the recorder stops the meter.
   useEffect(() => {
     if (!info || phase !== "setup" || !micId) return;
-    api.startMeter(micId).catch(() => setLevel(0));
+    let current = true;
+    api.startMeter(micId).catch(() => current && setLevel(0));
+    return () => {
+      current = false;
+    };
   }, [api, info, micId, phase]);
 
   // The engine checks the region (normalize_region); the bar shows its sentence.
