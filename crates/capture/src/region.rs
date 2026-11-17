@@ -27,12 +27,15 @@ pub const FPS_CAPPED: &str = "This screen records at 30 fps";
 const MAX_PIXELS_AT_FULL_RATE: u64 = 2560 * 1440;
 const CAPPED_FPS: u32 = 30;
 
-/// Refuse a frame rate above 30 for a capture area larger than 2560 x 1440.
-pub fn check_fps(w: u32, h: u32, fps: u32) -> Result<(), String> {
-    if u64::from(w) * u64::from(h) > MAX_PIXELS_AT_FULL_RATE && fps > CAPPED_FPS {
-        return Err(FPS_CAPPED.to_string());
-    }
-    Ok(())
+/// The frame rate to record at: `requested`, lowered to 30 for a capture area larger than
+/// 2560 x 1440 (the bar tells the person beforehand with `FPS_CAPPED`).
+pub fn capture_fps(w: u32, h: u32, requested: u32) -> u32 {
+    if fps_capped(w, h) { requested.min(CAPPED_FPS) } else { requested }
+}
+
+/// True when a `w` x `h` capture area records at 30 fps at most.
+pub fn fps_capped(w: u32, h: u32) -> bool {
+    u64::from(w) * u64::from(h) > MAX_PIXELS_AT_FULL_RATE
 }
 
 /// Clamp `r` to a `monitor_w` x `monitor_h` monitor, round width and height down to even, and
@@ -99,19 +102,20 @@ mod tests {
     }
 
     #[test]
-    fn sixty_fps_is_fine_up_to_1440p() {
-        assert_eq!(check_fps(1920, 1080, 60), Ok(()));
-        assert_eq!(check_fps(2560, 1440, 60), Ok(()));
-        assert_eq!(check_fps(1000, 562, 144), Ok(()));
+    fn sixty_fps_is_kept_up_to_1440p() {
+        assert_eq!(capture_fps(1920, 1080, 60), 60);
+        assert_eq!(capture_fps(2560, 1440, 60), 60);
+        assert_eq!(capture_fps(1000, 562, 144), 144);
     }
 
     #[test]
-    fn above_1440p_is_capped_at_30_fps_with_the_exact_message() {
-        assert_eq!(check_fps(3840, 2160, 60), Err("This screen records at 30 fps".to_string()));
-        assert_eq!(check_fps(3440, 1440, 60), Err(FPS_CAPPED.to_string()));
-        assert_eq!(check_fps(3840, 2160, 31), Err(FPS_CAPPED.to_string()));
-        assert_eq!(check_fps(3840, 2160, 30), Ok(()));
-        assert_eq!(check_fps(3840, 2160, 24), Ok(()));
+    fn above_1440p_is_clamped_to_30_fps_instead_of_refused() {
+        assert_eq!(capture_fps(3840, 2160, 60), 30);
+        assert_eq!(capture_fps(3440, 1440, 60), 30);
+        assert_eq!(capture_fps(3840, 2160, 31), 30);
+        assert_eq!(capture_fps(3840, 2160, 30), 30);
+        assert_eq!(capture_fps(3840, 2160, 24), 24);
+        assert_eq!(FPS_CAPPED, "This screen records at 30 fps");
     }
 
     #[test]

@@ -110,17 +110,21 @@ pub fn project_json(meta: &ProjectMeta) -> Value {
     })
 }
 
-/// Write `project.json` through `project.json.tmp` and a rename, so a crash never leaves a
+/// Write `text` to `dir/name` through `name.tmp` and a rename, so a crash never leaves a
 /// half-written file under the real name.
-pub fn write_project_json(dir: &Path, meta: &ProjectMeta) -> io::Result<()> {
-    let text = serde_json::to_string_pretty(&project_json(meta)).map_err(io::Error::other)? + "
-";
-    let tmp = dir.join("project.json.tmp");
+fn write_atomic(dir: &Path, name: &str, text: &str) -> io::Result<()> {
+    let tmp = dir.join(format!("{name}.tmp"));
     let mut file = File::create(&tmp)?;
     file.write_all(text.as_bytes())?;
     file.sync_all()?;
     drop(file);
-    std::fs::rename(&tmp, dir.join("project.json"))
+    std::fs::rename(&tmp, dir.join(name))
+}
+
+/// Write `project.json` atomically (`write_atomic`).
+pub fn write_project_json(dir: &Path, meta: &ProjectMeta) -> io::Result<()> {
+    let text = serde_json::to_string_pretty(&project_json(meta)).map_err(io::Error::other)? + "\n";
+    write_atomic(dir, "project.json", &text)
 }
 
 /// RFC 3339 UTC at second precision (`createdAt`, `startedAt`) for seconds since the Unix epoch.
@@ -149,10 +153,13 @@ pub fn iso_utc_now() -> String {
 /// Name of the file that marks a recording in progress.
 pub const CRASH_MARKER: &str = ".recording";
 
-/// Write the crash marker: the `ProjectMeta` known at start (duration, offsets and zooms still empty).
+/// Write the crash marker: the `ProjectMeta` known at start (duration, offsets and zooms still empty),
+/// rewritten once the real offsets are known.
 pub fn write_crash_marker(dir: &Path, meta: &ProjectMeta) -> io::Result<()> {
     let text = serde_json::to_string_pretty(meta).map_err(io::Error::other)?;
-    std::fs::write(dir.join(CRASH_MARKER), text)
+    // Atomic: the marker is rewritten mid-take with the real offsets, and a kill during that
+    // rewrite must leave the old marker, not a half-written one recovery cannot read.
+    write_atomic(dir, CRASH_MARKER, &text)
 }
 
 #[cfg(test)]
@@ -296,6 +303,19 @@ mod tests {
         assert_eq!(v["version"], 1);
         assert!(v.get("old").is_none());
         assert!(!dir.join("project.json.tmp").exists());
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn crash_marker_write_is_atomic() {
+        let dir = temp_dir("project-marker-atomic");
+        // A half-written temp file left by a kill mid-rewrite must not survive or leak in.
+        std::fs::write(dir.join(format!("{CRASH_MARKER}.tmp")), "{\"half\":").unwrap();
+        std::fs::write(dir.join(CRASH_MARKER), "{\"old\":true}").unwrap();
+        write_crash_marker(&dir, &sample_meta()).unwrap();
+        let back: ProjectMeta = serde_json::from_str(&std::fs::read_to_string(dir.join(CRASH_MARKER)).unwrap()).unwrap();
+        assert_eq!(back, sample_meta());
+        assert!(!dir.join(format!("{CRASH_MARKER}.tmp")).exists());
         std::fs::remove_dir_all(&dir).ok();
     }
 

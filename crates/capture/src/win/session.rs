@@ -27,7 +27,7 @@ use crate::clock::RecClock;
 use crate::events::{EventLog, EventsHeader, ZoomAction};
 use crate::ffmpeg::{self, ScreenEncoder};
 use crate::project::{self, LiveZoomMark, MicMeta, ProjectMeta, ZoomPreset, CRASH_MARKER};
-use crate::region::{check_fps, normalize_region, PxRect};
+use crate::region::{capture_fps, normalize_region, PxRect};
 use crate::slots::Slotter;
 use crate::writer::{self, SlotFrame, WriterStats};
 use crate::CaptureError;
@@ -297,8 +297,8 @@ impl Session {
         let region = opts.region.map(|r| normalize_region(r, monitor.width, monitor.height)).transpose().map_err(CaptureError::User)?;
         let rect = screen::capture_rect(opts.monitor, region)?;
         let (w, h) = rect.size();
-        check_fps(w, h, opts.fps).map_err(CaptureError::User)?;
-        let fps = opts.fps;
+        // Above 2560 x 1440 the recording runs at 30 fps; the bar says so before Record.
+        let fps = capture_fps(w, h, opts.fps);
 
         // Folder and crash marker.
         let dir = opts.out_dir.join(format!("{}.marz", opts.name));
@@ -653,7 +653,11 @@ impl Session {
         meta.mic = mic_report.as_ref().map(|r| MicMeta { offset_us: r.first_rec_us.unwrap_or(0) });
         meta.zooms = project::live_zooms(&marks, &meta.presets, duration_us);
         project::write_project_json(&dir, &meta)?;
-        fs::remove_file(dir.join(CRASH_MARKER))?;
+        // project.json is written, so the recording is safe: a marker that will not go away is
+        // only noise (`needs_recovery` is false while project.json exists). Never fail the stop on it.
+        if let Err(e) = fs::remove_file(dir.join(CRASH_MARKER)) {
+            eprintln!("marz-capture: could not remove the crash marker in {}: {e}", dir.display());
+        }
 
         let st = &screen_sh.stats;
         let ms = |hns: u64| hns as f64 / 1e4;

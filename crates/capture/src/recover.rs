@@ -36,12 +36,16 @@ pub fn recover(dir: &Path, ffprobe: &Path) -> Result<RecoverReport, CaptureError
 
     let screen_us = screen_duration_us(ffprobe, &dir.join("screen.mp4"), meta.fps)?;
 
-    // The mic track only counts when the marker says one was recorded and the file is there.
+    // The mic track only counts when the marker says one was recorded and the file holds samples
+    // (a kill before the first packet leaves a bare header or less).
     let mic_path = dir.join("mic.wav");
     let mic_us = if meta.mic.is_some() && mic_path.exists() { patch_wav(&mic_path)? } else { None };
-    meta.mic = mic_us.map(|_| meta.mic.take().unwrap_or(MicMeta { offset_us: 0 }));
+    let has_mic = mic_us.is_some_and(|us| us > 0);
+    meta.mic = if has_mic { Some(meta.mic.take().unwrap_or(MicMeta { offset_us: 0 })) } else { None };
 
-    let duration_us = mic_us.map_or(screen_us, |mic| mic.min(screen_us));
+    // The screen sets the length (on the recording clock, from t0). A shorter mic is padded with
+    // silence by the editor and the export, as after a device loss.
+    let duration_us = meta.screen_offset_us.max(0) + screen_us;
     let marks = read_zoom_marks(&dir.join("events.jsonl"));
     meta.duration_us = duration_us;
     meta.zooms = live_zooms(&marks, &meta.presets, duration_us);
@@ -231,12 +235,44 @@ mod tests {
     }
 
     #[test]
-    fn duration_is_the_shorter_track() {
-        // Mic stopped after 1 s while the screen file holds about 2 s: the shorter one wins.
+    fn duration_follows_the_screen_not_a_shorter_mic() {
+        // Mic stopped after 1 s while the screen file holds about 2 s: the video is not cut to the mic.
         let Some((dir, ffprobe)) = killed_folder("recover-short-mic", Some(1)) else { return };
+        let screen_us = screen_duration_us(&ffprobe, &dir.join("screen.mp4"), 30).unwrap();
         let report = recover(&dir, &ffprobe).unwrap();
-        assert_eq!(report.duration_us, 1_000_000);
+        assert!(screen_us > 1_000_000, "screen {screen_us}");
+        assert_eq!(report.duration_us, screen_us);
+        let v: Value = serde_json::from_str(&std::fs::read_to_string(dir.join("project.json")).unwrap()).unwrap();
+        assert_eq!(v["tracks"]["mic"]["file"], "mic.wav", "the short mic track is kept");
         std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn duration_adds_the_screen_offset() {
+        let Some((dir, ffprobe)) = killed_folder("recover-offset", None) else { return };
+        let mut meta = start_meta(false);
+        meta.screen_offset_us = 250_000;
+        write_crash_marker(&dir, &meta).unwrap();
+        let screen_us = screen_duration_us(&ffprobe, &dir.join("screen.mp4"), 30).unwrap();
+        let report = recover(&dir, &ffprobe).unwrap();
+        assert_eq!(report.duration_us, 250_000 + screen_us);
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn a_mic_without_samples_is_dropped() {
+        // Killed before the first packet: a bare 44-byte header, or not even a whole header.
+        for (tag, bytes) in [("recover-mic-header-only", wav_with_zero_sizes(0)), ("recover-mic-short", vec![b'R', b'I', b'F', b'F', 0, 0])] {
+            let Some((dir, ffprobe)) = killed_folder(tag, None) else { return };
+            std::fs::write(dir.join("mic.wav"), bytes).unwrap();
+            write_crash_marker(&dir, &start_meta(true)).unwrap();
+            let report = recover(&dir, &ffprobe).unwrap();
+            assert!(report.duration_us > 1_000_000, "{tag}: duration {}", report.duration_us);
+            let v: Value = serde_json::from_str(&std::fs::read_to_string(dir.join("project.json")).unwrap()).unwrap();
+            assert!(v["tracks"].get("mic").is_none(), "{tag}: {v}");
+            assert_eq!(v["durationUs"], report.duration_us);
+            std::fs::remove_dir_all(&dir).ok();
+        }
     }
 
     #[test]

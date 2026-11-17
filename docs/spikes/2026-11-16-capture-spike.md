@@ -222,8 +222,9 @@ Verdict: **1440p at 60 fps holds** with a wide margin (no write later than one s
 worst steady write 5 ms). **4K at 60 fps does not hold steadily**: two of four runs were under 98% of the target
 (56.4 and 58.9 fps), and in every run most frames were written one to two slots late, which means the pipe
 (about 2 GB/s) is the limit. The real recorder drops frames when its queue fills, so 4K at 60 would show as
-drops and repeats. Result: capture above 2560 x 1440 pixels is capped at 30 fps (`region::check_fps`, called
-from `Session::start`; the message is "This screen records at 30 fps"). The area is the captured region, so a
+drops and repeats. Result: capture above 2560 x 1440 pixels is capped at 30 fps (`region::capture_fps`, called
+from `Session::start`, lowers 60 to 30; since the final review it no longer refuses the start, and the setup
+bar shows the note "This screen records at 30 fps." beforehand). The area is the captured region, so a
 small region on a 4K screen still records at 60. The GPU path (Media Foundation or NVENC with D3D11 input) is
 parked, not built in M1. The 4K cap follows the plan's "1440p or 4K fails" rule. The 1440p criterion alone would not have triggered it.
 
