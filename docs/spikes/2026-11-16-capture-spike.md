@@ -2,15 +2,15 @@
 
 Date: 2026-11-16. Machine: Windows 11, i7-12700H (20 threads), RTX 3060 Laptop + Iris Xe,
 1920x1080 internal screen at 165 Hz, Intel Smart Sound mic array.
-Code: `crates/capture` (throwaway, one file). Run it:
+Code: the spike was one throwaway file; it was replaced by the engine (`crates/capture`, Task 8 of
+the capture plan) and deleted. The engine CLI reproduces the run (see "Engine run" below):
 
 ```
-cd crates/capture && cargo build --release
-target/release/marz-capture.exe ../../samples/<name>.marz --secs 180
+cargo build --release -p marz-capture
+target/release/marz-capture.exe record samples/<name>.marz --secs 180 --report
 ```
 
 Then `pnpm --filter @marz/desktop dev` and open `http://localhost:5173/?project=<name>`.
-Flags: `--fps N`, `--encoder NAME`, `--min-interval-us N` (0 = OS default), `--no-test-window`.
 
 ## Verdict
 
@@ -88,3 +88,88 @@ excluded test window on top.
   or keep frames on the GPU (Media Foundation or NVENC with D3D11 input) if the 1440p/4K pipe test fails.
 - Pad mic gaps from the QPC position, not only from the discontinuity flag.
 - Keep warm-up before t0; show "recording" only after both tracks deliver.
+
+## Engine run (2026-11-17)
+
+The real engine (`Session` in `crates/capture/src/win/session.rs`, CLI `marz-capture record`),
+release build, same machine, `h264_nvenc` picked by the probe, 1920x1080 at 165 Hz, default mic.
+Every run below passes `packages/format` (`parseProject` and `parseEvents`), and ffprobe reads
+H.264 Main, yuv420p, `60/1`. Recordings are in `samples/engine-*.marz` (gitignored).
+
+### 3-minute run (Step 2)
+
+Content was not the same as the spike's. The machine was in use during the runs: the animated Edge
+window (canvas redrawing at 166 fps, the spike's content) stayed in front for the first 25 s of
+run A, then other windows covered it; in run B a small always-on-top animated window was used and
+closed after 25 s. A static screen makes WGC deliver fewer frames, and the CFR writer repeats the
+last frame for every empty slot, so the repeat count of these runs measures the content, not the
+engine. Run A also had a scripted mouse (circling, clicking only when over the Edge window).
+
+| What | Spike | Run A (`engine-3min`) | Run B (`engine-3min-b`) |
+|---|---|---|---|
+| Output | 10,803 frames, 60 fps CFR | 10,799 frames = expected 10,799, ffprobe 60/1 | 10,800 = expected 10,800, ffprobe 60/1 |
+| Repeats | 14 (0.13%) | 640 (5.9%); 18 in the first 20 s (animated part), about 5 to 9 of them at start | 7,779 (72%), static screen most of the run |
+| WGC frames | 89.8/s | 81/s while animated, 65.5/s overall | 82/s while animated, 27.6/s overall |
+| Queue-full drops | 5 | 11, all in the first 10 s | 10 in the first 80 s, then 1,206 between 90 s and 180 s (heavy desktop use, see concerns) |
+| Frame copy | 4.0 ms avg, 8.9 ms worst | 3.89 ms avg, 17.4 ms worst | 4.09 ms avg, 17.9 ms worst |
+| WGC timestamp vs QPC now | 0.00 ms avg, 2.3 ms worst | 0.40 ms avg, 19.6 ms worst; stamps up to 9.5 ms ahead of now | 0.17 ms avg, 14.4 ms worst; up to 9.1 ms ahead |
+| Mic drift | 1.0 ms worst, 0.03 ms at end | 0.77 ms worst, 0 at end | 0.81 ms worst, 0.06 ms at end |
+| Mic gap padded | 20 ms once | 20 ms once | 20 ms once |
+| Offsets | screen 13 ms, mic 2 ms | screen 14.3 ms, mic 1.5 ms | screen 6.5 ms, mic 6.1 ms |
+| Warm-up | not measured | 162 ms | 159 ms |
+| CPU capture process | 29% of one core | 24.9% | 18.1% |
+| CPU FFmpeg | 24% of one core | 30.8% (+28%) | 38.8% (+62%) |
+| Sizes | 2.2 Mbit/s | 2.15 Mbit/s, mic 5.8 MB/min, events 115 KB/min | 2.26 Mbit/s |
+
+Holds: 60 fps CFR with the exact frame count, mic drift under 2 ms, offsets under 20 ms, capture
+CPU within 20%. Not shown: repeats under 0.5% and FFmpeg CPU within 20% (content not comparable).
+The browser editor opened `engine-3min` and `engine-pause` with screen, mic, waveform, the cursor
+drawn from `events.jsonl` and the live zoom blocks.
+
+Found and fixed during the run: WGC frame timestamps are up to about 9.5 ms ahead of QPC now
+(the frame's present time), so frames one or two slots past the stop time can already be queued
+when the stop time is read. The writer wrote one frame too many (180 for an expected 179). It now
+holds three slots back (`writer::HOLD_SLOTS`), and every run since matches the expected count.
+
+### Pause (Step 3)
+
+`--secs 60 --pause-at 0.5,20,40 --resume-at 5,25 --zoom-at 8,12,30`: pauses 0.5 to 5, 20 to 25,
+and 40 to the stop (stopped while paused). Wall 60.003 s, paused 29.500 s, wall minus paused
+30.503 s; `durationUs` 30,503,063. Video 1,829 frames (ffprobe) for `durationUs` minus the 14.4 ms
+screen offset = 1,829.3 frames. Events: `pause`/`resume` at 503,126 and at 15,504,701 (equal
+`tUs`), last `pause` at 30,503,063. mic.wav 30.5029 s plus 0.2 ms offset = `durationUs`. Two live
+zoom blocks (3.50 to 7.50 s and 20.50 s to the end) on the pause-adjusted clock.
+
+### Region (Step 4)
+
+`--secs 10 --region 101,101,1001,563`: `source` 1000 x 562 (width and height rounded down to even),
+ffprobe 1000 x 562, 599 frames. A frame at 5 s matches a desktop screenshot cropped to
+(101, 101, 1000, 562). Cursor moved by script to (101, 101) then (601, 401): events show
+`x 0, y 0` and `x 500, y 300`.
+
+### Crash (Step 5)
+
+`--secs 60`, killed with `taskkill /F` 20.4 s after recording started. The `.recording` marker
+held the real offsets (screen 17.5 ms, mic 8.3 ms, rewritten after the first frame and packet).
+`marz-capture recover samples/engine-crash.marz`: `durationUs` 20,320,000 (the shorter track),
+screen 1,222 frames, WAV header patched, marker removed; a second `recover` says nothing to do.
+The project passes `packages/format`.
+
+### Mic loss (Step 6)
+
+Simulated: `--secs 30 --simulate-mic-loss-at 10` makes the mic thread take the same path as a
+device error (warning, clean stop, padding at stop). Printed "Microphone disconnected. Recording
+continues without sound." at 10 s; the recording continued; mic.wav 30.0004 s plus 5.0 ms offset =
+`durationUs` 30,005,355 (20.01 s of end padding); after 10.2 s the file is digital silence.
+Not checked: a real unplug or disabling the device in Sound settings (needs Mauricio).
+
+### Open points
+
+- Repeat rate and FFmpeg CPU on the spike's content need one clean 3-minute run with nobody using
+  the machine: open an animated page full screen, then
+  `target/release/marz-capture.exe record samples/clean-3min.marz --secs 180 --report`.
+- Under heavy desktop use (run B, 90 s on) the writer queue filled about 13 times a second while
+  WGC delivered only about 20 frames a second: the raw pipe to FFmpeg stalls when the machine is
+  busy. This is the pipe risk from "Not checked" above; Task 9's pipe check should measure it.
+- About 5 to 9 repeats and 10 to 13 queue-full drops in the first second of every run (FFmpeg opens
+  the encoder on the first frame). Small over a long recording, visible as a short hitch at the start.
