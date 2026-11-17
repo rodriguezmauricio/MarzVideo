@@ -10,7 +10,18 @@
 
 **Spec:** `docs/superpowers/specs/2026-11-15-milestone-1-design.md` (build order steps 4 to 6, "Technical calls", "Format contract"). Spike facts: `docs/spikes/2026-11-16-capture-spike.md`. Design (binding): `docs/design/avant-garde/DESIGN-SYSTEM.md`.
 
-## Decisions Mauricio must confirm before Task 1
+## Decisions (approved by Mauricio on 2026-11-17, all three, plus the export presets below)
+
+**Export presets (his ask: best quality at a small size for YouTube and Instagram/TikTok).** Two presets, picked at export time; the preset is an export choice only, `project.output` and the format do not change.
+
+| Preset | Size | Frame rate | Video | Audio | Layout |
+|---|---|---|---|---|---|
+| YouTube | 1920 x 1080 | source fps (60 max) | H.264 High, VBR 12 Mbit/s at 60 fps, 8 Mbit/s at 30, keyframe every 1 s | AAC 192 kbit/s, 48 kHz | the 16:9 frame as previewed |
+| Instagram and TikTok | 1080 x 1920 | 30 fps | H.264 High, VBR 6 Mbit/s, keyframe every 1 s | AAC 192 kbit/s, 48 kHz | the 16:9 frame scaled to 1080 x 608, centered at y 656 on ink (letterbox) |
+
+Why these numbers: YouTube re-encodes every upload, so it gets the upload bitrate its help page recommends for 1080p SDR; screen content uses less of a VBR budget, so real files are usually smaller than the cap. Both platforms re-encode vertical uploads to 30 fps, so exporting 60 only wastes size. All files get `+faststart` so uploads start processing early. A real 9:16 crop that follows the zooms is the product-spec "auto-reframe" feature, out of M1 scope; letterbox ships now.
+
+### The three decisions
 
 1. **Export encodes video in the webview, FFmpeg only muxes.** Technical call 1 said FFmpeg encodes raw frames piped from the compositor. At 1920 x 1080 that is about 500 MB/s through the Tauri bridge, which is the risk. Plan: the WebCodecs `VideoEncoder` (Windows hardware H.264 inside WebView2) encodes; only compressed chunks (about 1 to 2 MB/s) cross to Rust; FFmpeg adds audio and writes the file. Same compositor, same pixels, so preview and export still match. Task 15 Step 1 checks the encoder exists on this machine; if it does not, the fallback is the original raw-frame pipe and the measured speed goes in the spike doc.
 2. **Home and the recorder bars are built in M1.** `CLAUDE.md` and the design README call them "later milestone", but spec build step 5 needs them (you cannot record without the recorder bar or reopen a recording without Home). Task 17 corrects those two lines.
@@ -341,19 +352,20 @@ Not added on purpose: a global-shortcut plugin (hotkeys use `RegisterHotKey` fro
 **Where:** anywhere (Edge for the browser check); Step 1 on Windows.
 
 **Files:**
-- Create: `apps/desktop/src/export/outputFrames.ts`, `apps/desktop/src/export/outputFrames.test.ts`, `apps/desktop/src/export/frameSource.ts`, `apps/desktop/src/export/exportVideo.ts`, `apps/desktop/src/export/sink.ts`, `apps/desktop/src/export/memorySink.ts`
+- Create: `apps/desktop/src/export/presets.ts`, `apps/desktop/src/export/outputFrames.ts`, `apps/desktop/src/export/outputFrames.test.ts`, `apps/desktop/src/export/frameSource.ts`, `apps/desktop/src/export/exportVideo.ts`, `apps/desktop/src/export/sink.ts`, `apps/desktop/src/export/memorySink.ts`
 - Modify: `apps/desktop/package.json` (dep `mp4box`), `packages/compositor/src/draw.ts` (`ctx` type widened to `CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D`, no behaviour change); if `Preview.tsx` maps source time to media time inline (screen `offsetUs`), move that into `playback/clock.ts` as `mediaTimeSec(project, srcUs)` and use it in both places.
 
 **Interfaces:**
 - Consumes: `keptSegments`, `outputDurationUs`, `outputToSource` (`@marz/timeline`), `frameAt`, `drawFrame` (`@marz/compositor`).
 - Produces:
+  - `presets.ts`: `type ExportPresetId = "youtube" | "vertical"`; `interface ExportPreset { id; label: string; width: number; height: number; fps(sourceFps: number): number; bitrate(fps: number): number; keyframeEverySec: 1; frameRect: { x: number; y: number; w: number; h: number } }` with the values from the "Export presets" table at the top; `PRESETS: Record<ExportPresetId, ExportPreset>`.
   - `outputFrameTimes(segs: Segment[], fps: number): Iterable<number>` (source us for output frame k at `k / fps`, k from 0 while `k / fps < outputDuration`); `refuseEmpty(segs): string | null` returns "Nothing left to export. Every part is cut." when the output is empty.
   - `interface FrameSource { frameAt(mediaUs: number): Promise<VideoFrame>; close(): void }` and `createFrameSource(url: string): Promise<FrameSource>` (mp4box demux, `VideoDecoder`, decodes forward only, returns the latest frame with timestamp at or before `mediaUs`, closes older frames; a backwards request re-seeks from the previous keyframe).
   - `interface ExportSink { begin(job: ExportJobDto): Promise<void>; chunk(data: Uint8Array): Promise<void>; finish(): Promise<ExportReport>; cancel(): Promise<void> }`; `createMemorySink(): ExportSink & { bytes(): Uint8Array }` for tests.
-  - `exportProject(opts: { project: Project; events: MarzEvent[]; storage: ProjectStorage; sink: ExportSink; outPath: string; signal: AbortSignal; onProgress(p: number): void }): Promise<ExportReport>`: OffscreenCanvas at `project.output`, `frameAt` + `drawFrame` per output frame, `VideoEncoder` (`avc1.640028`, `avc: { format: "annexb" }`, `hardwareAcceleration: "prefer-hardware"`, bitrate 12 Mbit/s at 60 fps and 8 Mbit/s at 30, keyframe every 2 s), keeps at most 8 frames in flight (`encodeQueueSize`), passes each chunk to the sink in order.
+  - `exportProject(opts: { project: Project; events: MarzEvent[]; storage: ProjectStorage; sink: ExportSink; preset: ExportPreset; outPath: string; signal: AbortSignal; onProgress(p: number): void }): Promise<ExportReport>`: `frameAt` + `drawFrame` into an OffscreenCanvas at `project.output` (the preview's 16:9 frame), then that canvas is drawn into an encode canvas of `preset.width x preset.height` at `preset.frameRect` on ink (for YouTube the rect is the whole canvas). `VideoEncoder` (`avc1.640028`, `avc: { format: "annexb" }`, `hardwareAcceleration: "prefer-hardware"`, `bitrateMode: "variable"`, bitrate and keyframes from the preset), keeps at most 8 frames in flight (`encodeQueueSize`), passes each chunk to the sink in order. Output frame times use `preset.fps(project.source.fps)`.
 
 - [ ] **Step 1 (Windows, before anything else):** in the Tauri dev window run `VideoEncoder.isConfigSupported` for the config above and log the result. If unsupported, stop and switch this task to the raw-frame fallback (canvas pixels to `ExportProcess` with `-f rawvideo -pix_fmt rgba` input instead of `-f h264`), and tell Mauricio the measured export speed.
-- [ ] **Step 2: Write failing tests (`outputFrames.test.ts`):** 2 s at 30 fps with no cuts gives 60 times, first 0, last 1,966,667 (rounded us); a cut 0.5 s to 1.5 s gives 30 times with none inside the cut; all cut gives none and `refuseEmpty` returns the exact message.
+- [ ] **Step 2: Write failing tests (`outputFrames.test.ts`):** 2 s at 30 fps with no cuts gives 60 times, first 0, last 1,966,667 (rounded us); a cut 0.5 s to 1.5 s gives 30 times with none inside the cut; all cut gives none and `refuseEmpty` returns the exact message; `youtube keeps source fps up to 60` (30 gives 30, 60 gives 60, 120 gives 60) and bitrate 12,000,000 at 60 and 8,000,000 at 30; `vertical is 1080 x 1920 at 30 fps, 6 Mbit/s`; `vertical frame rect is { x: 0, y: 656, w: 1080, h: 608 }`; a 60 fps source to the vertical preset gives half the frame times of the YouTube preset.
 - [ ] **Step 3:** Run, expect FAIL. **Step 4:** Implement. **Step 5:** Run, expect PASS; `pnpm typecheck` clean.
 - [ ] **Step 6: Browser check (Edge, dev page `?project=demo&export=memory`):** export the sample to the memory sink; log frames encoded, bytes, and seconds taken. Expected: frame count equals `outputDurationUs * fps / 1e6` rounded, and it runs faster than real time.
 - [ ] **Step 7: Commit:** `feat(export): decode, composite and encode frames with WebCodecs`
@@ -367,7 +379,7 @@ Not added on purpose: a global-shortcut plugin (hotkeys use `RegisterHotKey` fro
 - Create: `apps/desktop/src/export/tauriSink.ts`, `apps/desktop/src/export/ExportStatus.tsx`, `apps/desktop/src-tauri/src/export.rs`
 - Modify: top strip (Export MP4 button becomes live; remove the "Export comes in a later step" tooltip and its line in `DEVIATIONS.md`)
 
-**Design addition (before code):** "Export" in section 6. Click Export MP4 (hotkey Ctrl+E, shown in its tooltip): native save dialog, default `<project name>.mp4` beside the projects folder's `Exports` folder. While exporting, the button area shows "Exporting 42%" in mono with a Cancel button (1px paper border), and a 2px accent progress line runs along the bottom of the top strip. Editing stays possible but Export is disabled. Done: the save status slot shows the accent square + "Exported. Show in folder" (underlined link). Failed: warning bar "Export failed. <reason>. Your project is unchanged." Empty output: the button is faint with tooltip "Nothing left to export. Every part is cut."
+**Design addition (before code):** "Export" in section 6. Click Export MP4 (hotkey Ctrl+E, shown in its tooltip): a paper panel drops under the button (no shadow, 1px ink rules) with two 34px rows, each icon + label left and size in faint right: "YouTube" / "1920 x 1080, 60 fps" and "Instagram and TikTok" / "1080 x 1920, 30 fps"; the last used row is marked with the accent square; Enter picks it, Esc closes. Then the native save dialog, default `<project name> YouTube.mp4` or `<project name> Vertical.mp4` in the projects folder's `Exports` folder. While exporting, the button area shows "Exporting 42%" in mono with a Cancel button (1px paper border), and a 2px accent progress line runs along the bottom of the top strip. Editing stays possible but Export is disabled. Done: the save status slot shows the accent square + "Exported. Show in folder" (underlined link). Failed: warning bar "Export failed. <reason>. Your project is unchanged." Empty output: the button is faint with tooltip "Nothing left to export. Every part is cut."
 
 **Interfaces:**
 - Consumes: `exportProject`, `ExportSink`, `ExportProcess`.
@@ -375,7 +387,7 @@ Not added on purpose: a global-shortcut plugin (hotkeys use `RegisterHotKey` fro
 
 - [ ] **Step 1:** Write the design addition; commit it alone: `docs(design): export button states`.
 - [ ] **Step 2:** Implement the commands, sink and UI.
-- [ ] **Step 3: End-to-end on Windows,** with the 60 s recording from Task 13 plus two cuts and the live zooms: export to MP4. Expected, checked with `ffprobe`: H.264 1920 x 1080, fps matches, AAC 48 kHz, duration equals `outputDurationUs` within one frame; plays in the Windows Media Player app.
+- [ ] **Step 3: End-to-end on Windows,** with the 60 s recording from Task 13 plus two cuts and the live zooms: export with both presets. Expected, checked with `ffprobe`: YouTube file H.264 High 1920 x 1080 at the source fps, vertical file 1080 x 1920 at 30 fps, both AAC 48 kHz with `moov` at the start (faststart), duration equals `outputDurationUs` within one frame; sizes at most 90 MB per minute (YouTube, 60 fps) and 45 MB per minute (vertical), written into the spike doc; both play in the Windows Media Player app. Mauricio uploads one of each as a private or draft post and says whether the text stays sharp after the platform's re-encode (not checked until he does).
 - [ ] **Step 4: Preview equals export:** at three output times (inside a zoom, in a zoom ease, after a cut) grab the preview canvas (dev hook `window.__marzGrab(outUs)`) and the exported frame (`ffmpeg -ss`), compare with FFmpeg's `psnr` filter. Pass: PSNR at least 35 dB on all three (only encoder loss differs).
 - [ ] **Step 5: Export sync:** export `samples/sync.marz` from Task 9 with one cut in the middle; run `pnpm sync-check <export>.mp4`. Pass: mean offset within 10 ms of the raw project's mean, spread at most one frame on both sides of the cut.
 - [ ] **Step 6: Failure paths:** cancel at 50% (no `.part` left, target untouched); export to a folder without write access (warning bar with the reason); FFmpeg renamed away (warning bar "FFmpeg is missing...").
@@ -387,7 +399,7 @@ Not added on purpose: a global-shortcut plugin (hotkeys use `RegisterHotKey` fro
 **Where:** anywhere.
 
 **Files:**
-- Modify: `CLAUDE.md` (status: steps 4 to 6 done; Home and Recorder screens are M1; run instructions `pnpm --filter @marz/desktop app:dev`, `cargo test`, `pnpm sync-check`), `docs/design/avant-garde/README.md` (milestone column: Home and Recorder screens are M1), `docs/superpowers/specs/2026-11-15-milestone-1-design.md` (technical call 1 updated to "browser encoder, FFmpeg muxes" if decision 1 was approved; status line), `docs/LEARNINGS.md` (Deferred items closed: atomic write, recorder pin-downs).
+- Modify: `CLAUDE.md` (status: steps 4 to 6 done; Home and Recorder screens are M1; run instructions `pnpm --filter @marz/desktop app:dev`, `cargo test`, `pnpm sync-check`), `docs/design/avant-garde/README.md` (milestone column: Home and Recorder screens are M1), `docs/superpowers/specs/2026-11-15-milestone-1-design.md` (technical call 1 updated to "browser encoder, FFmpeg muxes"; goals line "Export a 16:9 MP4" extended with the YouTube and vertical letterbox presets; status line), `docs/LEARNINGS.md` (Deferred items closed: atomic write, recorder pin-downs).
 
 - [ ] **Step 1:** Update the files. **Step 2:** `pnpm test && pnpm typecheck && cargo test --workspace && pnpm design:check` all pass.
 - [ ] **Step 3: Commit:** `docs: M1 capture, shell and export status`
