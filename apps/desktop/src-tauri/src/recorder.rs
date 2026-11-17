@@ -7,6 +7,7 @@
 
 use serde::{Deserialize, Serialize};
 use std::sync::Mutex;
+use crate::recording::Shutdown;
 use tauri::{AppHandle, Emitter, Manager, State, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
 
 pub(crate) const OVERLAY: &str = "overlay";
@@ -131,15 +132,21 @@ pub async fn open_recorder(app: AppHandle, state: State<'_, Recorder>) -> Result
     *state.monitor.lock().map_err(err)? = Some(mon.clone());
     match build_windows(&app, &mon) {
         Ok(overlay) => {
-            // If the overlay goes away by any route (Alt+F4 too), the recorder closes and Home comes back.
-            let handle = app.clone();
-            overlay.on_window_event(move |e| {
-                if let tauri::WindowEvent::Destroyed = e {
-                    close_all(&handle);
-                }
-            });
+            // If the overlay or the bar goes away by any route (Alt+F4 too), the recorder closes:
+            // a running recording is stopped and opened, never left without a Stop. On its own
+            // thread, so a stop never blocks the window thread.
+            for w in [Some(overlay.clone()), app.get_webview_window(BAR)].into_iter().flatten() {
+                let handle = app.clone();
+                w.on_window_event(move |e| {
+                    if let tauri::WindowEvent::Destroyed = e {
+                        let app = handle.clone();
+                        std::thread::spawn(move || close_all(&app));
+                    }
+                });
+            }
             overlay.show().map_err(err)?;
             main.hide().map_err(err)?;
+            crate::recording::set_open(&app, true);
             crate::recording::arm_setup_keys(&app);
             Ok(())
         }
@@ -198,10 +205,11 @@ fn build_windows(app: &AppHandle, mon: &RecMonitor) -> Result<WebviewWindow, Str
 }
 
 /// Close the recorder: meter and setup hotkeys off, a running recording stopped, both windows
-/// gone, the main window back. A stopped recording opens in the editor (`recorder://open-project`
-/// to the main window); its folder, or the stop error, is returned. No lock is held while windows
-/// are destroyed (the overlay's Destroyed handler calls this again).
-pub(crate) fn close_all(app: &AppHandle) -> Option<Result<String, String>> {
+/// gone, the main window back (`land`). No lock is held while windows are destroyed (their
+/// Destroyed handlers call this again). A close that finds another stop running leaves the main
+/// window to that stop, so Home never shows while the files are still being finished.
+pub(crate) fn close_all(app: &AppHandle) -> Shutdown {
+    crate::recording::set_open(app, false); // before the keys are freed: see `arm_setup_keys`
     let state = app.state::<Recorder>();
     {
         let mut meter = state.meter.lock().unwrap_or_else(|p| p.into_inner());
@@ -216,14 +224,29 @@ pub(crate) fn close_all(app: &AppHandle) -> Option<Result<String, String>> {
             let _ = w.destroy();
         }
     }
-    if let Some(main) = app.get_webview_window("main") {
-        let _ = main.show();
-        let _ = main.set_focus();
-        if let Some(Ok(dir)) = &stopped {
+    land(app, &stopped);
+    stopped
+}
+
+/// Back to the main window after the recorder closed: a stopped recording opens in the editor
+/// (`recorder://open-project`); one whose files could not be finished shows the sentence on Home
+/// (`recorder://stop-failed`) above its recover banner. `Busy`: the running stop lands instead.
+pub(crate) fn land(app: &AppHandle, how: &Shutdown) {
+    if *how == Shutdown::Busy {
+        return;
+    }
+    let Some(main) = app.get_webview_window("main") else { return };
+    let _ = main.show();
+    let _ = main.set_focus();
+    match how {
+        Shutdown::Stopped(Ok(dir)) => {
             let _ = main.emit_to("main", crate::recording::OPEN_EVENT, dir);
         }
+        Shutdown::Stopped(Err(_)) => {
+            let _ = main.emit_to("main", crate::recording::STOP_FAILED_EVENT, crate::recording::STOP_FAILED);
+        }
+        _ => {}
     }
-    stopped
 }
 
 /// Close both recorder windows and show the main window again.

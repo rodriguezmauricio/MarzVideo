@@ -129,7 +129,139 @@ pub struct RecState {
     pub rec_us: i64,
 }
 
-pub use imp::{arm_setup_keys, shutdown, Recording};
+/// Sent to the main window when a stop could not finish the files (the recover banner has it).
+pub const STOP_FAILED_EVENT: &str = "recorder://stop-failed";
+pub const STOP_FAILED: &str = "Recording could not be finished. Recover it below.";
+
+/// What closing the recorder did with the recording.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Shutdown {
+    /// Nothing was recording.
+    Nothing,
+    /// Another stop (or a failure) is finishing the recording; it shows the main window when done.
+    Busy,
+    /// The recording was stopped: its folder, or why the files could not be finished.
+    Stopped(Result<String, String>),
+}
+
+/// What the start, stop and failure paths share, all under one lock, so they cannot race: the
+/// running recording, the attempt being started, a stop in progress, and a failure that came in
+/// before its session was stored.
+#[derive(Debug)]
+pub struct Slot<T> {
+    live: Option<T>,
+    live_attempt: u64,
+    starting: Option<u64>,
+    stopping: bool,
+    pending_fail: Option<(u64, String)>,
+}
+
+impl<T> Default for Slot<T> {
+    fn default() -> Self {
+        Slot { live: None, live_attempt: 0, starting: None, stopping: false, pending_fail: None }
+    }
+}
+
+/// What to do with an engine failure.
+#[derive(Debug, PartialEq)]
+pub enum FailRoute<T> {
+    /// It belongs to the running recording: the caller stops it (the slot is now stopping).
+    Handle(T),
+    /// Its session is still being stored: `attach` hands it back.
+    Deferred,
+    /// Old, already stopping, or a failed start (that returns its own error).
+    Ignored,
+}
+
+/// What a stop finds.
+#[derive(Debug, PartialEq)]
+pub enum Take<T> {
+    Nothing,
+    Busy,
+    Took(T),
+}
+
+impl<T> Slot<T> {
+    pub fn live(&self) -> Option<&T> {
+        self.live.as_ref()
+    }
+
+    pub fn live_mut(&mut self) -> Option<&mut T> {
+        self.live.as_mut()
+    }
+
+    pub fn is_starting(&self) -> bool {
+        self.starting.is_some()
+    }
+
+    /// A start may begin: nothing running, starting or stopping.
+    pub fn begin_start(&mut self, attempt: u64) -> Result<(), String> {
+        if self.starting.is_some() {
+            return Err("The recording is starting.".into());
+        }
+        if self.live.is_some() || self.stopping {
+            return Err("A recording is already running.".into());
+        }
+        self.starting = Some(attempt);
+        self.pending_fail = None;
+        Ok(())
+    }
+
+    /// The engine refused to start.
+    pub fn start_failed(&mut self) {
+        self.starting = None;
+        self.pending_fail = None;
+    }
+
+    /// Store the started session. If its failure already came in, the session comes back with
+    /// the sentence (and the slot is stopping), so the caller stops it at once.
+    pub fn attach(&mut self, attempt: u64, live: T) -> Option<(T, String)> {
+        self.starting = None;
+        match self.pending_fail.take() {
+            Some((a, msg)) if a == attempt => {
+                self.stopping = true;
+                Some((live, msg))
+            }
+            _ => {
+                self.live = Some(live);
+                self.live_attempt = attempt;
+                None
+            }
+        }
+    }
+
+    pub fn fail(&mut self, attempt: u64, msg: String) -> FailRoute<T> {
+        if !self.stopping && self.live_attempt == attempt && let Some(l) = self.live.take() {
+            self.stopping = true;
+            return FailRoute::Handle(l);
+        }
+        if self.starting == Some(attempt) {
+            self.pending_fail = Some((attempt, msg));
+            return FailRoute::Deferred;
+        }
+        FailRoute::Ignored
+    }
+
+    /// Take the recording to stop it; a second stop while one runs gets `Busy`.
+    pub fn take_for_stop(&mut self) -> Take<T> {
+        if self.stopping {
+            return Take::Busy;
+        }
+        match self.live.take() {
+            Some(l) => {
+                self.stopping = true;
+                Take::Took(l)
+            }
+            None => Take::Nothing,
+        }
+    }
+
+    pub fn stop_done(&mut self) {
+        self.stopping = false;
+    }
+}
+
+pub use imp::{arm_setup_keys, set_open, shutdown, Recording};
 
 /// Start recording with the bar's setup. Returns once the engine reports Recording.
 #[tauri::command(async)]
@@ -164,7 +296,11 @@ pub fn stop_recording(app: tauri::AppHandle) -> Result<String, String> {
     if !imp::is_live(&app) {
         return Err(NOT_RECORDING.into());
     }
-    crate::recorder::close_all(&app).unwrap_or_else(|| Err(NOT_RECORDING.into()))
+    match crate::recorder::close_all(&app) {
+        Shutdown::Stopped(r) => r,
+        Shutdown::Busy => Err("The recording is already stopping.".into()),
+        Shutdown::Nothing => Err(NOT_RECORDING.into()),
+    }
 }
 
 #[tauri::command]
@@ -196,16 +332,18 @@ mod imp {
         mic: bool,
     }
 
-    /// Lock order: `live` alone, or `keys` alone; never both. Nothing that emits or touches a
-    /// window runs under `live` except `emit_state` (emit does not wait for the page).
+    /// Lock order: `slot` alone, or `keys` alone; never both. Nothing that emits or touches a
+    /// window runs under `slot`, and `Session::start` and `stop` run outside it.
     #[derive(Default)]
     pub struct Recording {
-        live: Mutex<Option<Live>>,
+        slot: Mutex<Slot<Live>>,
         /// The setup hotkeys (an input thread without a clock) while the recorder is open and not recording.
         keys: Mutex<Option<InputHandle>>,
         hotkeys: OnceLock<mpsc::Sender<Hotkey>>,
-        /// A start is running.
-        starting: AtomicBool,
+        /// The recorder windows are open. `close_all` clears it before it frees the keys, so a
+        /// start that fails after a close never registers them again.
+        open: AtomicBool,
+        attempts: AtomicU64,
         /// Bumped on every start and stop, so an old 250 ms ticker ends.
         generation: AtomicU64,
     }
@@ -218,14 +356,22 @@ mod imp {
         app.state::<Recording>()
     }
 
+    pub fn set_open(app: &AppHandle, open: bool) {
+        state(app).open.store(open, Ordering::SeqCst);
+    }
+
+    fn is_open(app: &AppHandle) -> bool {
+        state(app).open.load(Ordering::SeqCst)
+    }
+
     pub fn is_live(app: &AppHandle) -> bool {
-        lock(&state(app).live).is_some()
+        lock(&state(app).slot).live().is_some()
     }
 
     pub fn snapshot(app: &AppHandle) -> RecState {
         let st = state(app);
-        let g = lock(&st.live);
-        let Some(l) = g.as_ref() else { return RecState::default() };
+        let g = lock(&st.slot);
+        let Some(l) = g.live() else { return RecState::default() };
         let p = l.session.progress();
         RecState {
             recording: true,
@@ -267,9 +413,14 @@ mod imp {
     fn on_hotkey(app: &AppHandle, h: Hotkey) {
         match h {
             Hotkey::RecordStop => {
-                if is_live(app) {
+                let (live, starting) = {
+                    let st = state(app);
+                    let g = lock(&st.slot);
+                    (g.live().is_some(), g.is_starting())
+                };
+                if live {
                     let _ = crate::recorder::close_all(app);
-                } else if !state(app).starting.load(Ordering::SeqCst) {
+                } else if !starting && is_open(app) {
                     // The setup lives in the bar: it starts the recording with it.
                     let _ = app.emit_to(BAR, "recorder://record", ());
                 }
@@ -289,18 +440,24 @@ mod imp {
         }
     }
 
-    /// Register the hotkeys for the setup. Warnings ("Hotkey Ctrl+1 is taken by another app") go to the bar.
+    /// Register the hotkeys for the setup, only while the recorder is open. Warnings ("Hotkey
+    /// Ctrl+1 is taken by another app") go to the bar. `close_all` clears `open` before it takes
+    /// the keys lock, so either this sees the close and does nothing, or the close frees what this
+    /// registered; the re-check after starting is a second guard.
     pub fn arm_setup_keys(app: &AppHandle) {
         let st = state(app);
         let mut keys = lock(&st.keys);
-        if keys.is_some() {
+        if keys.is_some() || !is_open(app) {
             return;
         }
         let (warn_tx, warn_rx) = mpsc::channel::<String>();
         let shared = InputShared::new(new_clock(), hotkey_sender(app), warn_tx);
-        if let Ok(h) = input::start(shared, true) {
-            *keys = Some(h);
+        let Ok(h) = input::start(shared, true) else { return };
+        if !is_open(app) {
+            let _ = h.stop();
+            return;
         }
+        *keys = Some(h);
         let app = app.clone();
         // Ends when the input thread is stopped (its warning sender is dropped then).
         let _ = thread::Builder::new().name("marz-setup-warn".into()).spawn(move || {
@@ -328,22 +485,46 @@ mod imp {
         }
     }
 
-    struct Starting<'a>(&'a AtomicBool);
-    impl Drop for Starting<'_> {
-        fn drop(&mut self) {
-            self.0.store(false, Ordering::SeqCst);
-        }
-    }
-
     pub fn start(app: &AppHandle, plan: Plan) -> Result<(), String> {
         let st = state(app);
-        if st.starting.swap(true, Ordering::SeqCst) {
-            return Err("The recording is starting.".into());
+        let attempt = st.attempts.fetch_add(1, Ordering::SeqCst) + 1;
+        lock(&st.slot).begin_start(attempt)?;
+        let (session, presets, mic) = match open_session(app, attempt, plan) {
+            Ok(s) => s,
+            Err(e) => {
+                lock(&st.slot).start_failed();
+                arm_setup_keys(app); // only if the recorder is still open
+                return Err(e);
+            }
+        };
+        let generation = st.generation.fetch_add(1, Ordering::SeqCst) + 1;
+        let early = lock(&st.slot).attach(attempt, Live { session, presets, active: None, mic });
+        if let Some((live, msg)) = early {
+            // The engine failed between its start and here: handle it as any failure.
+            after_failure(app, live, msg);
+            return Ok(());
         }
-        let _starting = Starting(&st.starting);
-        if is_live(app) {
-            return Err("A recording is already running.".into());
+        if !is_open(app) {
+            // The recorder was closed while starting: keep what was recorded and open it.
+            let _ = crate::recorder::close_all(app);
+            return Ok(());
         }
+        set_click_through(app, true);
+        emit_state(app);
+        let app = app.clone();
+        let _ = thread::Builder::new().name("marz-rec-tick".into()).spawn(move || {
+            loop {
+                thread::sleep(TICK);
+                if state(&app).generation.load(Ordering::SeqCst) != generation || !emit_state(&app) {
+                    break;
+                }
+            }
+        });
+        Ok(())
+    }
+
+    /// Build the options and start the engine: the session, its preset ids and the mic flag.
+    fn open_session(app: &AppHandle, attempt: u64, plan: Plan) -> Result<(Session, Vec<String>, bool), String> {
         let mon = crate::recorder::current_monitor(app)?;
         crate::recorder::stop_meter(app); // the session opens the same mic
         let out_dir = crate::projects::default_dir(app)?;
@@ -380,59 +561,53 @@ mod imp {
             SessionEvent::Failed(m) => {
                 // Not on the session's own thread: stopping the session joins it.
                 let app = ev_app.clone();
-                let _ = thread::Builder::new().name("marz-failed".into()).spawn(move || failed(&app, m));
+                let _ = thread::Builder::new().name("marz-failed".into()).spawn(move || failed(&app, attempt, m));
             }
         });
-
-        let session = match Session::start(opts, on_event) {
-            Ok(s) => s,
-            Err(e) => {
-                arm_setup_keys(app);
-                return Err(e.to_string());
-            }
-        };
-        let generation = st.generation.fetch_add(1, Ordering::SeqCst) + 1;
-        *lock(&st.live) = Some(Live { session, presets, active: None, mic });
-        if crate::recorder::current_monitor(app).is_err() {
-            // The recorder was closed while starting: keep what was recorded and open it.
-            let _ = crate::recorder::close_all(app);
-            return Ok(());
-        }
-        set_click_through(app, true);
-        emit_state(app);
-        let app = app.clone();
-        let _ = thread::Builder::new().name("marz-rec-tick".into()).spawn(move || {
-            loop {
-                thread::sleep(TICK);
-                if state(&app).generation.load(Ordering::SeqCst) != generation || !emit_state(&app) {
-                    break;
-                }
-            }
-        });
-        Ok(())
+        let session = Session::start(opts, on_event).map_err(|e| e.to_string())?;
+        Ok((session, presets, mic))
     }
 
-    /// The engine cannot continue: stop what is there (the crash marker keeps it recoverable when
-    /// the files are broken), and return the bar to the setup with the sentence.
-    fn failed(app: &AppHandle, msg: String) {
-        let st = state(app);
-        let live = lock(&st.live).take();
-        let Some(live) = live else { return }; // a failed start: `start` returns the error itself
-        st.generation.fetch_add(1, Ordering::SeqCst);
-        let _ = live.session.stop();
-        set_click_through(app, false);
-        if crate::recorder::current_monitor(app).is_ok() {
-            arm_setup_keys(app);
+    /// The engine cannot continue. A failure of the running recording stops it; one that came in
+    /// before its session was stored is handed back by `attach`; others are ignored.
+    fn failed(app: &AppHandle, attempt: u64, msg: String) {
+        let route = lock(&state(app).slot).fail(attempt, msg.clone());
+        if let FailRoute::Handle(live) = route {
+            after_failure(app, live, msg);
         }
-        emit_state(app);
-        let _ = app.emit_to(BAR, FAILED_EVENT, msg);
+    }
+
+    /// Stop a failed recording (the crash marker keeps it recoverable when the files are broken).
+    /// With the recorder open the bar returns to the setup with the sentence; if it was closed
+    /// meanwhile (that close found the stop busy) the main window comes back here.
+    fn after_failure(app: &AppHandle, live: Live, msg: String) {
+        let st = state(app);
+        st.generation.fetch_add(1, Ordering::SeqCst);
+        let res = finish(app, live);
+        lock(&st.slot).stop_done();
+        if is_open(app) {
+            set_click_through(app, false);
+            arm_setup_keys(app);
+            emit_state(app);
+            let _ = app.emit_to(BAR, FAILED_EVENT, msg);
+        } else {
+            crate::recorder::land(app, &Shutdown::Stopped(res));
+        }
+    }
+
+    /// Stop the session and allow its folder for the editor.
+    fn finish(app: &AppHandle, live: Live) -> Result<String, String> {
+        live.session.stop().map_err(|e| e.to_string()).and_then(|r| {
+            crate::projects::allow_recording(app, &r.dir)?;
+            Ok(r.dir.to_string_lossy().into_owned())
+        })
     }
 
     fn with_live<R>(app: &AppHandle, f: impl FnOnce(&mut Live) -> R) -> Result<R, String> {
         let r = {
             let st = state(app);
-            let mut g = lock(&st.live);
-            let l = g.as_mut().ok_or(NOT_RECORDING)?;
+            let mut g = lock(&st.slot);
+            let l = g.live_mut().ok_or(NOT_RECORDING)?;
             f(l)
         };
         emit_state(app);
@@ -469,18 +644,21 @@ mod imp {
         })
     }
 
-    /// On closing the recorder: free the setup hotkeys, and stop a running recording. Returns the
-    /// project folder (allowed for the editor) when a recording was stopped.
-    pub fn shutdown(app: &AppHandle) -> Option<Result<String, String>> {
+    /// On closing the recorder (`open` already cleared): free the setup hotkeys and stop a running
+    /// recording. A second close while a stop runs gets `Busy`.
+    pub fn shutdown(app: &AppHandle) -> Shutdown {
         disarm_setup_keys(app);
         let st = state(app);
-        let live = lock(&st.live).take()?;
+        let took = lock(&st.slot).take_for_stop();
+        let live = match took {
+            Take::Nothing => return Shutdown::Nothing,
+            Take::Busy => return Shutdown::Busy,
+            Take::Took(l) => l,
+        };
         st.generation.fetch_add(1, Ordering::SeqCst);
-        let res = live.session.stop().map_err(|e| e.to_string()).and_then(|r| {
-            crate::projects::allow_recording(app, &r.dir)?;
-            Ok(r.dir.to_string_lossy().into_owned())
-        });
-        Some(res)
+        let res = finish(app, live);
+        lock(&st.slot).stop_done();
+        Shutdown::Stopped(res)
     }
 }
 
@@ -500,6 +678,7 @@ mod imp {
     pub fn snapshot(_app: &AppHandle) -> RecState {
         RecState::default()
     }
+    pub fn set_open(_app: &AppHandle, _open: bool) {}
     pub fn arm_setup_keys(_app: &AppHandle) {}
     pub fn start(_app: &AppHandle, _plan: Plan) -> Result<(), String> {
         Err(NEEDS_WINDOWS.into())
@@ -513,8 +692,8 @@ mod imp {
     pub fn zoom(_app: &AppHandle, _id: Option<String>) -> Result<(), String> {
         Err(NOT_RECORDING.into())
     }
-    pub fn shutdown(_app: &AppHandle) -> Option<Result<String, String>> {
-        None
+    pub fn shutdown(_app: &AppHandle) -> Shutdown {
+        Shutdown::Nothing
     }
 }
 
@@ -577,5 +756,68 @@ mod tests {
         assert_eq!(next_active(Some("p1"), None, false, &ids), None);
         assert_eq!(next_active(Some("p1"), None, true, &ids), Some("p1".into()), "ignored while paused");
         assert_eq!(next_active(None, Some("p2"), true, &ids), None);
+    }
+
+    #[test]
+    fn a_second_stop_while_one_runs_is_busy_and_a_stop_after_it_finds_nothing() {
+        let mut s: Slot<&str> = Slot::default();
+        s.begin_start(1).unwrap();
+        assert_eq!(s.attach(1, "rec"), None);
+        assert_eq!(s.take_for_stop(), Take::Took("rec"));
+        assert_eq!(s.take_for_stop(), Take::Busy, "button plus Ctrl+Shift+R");
+        assert!(s.begin_start(2).is_err(), "no new start while the files are being finished");
+        s.stop_done();
+        assert_eq!(s.take_for_stop(), Take::Nothing);
+        assert!(s.begin_start(2).is_ok());
+    }
+
+    #[test]
+    fn a_failure_before_the_session_is_stored_comes_back_from_attach() {
+        let mut s: Slot<&str> = Slot::default();
+        s.begin_start(7).unwrap();
+        assert_eq!(s.fail(7, "The video encoder stopped.".into()), FailRoute::Deferred);
+        assert_eq!(s.attach(7, "rec"), Some(("rec", "The video encoder stopped.".to_string())));
+        assert!(s.live().is_none());
+        assert_eq!(s.take_for_stop(), Take::Busy, "the failure path is stopping it");
+        s.stop_done();
+        assert_eq!(s.take_for_stop(), Take::Nothing);
+    }
+
+    #[test]
+    fn a_failure_of_the_running_recording_is_handled_once() {
+        let mut s: Slot<&str> = Slot::default();
+        s.begin_start(1).unwrap();
+        s.attach(1, "rec");
+        assert_eq!(s.fail(1, "x".into()), FailRoute::Handle("rec"));
+        assert_eq!(s.fail(1, "x".into()), FailRoute::Ignored);
+        assert_eq!(s.take_for_stop(), Take::Busy, "a close during the failure stop leaves Home to it");
+    }
+
+    #[test]
+    fn failures_of_other_attempts_or_during_a_stop_are_ignored() {
+        let mut s: Slot<&str> = Slot::default();
+        s.begin_start(1).unwrap();
+        s.attach(1, "rec");
+        assert_eq!(s.fail(2, "old".into()), FailRoute::Ignored);
+        assert_eq!(s.take_for_stop(), Take::Took("rec"));
+        assert_eq!(s.fail(1, "during stop".into()), FailRoute::Ignored);
+        s.stop_done();
+        // a failed start leaves nothing pending for the next one
+        s.begin_start(3).unwrap();
+        assert_eq!(s.fail(3, "mic".into()), FailRoute::Deferred);
+        s.start_failed();
+        s.begin_start(4).unwrap();
+        assert_eq!(s.attach(4, "next"), None);
+        assert_eq!(s.live(), Some(&"next"));
+    }
+
+    #[test]
+    fn only_one_start_at_a_time() {
+        let mut s: Slot<&str> = Slot::default();
+        s.begin_start(1).unwrap();
+        assert_eq!(s.begin_start(2), Err("The recording is starting.".to_string()));
+        assert!(s.is_starting());
+        s.attach(1, "rec");
+        assert_eq!(s.begin_start(2), Err("A recording is already running.".to_string()));
     }
 }

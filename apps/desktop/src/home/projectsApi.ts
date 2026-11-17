@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { isTauri } from "../platform";
 import type { ProjectRow } from "./projectRows";
 
@@ -12,6 +13,8 @@ export interface ProjectsApi {
   recover(dir: string): Promise<void>;
   discard(dir: string): Promise<void>;
   openRecorder(): Promise<void>;
+  /** A stopped recording whose files could not be finished: the sentence for the warning bar. */
+  onRecordingFailed(cb: (text: string) => void): () => void;
 }
 
 const tauriApi: ProjectsApi = {
@@ -25,6 +28,10 @@ const tauriApi: ProjectsApi = {
   discard: (dir) => invoke<void>("discard_project", { dir }),
   // Opens the recorder windows; a stopped recording comes back as `recorder://open-project`.
   openRecorder: () => invoke<void>("open_recorder"),
+  onRecordingFailed: (cb) => {
+    const p = listen<string>("recorder://stop-failed", (e) => cb(e.payload));
+    return () => void p.then((u) => u());
+  },
 };
 
 const MIN = 60_000;
@@ -49,6 +56,7 @@ function fakeApi(empty: boolean): ProjectsApi {
       rows = rows.filter((r) => !(r.dir === dir && r.needs_recovery));
     },
     openRecorder: async () => {},
+    onRecordingFailed: () => () => undefined,
   };
 }
 

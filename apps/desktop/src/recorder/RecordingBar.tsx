@@ -103,12 +103,16 @@ export function RecordingBar({ placed = false }: { placed?: boolean }) {
           </span>
           <button
             type="button"
-            className={`rr-b sq${rec.paused ? " on" : ""}`}
-            aria-label={rec.paused ? "Resume" : "Pause"}
+            className={`rr-b${rec.paused ? " on" : ""}`}
             onClick={() => void (rec.paused ? api.resume() : api.pause()).catch(() => undefined)}
             {...hover("pause")}
           >
             <Icon name={rec.paused ? "play" : "pause"} size={16} />
+            {/* Both words in one cell, so the button keeps its width and nothing moves. */}
+            <span className="rr-swap">
+              <span className={rec.paused ? "off" : undefined}>Pause</span>
+              <span className={rec.paused ? undefined : "off"}>Resume</span>
+            </span>
             <Tip id="pause" text={`${rec.paused ? "Resume" : "Pause"} / Ctrl+Shift+P`} {...tipProps} />
           </button>
           <button
@@ -146,6 +150,7 @@ export function RecordingBar({ placed = false }: { placed?: boolean }) {
                 onClick={() => void api.zoom(id).catch(() => undefined)}
                 {...hover(id)}
               >
+                <Icon name="zoomadd" size={16} />
                 <b>{p.id}</b>
                 {p.name}
                 <Tip id={id} text={`Zoom to ${p.name} / Ctrl+${p.id}`} {...tipProps} />

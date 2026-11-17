@@ -175,13 +175,15 @@ Record / stop Ctrl+Shift+R, Pause / resume Ctrl+Shift+P, Mute mic Ctrl+Shift+M, 
 
 ### Recorder: bar WHILE recording (floating, bottom centre, y 716)
 Rec square (14px) + timer (display 30px), Pause, Mute mic with meter, divider, one button per zoom preset ("1 Cart total", active = accent fill), Zoom out, divider, Stop (rec fill, white). Top-left chip: "Recording this region. Autosaving every few seconds" with red 1px border and square rec indicator. Region border 3px solid rec. Same "never captured" chip below.
-- Buttons are 44px high with a 1px line border (Pause is 44 x 44, icon only); Stop has 16px side padding. Gap 10, padding 10. The chip below sits 4px under the bar.
+- Buttons are 44px high with a 1px line border and 14px side padding; Stop has 16px. Gap 10, padding 10. The chip below sits 4px under the bar.
+- Every button has an icon and a label; the hotkeys are in the tooltips. Pause: pause icon + "Pause" (the button keeps the width of "Resume"). Presets: zoomadd icon (16px) + number box + name ("1 Cart total"). Mute: mic icon + meter. Zoom out: zoomout icon + "Zoom out". Stop: stop icon + "Stop".
 - The bar and the "Recording" chip appear only once the engine reports Recording; until then the setup bar shows "Starting...". The timer is recording time (pauses excluded), `mm:ss`, `h:mm:ss` from one hour.
-- Paused: the Pause button turns accent with the play icon, its label becomes Resume; the timer stops.
+- Paused: the Pause button turns accent with the play icon and reads "Resume"; the timer stops.
 - Muted: the Mute button turns accent with the mic-off icon, and "Muted" (the meter's width) replaces the meter.
 - Tooltips on hover or focus, above the button (the Tooltips style): "Pause / Ctrl+Shift+P", "Resume / Ctrl+Shift+P", "Mute mic / Ctrl+Shift+M", "Unmute mic / Ctrl+Shift+M", "Zoom to Cart total / Ctrl+1", "Zoom out / Ctrl+0", "Stop and open in the editor / Ctrl+Shift+R" (right-aligned to Stop). Without a mic the Mute button is faint and reads "Recording without a mic".
 - Overlay while recording: never takes clicks. Outside the region dimmed with `dim-rec`; only the live preset is drawn (2px solid accent, no tag). Full screen: the 3px border runs around the monitor and the chip reads "Recording this screen. Autosaving every few seconds" at left 24, top 100.
-- Warnings while recording ("Hotkey Ctrl+1 is taken by another app", "Microphone disconnected. Recording continues without sound.") use the error line on top of the bar. An engine failure ends the recording and returns to the setup bar with its sentence on the error line. Esc does nothing while recording.
+- Warnings while recording ("Hotkey Ctrl+1 is taken by another app", "Microphone disconnected. Recording continues without sound.") use the error line on top of the bar. An engine failure ends the recording and returns to the setup bar with its sentence on the error line. Esc does nothing while recording. Closing the bar or the overlay window (Alt+F4) stops the recording and opens it in the editor.
+- A stop that cannot finish the files shows Home with the Warning bar "Recording could not be finished. Recover it below." above the recover banner.
 
 ### Home
 - Hero: paper block, 276px high, giant display "Record once." (210px), line below, two attached hero buttons: "New recording" (accent, 2px ink border, hotkey Ctrl+Shift+R, 300 x 60) and "Open a project" (2px ink border, 200 x 60).

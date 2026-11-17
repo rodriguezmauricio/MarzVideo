@@ -105,6 +105,16 @@ export function Home() {
 
   useEffect(() => void refresh(), [refresh]);
 
+  // A recording whose files could not be finished: the sentence here, its recover banner below.
+  useEffect(
+    () =>
+      api.onRecordingFailed((text) => {
+        setWarning(text);
+        void refresh();
+      }),
+    [api, refresh],
+  );
+
   const newRecording = useCallback(() => void api.openRecorder().catch((err) => setWarning(message(err))), [api]);
 
   useEffect(() => {
