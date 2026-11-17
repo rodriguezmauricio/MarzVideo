@@ -27,7 +27,7 @@ use crate::clock::RecClock;
 use crate::events::{EventLog, EventsHeader, ZoomAction};
 use crate::ffmpeg::{self, ScreenEncoder};
 use crate::project::{self, LiveZoomMark, MicMeta, ProjectMeta, ZoomPreset, CRASH_MARKER};
-use crate::region::{normalize_region, PxRect};
+use crate::region::{check_fps, normalize_region, PxRect};
 use crate::slots::Slotter;
 use crate::writer::{self, SlotFrame, WriterStats};
 use crate::CaptureError;
@@ -297,6 +297,7 @@ impl Session {
         let region = opts.region.map(|r| normalize_region(r, monitor.width, monitor.height)).transpose().map_err(CaptureError::User)?;
         let rect = screen::capture_rect(opts.monitor, region)?;
         let (w, h) = rect.size();
+        check_fps(w, h, opts.fps).map_err(CaptureError::User)?;
         let fps = opts.fps;
 
         // Folder and crash marker.

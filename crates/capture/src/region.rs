@@ -20,6 +20,21 @@ pub fn even_size(w: u32, h: u32) -> (u32, u32) {
     (w & !1, h & !1)
 }
 
+pub const FPS_CAPPED: &str = "This screen records at 30 fps";
+
+/// Pixels above this (2560 x 1440) record at 30 fps at most: the raw BGRA pipe to FFmpeg holds 60 fps
+/// at 1440p with room to spare but only just, and not steadily, at 4K (see the spike doc, "Pipe check").
+const MAX_PIXELS_AT_FULL_RATE: u64 = 2560 * 1440;
+const CAPPED_FPS: u32 = 30;
+
+/// Refuse a frame rate above 30 for a capture area larger than 2560 x 1440.
+pub fn check_fps(w: u32, h: u32, fps: u32) -> Result<(), String> {
+    if u64::from(w) * u64::from(h) > MAX_PIXELS_AT_FULL_RATE && fps > CAPPED_FPS {
+        return Err(FPS_CAPPED.to_string());
+    }
+    Ok(())
+}
+
 /// Clamp `r` to a `monitor_w` x `monitor_h` monitor, round width and height down to even, and
 /// refuse anything below 64 x 64.
 pub fn normalize_region(r: PxRect, monitor_w: u32, monitor_h: u32) -> Result<PxRect, String> {
@@ -81,6 +96,22 @@ mod tests {
     #[test]
     fn full_monitor_is_unchanged() {
         assert_eq!(normalize_region(rect(0, 0, MW, MH), MW, MH), Ok(rect(0, 0, MW, MH)));
+    }
+
+    #[test]
+    fn sixty_fps_is_fine_up_to_1440p() {
+        assert_eq!(check_fps(1920, 1080, 60), Ok(()));
+        assert_eq!(check_fps(2560, 1440, 60), Ok(()));
+        assert_eq!(check_fps(1000, 562, 144), Ok(()));
+    }
+
+    #[test]
+    fn above_1440p_is_capped_at_30_fps_with_the_exact_message() {
+        assert_eq!(check_fps(3840, 2160, 60), Err("This screen records at 30 fps".to_string()));
+        assert_eq!(check_fps(3440, 1440, 60), Err(FPS_CAPPED.to_string()));
+        assert_eq!(check_fps(3840, 2160, 31), Err(FPS_CAPPED.to_string()));
+        assert_eq!(check_fps(3840, 2160, 30), Ok(()));
+        assert_eq!(check_fps(3840, 2160, 24), Ok(()));
     }
 
     #[test]

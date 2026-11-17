@@ -170,6 +170,62 @@ Not checked: a real unplug or disabling the device in Sound settings (needs Maur
   `target/release/marz-capture.exe record samples/clean-3min.marz --secs 180 --report`.
 - Under heavy desktop use (run B, 90 s on) the writer queue filled about 13 times a second while
   WGC delivered only about 20 frames a second: the raw pipe to FFmpeg stalls when the machine is
-  busy. This is the pipe risk from "Not checked" above; Task 9's pipe check should measure it.
+  busy. This is the pipe risk from "Not checked" above; Task 9's pipe check measured the pipe itself (see "Pipe check"): at 1080p and 1440p it never stalls in steady state, so the run B stalls most likely came from the machine being busy (CPU and GPU contention), not from the pipe alone. Not proven.
 - About 5 to 9 repeats and 10 to 13 queue-full drops in the first second of every run (FFmpeg opens
   the encoder on the first frame). Small over a long recording, visible as a short hitch at the start.
+
+## Sync check (Task 9, 2026-11-17)
+
+Built: `tools/sync-check` (`pnpm sync-check <folder.marz | file.mp4> [--mode flash|click] [--latency-ms N]`)
+and `marz-capture record ... --sync-probe` (black window over the monitor that turns white for 100 ms
+and plays a 1 kHz 100 ms beep every 3 s from 2 s in; writes `sync-probe.json` beside the project with the
+render latency). Flash detection: mean luma of each frame (`scale=1:1,format=gray`) jumps from below 40 to
+above 200. Beep detection: 2 ms RMS window above 8 times the median RMS of the preceding 200 ms, refined to the
+first loud sample. Audio for `mic.wav` and for an MP4 goes through one path: `ffmpeg -f s16le -ac 1 -ar 48000`.
+
+Checked here (no screen, no sound): the analyzer unit tests (flashes at frames 30 and 210 at 30 fps,
+a beep at 1.000 s in noise within 1 ms, pairing, verdicts) and the analyzer on a generated sample
+(`makeSample` with `syncOffsetMs` 0 reads 0.0 ms, with 30 reads 30.0 ms, spread 0.0 ms, 20 of 20 pairs on a
+63 s sample; an MP4 with the sound muxed in is read the same way). The probe compiles and its
+JSON and beep generator are unit tested. **The probe itself and a real recording have not been run:**
+the PC was in use, and the probe flashes the whole screen and plays sound. Not checked: any real sync
+number, the click test, the listen check. Commands and pass criteria: `docs/spikes/2026-11-17-owner-checks.md`.
+
+What the printed latency covers: stream latency from `GetStreamLatency`, plus the time the trigger
+waited for the audio thread, plus the frames already queued in the render buffer. It does not include
+the speaker path or the mic input path, so a mean a few ms off the printed latency is expected; the
+mean absolute offset (45 ms) and spread (17 ms) limits are the ones that matter.
+
+## Pipe check (Task 9, 2026-11-17)
+
+`target/release/pipe-bench.exe`: synthetic BGRA frames (a scrolling gradient with noise, four patterns cycled)
+written into `ScreenEncoder` with the recorder's own FFmpeg arguments, 20 s per size, 60 fps target,
+`h264_nvenc`. Frame i is due at i / 60 s; a slow encoder fills the pipe, the write blocks and the rate falls.
+Same machine (i7-12700H, RTX 3060 Laptop), **Mauricio was using it during every run**, so read these as
+worst-ish case. CPU is percent of one core (20 threads).
+
+| Size | Run | Sustained fps | Worst write | Writes later than one slot | Bench CPU | FFmpeg CPU | Output |
+|---|---|---|---|---|---|---|---|
+| 1920x1080 | 1 | 60.04 | 150.8 ms | 10 of 1200 | 9% | 21% | 9.5 Mbit/s |
+| 1920x1080 | 2 | 60.04 | 250.9 ms (3.9 ms after the first second) | 18, none after the first second | 9% | 28% | 9.5 Mbit/s |
+| 2560x1440 | 1 | 60.04 | 235.4 ms | 20 of 1200 | 15% | 48% | 13.6 Mbit/s |
+| 2560x1440 | 2 | 60.04 | 256.0 ms (5.0 ms after the first second) | 24, none after the first second | 14% | 51% | 13.6 Mbit/s |
+| 3840x2160 | 1 | 60.02 | 429.0 ms | 153 of 1200 | 29% | 104% | 25.1 Mbit/s |
+| 3840x2160 | 2 | **56.39** | 389.8 ms (26.5 ms after the first second) | 1,198 (1,140 after the first second) | 55% | 145% | 23.6 Mbit/s |
+| 3840x2160 | 3 | 59.75 | 387.4 ms (22.7 ms) | 909 (851) | 49% | 140% | 25.0 Mbit/s |
+| 3840x2160 | 4 | 58.88 | 373.8 ms (23.0 ms) | 1,145 (1,087) | 50% | 142% | 24.6 Mbit/s |
+
+(Run 1 was made before the "after the first second" columns existed.) The first 150 to 430 ms stall in every row is
+FFmpeg opening the encoder on the first frame, the hitch every recording has at its start.
+
+Verdict: **1440p at 60 fps holds** with a wide margin (no write later than one slot after the first second,
+worst steady write 5 ms). **4K at 60 fps does not hold steadily**: two of four runs were under 98% of the target
+(56.4 and 58.9 fps), and in every run most frames were written one to two slots late, which means the pipe
+(about 2 GB/s) is the limit. The real recorder drops frames when its queue fills, so 4K at 60 would show as
+drops and repeats. Result: capture above 2560 x 1440 pixels is capped at 30 fps (`region::check_fps`, called
+from `Session::start`; the message is "This screen records at 30 fps"). The area is the captured region, so a
+small region on a 4K screen still records at 60. The GPU path (Media Foundation or NVENC with D3D11 input) is
+parked, not built in M1. The 4K cap follows the plan's "1440p or 4K fails" rule. The 1440p criterion alone would not have triggered it.
+
+Not checked: 4K or 1440p through the real engine (this machine's screen is 1080p), libx264 at these sizes
+(the machine has NVENC; a CPU encoder would be much slower), a second monitor.
