@@ -39,3 +39,6 @@
 - [2026-11-17] [claude] The Tauri window can be driven without touching the desktop: start `tauri dev` with `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=9333` and attach Playwright with `chromium.connectOverCDP`. Input goes only to the webview.
 - [2026-11-17] [claude] A window with `SetWindowDisplayAffinity(WDA_EXCLUDEFROMCAPTURE)` is also missing from every screenshot tool, so the recorder overlay and bar can only be looked at on the real screen or through a CDP screenshot of their webview (transparent areas come out white there): plan design checks with the `?fake` pages.
 - [2026-11-17] [claude] The two recorder windows share one origin, so localStorage plus the `storage` event syncs them (checked in WebView2: a tiny region drawn on the overlay shows the error on the bar). Mic friendly names on Windows can be 70+ characters: always cap name widths in bars.
+- [2026-11-17] [claude] `ResizeObserver` watches the content box by default, so a padding change (the recording bar's tooltip room) fires nothing; observe `{ box: "border-box" }` when the window must follow padding too.
+- [2026-11-17] [claude] Two threads of one process cannot `RegisterHotKey` the same keys: the recorder's setup hotkeys run on their own input thread and must be stopped (joined) before `Session::start` registers them again, and armed again when a start fails.
+

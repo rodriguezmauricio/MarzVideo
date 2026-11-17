@@ -1,8 +1,9 @@
 // Recorder setup state: mode, region, zoom presets, mic and cursor. Persisted to localStorage per
 // monitor so the last setup comes back. The overlay and the bar are two windows of the same
 // origin; each keeps its own store and reloads it when the other one saves (`storage` event).
+import { lockAspect } from "@marz/timeline";
 import { create } from "zustand";
-import type { NormRect, PxRect } from "./regionMath";
+import { OUTPUT_ASPECT, type NormRect, type PxRect } from "./regionMath";
 
 export type Mode = "full" | "region" | "exact";
 export type Preset = { id: string; name: string; rect: NormRect };
@@ -145,5 +146,27 @@ export const useRecorder = create<State>((set, get) => ({
   select: (selected) => set({ selected }),
 }));
 
-/** The setup as the engine will need it (Task 13 reads this when Record is pressed). */
+/** The setup now (read when Record is pressed). */
 export const currentSetup = (): Setup => pick(useRecorder.getState());
+
+/** What Record sends to Rust (recording.rs `RecordOptionsDto`). */
+export type RecordOptions = { mode: Mode; region: PxRect; micId: string | null; cursorHidden: boolean; presets: Preset[] };
+
+/** The session preset id for a setup preset ("1" -> "p1"); Ctrl+n zooms into "pn". */
+export const sessionPresetId = (id: string) => `p${id}`;
+
+/** The setup as the engine needs it: presets get session ids "p1".."p9" in order, and rects
+ * normalized to the region (the monitor in Full screen) and locked to the output aspect, exactly
+ * as the overlay draws them. */
+export function recordOptions(s: Setup, m: Monitor): RecordOptions {
+  const source = s.mode === "full" ? { width: m.width, height: m.height } : { width: s.region.w, height: s.region.h };
+  return {
+    mode: s.mode,
+    region: { x: Math.round(s.region.x), y: Math.round(s.region.y), w: Math.round(s.region.w), h: Math.round(s.region.h) },
+    micId: s.micId,
+    cursorHidden: s.cursorHidden,
+    presets: [...s.presets]
+      .sort((a, b) => a.id.localeCompare(b.id))
+      .map((p) => ({ id: sessionPresetId(p.id), name: p.name, rect: lockAspect(p.rect, OUTPUT_ASPECT, source) })),
+  };
+}

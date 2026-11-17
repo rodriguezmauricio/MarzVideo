@@ -2,12 +2,14 @@
 
 mod projects;
 mod recorder;
+mod recording;
 
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(projects::Allowed::default())
         .manage(recorder::Recorder::default())
+        .manage(recording::Recording::default())
         .invoke_handler(tauri::generate_handler![
             projects::projects_dir,
             projects::list_projects,
@@ -24,7 +26,13 @@ pub fn run() {
             recorder::fit_bar,
             recorder::start_mic_meter,
             recorder::stop_mic_meter,
-            recorder::start_recording,
+            recording::start_recording,
+            recording::pause_recording,
+            recording::resume_recording,
+            recording::set_mic_muted,
+            recording::trigger_zoom,
+            recording::stop_recording,
+            recording::recording_state,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Marz Recorder");

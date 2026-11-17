@@ -1,4 +1,5 @@
 // Shared start-up for the two recorder windows: monitor, persisted setup, cross-window sync.
+import { initLive } from "./recLive";
 import { isFake, recorderApi } from "./recorderApi";
 import { defaultSetup, loadSetup, localStore, setupKey, useRecorder, type Mode, type Setup } from "./recorderStore";
 
@@ -21,6 +22,7 @@ function fakeSetup(): Setup {
 export function initSetup(): void {
   const api = recorderApi();
   const m = api.monitor;
+  initLive();
   if (isFake()) {
     useRecorder.getState().init(m, fakeSetup(), false);
     return;

@@ -159,7 +159,7 @@ pub fn write_project_json_atomic(dir: &Path, text: &str) -> io::Result<()> {
 }
 
 /// `%USERPROFILE%\Videos\Marz Recorder`, created on first use.
-fn default_dir(app: &AppHandle) -> Result<PathBuf, String> {
+pub(crate) fn default_dir(app: &AppHandle) -> Result<PathBuf, String> {
     let dir = app.path().video_dir().map_err(err)?.join("Marz Recorder");
     fs::create_dir_all(&dir).map_err(err)?;
     Ok(dir)
@@ -170,6 +170,11 @@ fn allow_dir(app: &AppHandle, allowed: &Allowed, dir: &Path) -> Result<(), Strin
     app.asset_protocol_scope().allow_directory(dir, true).map_err(err)?;
     allowed.0.lock().map_err(err)?.insert(dir.to_path_buf());
     Ok(())
+}
+
+/// Allow a folder the recorder just wrote, so the editor can open it.
+pub(crate) fn allow_recording(app: &AppHandle, dir: &Path) -> Result<(), String> {
+    allow_dir(app, &app.state::<Allowed>(), dir)
 }
 
 fn checked(allowed: &Allowed, dir: &str) -> Result<PathBuf, String> {

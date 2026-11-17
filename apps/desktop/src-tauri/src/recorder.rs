@@ -2,17 +2,19 @@
 //! (mic, meter, Record) windows, both kept out of the capture, plus the mic meter.
 //!
 //! The overlay covers the monitor the main window is on, in physical pixels. The page works in CSS
-//! pixels and sends physical, monitor-relative pixels back (`check_region`). Starting a recording
-//! is Task 13; `start_recording` is a stub until then.
+//! pixels and sends physical, monitor-relative pixels back (`check_region`). The recording itself
+//! (session, hotkeys, stop into the editor) is in `recording.rs`.
 
 use serde::{Deserialize, Serialize};
 use std::sync::Mutex;
-use tauri::{AppHandle, Manager, State, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
+use tauri::{AppHandle, Emitter, Manager, State, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
 
-const OVERLAY: &str = "overlay";
-const BAR: &str = "bar";
-/// The bar's top edge at 1440 x 900 in the design; scaled to the monitor height.
+pub(crate) const OVERLAY: &str = "overlay";
+pub(crate) const BAR: &str = "bar";
+/// The bar's top edge at 1440 x 900 in the design (before recording); scaled to the monitor height.
 const BAR_TOP_DESIGN: f64 = 704.0;
+/// The bar's top edge while recording.
+const BAR_TOP_RECORDING: f64 = 716.0;
 const DESIGN_H: f64 = 900.0;
 
 /// The monitor the recorder covers. Position and size in physical pixels.
@@ -71,6 +73,16 @@ fn monitor(state: &Recorder) -> Result<RecMonitor, String> {
     state.monitor.lock().map_err(err)?.clone().ok_or_else(|| "The recorder is not open.".to_string())
 }
 
+/// The monitor the open recorder covers, or an error when the recorder is closed.
+pub(crate) fn current_monitor(app: &AppHandle) -> Result<RecMonitor, String> {
+    monitor(&app.state::<Recorder>())
+}
+
+/// Stop the setup mic meter (the session opens the same device).
+pub(crate) fn stop_meter(app: &AppHandle) {
+    meter::stop(&mut app.state::<Recorder>().meter.lock().unwrap_or_else(|p| p.into_inner()));
+}
+
 /// Clamp `rect` to the recorder's monitor and make it even; the error is a sentence for the bar.
 pub fn checked_region(rect: Rect, mon_w: u32, mon_h: u32) -> Result<Rect, String> {
     use marz_capture::region::{normalize_region, PxRect};
@@ -78,13 +90,14 @@ pub fn checked_region(rect: Rect, mon_w: u32, mon_h: u32) -> Result<Rect, String
     Ok(Rect { x: r.x, y: r.y, w: r.w, h: r.h })
 }
 
-/// Where the bar window goes: centred, its bar's top edge at y 704 of 900 scaled to the monitor.
-/// `w`, `h` and `bar_top` (the bar's top inside the window) are CSS pixels.
-pub fn bar_placement(mon: &RecMonitor, w: f64, h: f64, bar_top: f64) -> (i32, i32, u32, u32) {
+/// Where the bar window goes: centred, its bar's top edge at y `design_top` of 900 (704 before
+/// recording, 716 while recording) scaled to the monitor. `w`, `h` and `bar_top` (the bar's top
+/// inside the window) are CSS pixels.
+pub fn bar_placement(mon: &RecMonitor, w: f64, h: f64, bar_top: f64, design_top: f64) -> (i32, i32, u32, u32) {
     let pw = (w * mon.scale).ceil() as u32;
     let ph = (h * mon.scale).ceil() as u32;
     let x = mon.x + (mon.width as i32 - pw as i32) / 2;
-    let y = mon.y + (f64::from(mon.height) * BAR_TOP_DESIGN / DESIGN_H).round() as i32 - (bar_top * mon.scale).round() as i32;
+    let y = mon.y + (f64::from(mon.height) * design_top / DESIGN_H).round() as i32 - (bar_top * mon.scale).round() as i32;
     (x, y, pw, ph)
 }
 
@@ -127,6 +140,7 @@ pub async fn open_recorder(app: AppHandle, state: State<'_, Recorder>) -> Result
             });
             overlay.show().map_err(err)?;
             main.hide().map_err(err)?;
+            crate::recording::arm_setup_keys(&app);
             Ok(())
         }
         Err(e) => {
@@ -176,14 +190,18 @@ fn build_windows(app: &AppHandle, mon: &RecMonitor) -> Result<WebviewWindow, Str
         .map_err(err)?;
     platform::exclude(&bar)?;
     // The bar shows itself once it knows its size (`fit_bar`).
-    let (x, y, w, h) = bar_placement(mon, 900.0, 110.0, 24.0);
+    let (x, y, w, h) = bar_placement(mon, 900.0, 110.0, 24.0, BAR_TOP_DESIGN);
     bar.set_position(tauri::PhysicalPosition::new(x, y)).map_err(err)?;
     bar.set_size(tauri::PhysicalSize::new(w, h)).map_err(err)?;
 
     Ok(overlay)
 }
 
-fn close_all(app: &AppHandle) {
+/// Close the recorder: meter and setup hotkeys off, a running recording stopped, both windows
+/// gone, the main window back. A stopped recording opens in the editor (`recorder://open-project`
+/// to the main window); its folder, or the stop error, is returned. No lock is held while windows
+/// are destroyed (the overlay's Destroyed handler calls this again).
+pub(crate) fn close_all(app: &AppHandle) -> Option<Result<String, String>> {
     let state = app.state::<Recorder>();
     {
         let mut meter = state.meter.lock().unwrap_or_else(|p| p.into_inner());
@@ -192,6 +210,7 @@ fn close_all(app: &AppHandle) {
             *m = None;
         }
     }
+    let stopped = crate::recording::shutdown(app);
     for label in [BAR, OVERLAY] {
         if let Some(w) = app.get_webview_window(label) {
             let _ = w.destroy();
@@ -200,13 +219,17 @@ fn close_all(app: &AppHandle) {
     if let Some(main) = app.get_webview_window("main") {
         let _ = main.show();
         let _ = main.set_focus();
+        if let Some(Ok(dir)) = &stopped {
+            let _ = main.emit_to("main", crate::recording::OPEN_EVENT, dir);
+        }
     }
+    stopped
 }
 
 /// Close both recorder windows and show the main window again.
 #[tauri::command]
 pub fn close_recorder(app: AppHandle) {
-    close_all(&app);
+    let _ = close_all(&app);
 }
 
 /// Monitor, microphones and whether FFmpeg was found.
@@ -228,11 +251,13 @@ pub fn check_region(state: State<'_, Recorder>, rect: Rect) -> Result<Rect, Stri
     checked_region(rect, mon.width, mon.height)
 }
 
-/// Size and place the bar window around its content, then show it.
+/// Size and place the bar window around its content, then show it. `recording` puts the bar at
+/// the recording position (y 716 instead of 704).
 #[tauri::command]
-pub fn fit_bar(window: WebviewWindow, state: State<'_, Recorder>, w: f64, h: f64, bar_top: f64) -> Result<(), String> {
+pub fn fit_bar(window: WebviewWindow, state: State<'_, Recorder>, w: f64, h: f64, bar_top: f64, recording: Option<bool>) -> Result<(), String> {
     let mon = monitor(&state)?;
-    let (x, y, pw, ph) = bar_placement(&mon, w, h, bar_top);
+    let top = if recording == Some(true) { BAR_TOP_RECORDING } else { BAR_TOP_DESIGN };
+    let (x, y, pw, ph) = bar_placement(&mon, w, h, bar_top, top);
     window.set_size(tauri::PhysicalSize::new(pw, ph)).map_err(err)?;
     window.set_position(tauri::PhysicalPosition::new(x, y)).map_err(err)?;
     window.show().map_err(err)
@@ -251,13 +276,6 @@ pub fn start_mic_meter(app: AppHandle, state: State<'_, Recorder>, mic_id: Optio
 #[tauri::command(async)]
 pub fn stop_mic_meter(state: State<'_, Recorder>) {
     meter::stop(&mut state.meter.lock().unwrap_or_else(|p| p.into_inner()));
-}
-
-/// Stub until Task 13 wires the session. Stops the meter as the real start will.
-#[tauri::command(async)]
-pub fn start_recording(state: State<'_, Recorder>) -> Result<(), String> {
-    meter::stop(&mut *state.meter.lock().map_err(err)?);
-    Err("Recording is wired in the next step.".into())
 }
 
 #[cfg(windows)]
@@ -418,8 +436,10 @@ mod tests {
     fn bar_sits_centred_at_704_of_900_scaled_to_the_monitor() {
         // 1440 x 900 at 100%: the design position exactly
         let m = RecMonitor { x: 0, width: 1440, height: 900, scale: 1.0, ..mon(1.0) };
-        assert_eq!(bar_placement(&m, 800.0, 100.0, 24.0), (320, 680, 800, 100));
+        assert_eq!(bar_placement(&m, 800.0, 100.0, 24.0, BAR_TOP_DESIGN), (320, 680, 800, 100));
         // 2880 x 1800 at 200%, left of the primary: same place in logical pixels
-        assert_eq!(bar_placement(&mon(2.0), 800.0, 100.0, 24.0), (-2880 + 640, 1408 - 48, 1600, 200));
+        assert_eq!(bar_placement(&mon(2.0), 800.0, 100.0, 24.0, BAR_TOP_DESIGN), (-2880 + 640, 1408 - 48, 1600, 200));
+        // while recording the bar's top is at 716
+        assert_eq!(bar_placement(&m, 800.0, 100.0, 0.0, BAR_TOP_RECORDING), (320, 716, 800, 100));
     }
 }

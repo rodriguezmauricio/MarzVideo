@@ -17,6 +17,7 @@
   --grid: rgba(236, 234, 228, 0.1);  /* 12-column grid lines on ink */
   --grid-on-paper: rgba(11, 11, 10, 0.12);
   --dim: rgba(11, 11, 10, 0.62);     /* outside-of-zoom dimming on the preview */
+  --dim-rec: rgba(5, 5, 4, 0.4);     /* outside the region on the recorder overlay while recording */
   --later: #5a5953;                  /* dashed "Later" lane outlines */
   --thumb-line: #3a3935;             /* 1px border of timeline thumbnails, mic volume track */
   --wave: #a8a69f;                   /* mic waveform bars */

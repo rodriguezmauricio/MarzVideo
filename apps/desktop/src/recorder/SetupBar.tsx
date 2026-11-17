@@ -3,7 +3,8 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Icon } from "../components/Icon";
 import { NO_FFMPEG, NO_MIC, recorderApi, type BarInfo } from "./recorderApi";
-import { currentSetup, useRecorder } from "./recorderStore";
+import { useRecLive } from "./recLive";
+import { currentSetup, recordOptions, useRecorder } from "./recorderStore";
 import { meterLit, METER_BARS } from "./regionMath";
 
 const BAR_HEIGHTS = [8, 11, 14, 17];
@@ -19,6 +20,8 @@ export function SetupBar({ placed = false }: { placed?: boolean }) {
   const [phase, setPhase] = useState<Phase>(() => (new URLSearchParams(window.location.search).get("state") === "starting" ? "starting" : "setup"));
   const [regionError, setRegionError] = useState<string | null>(null);
   const [startError, setStartError] = useState<string | null>(null);
+  const failed = useRecLive((l) => l.failed);
+  const warning = useRecLive((l) => l.warning);
   const wrapRef = useRef<HTMLDivElement>(null);
   const barRef = useRef<HTMLDivElement>(null);
   const [top, setTop] = useState(0);
@@ -55,15 +58,18 @@ export function SetupBar({ placed = false }: { placed?: boolean }) {
     };
   }, [api, regionKey]);
 
-  const error = info && !info.ffmpeg ? NO_FFMPEG : (regionError ?? startError ?? (info && mics.length === 0 ? NO_MIC : null));
+  const error =
+    info && !info.ffmpeg ? NO_FFMPEG : (regionError ?? startError ?? failed ?? (info && mics.length === 0 ? NO_MIC : null) ?? warning);
   const blocked = !info || !info.ffmpeg || regionError !== null;
 
   const record = async () => {
     if (phase !== "setup" || blocked) return;
     setPhase("starting");
     setStartError(null);
+    useRecLive.getState().clearMessages();
     try {
-      await api.record({ ...currentSetup(), micId });
+      // Resolves after Rust reported Recording; the bar window then shows the recording bar.
+      await api.record(recordOptions({ ...currentSetup(), micId }, api.monitor));
     } catch (err) {
       setStartError(typeof err === "string" ? err : String(err));
       setPhase("setup");
@@ -94,7 +100,7 @@ export function SetupBar({ placed = false }: { placed?: boolean }) {
     if (!wrap || !bar) return;
     const fit = () => {
       setTop(bar.offsetTop);
-      if (!placed) void api.fitBar(wrap.offsetWidth, wrap.offsetHeight, bar.offsetTop).catch(() => undefined);
+      if (!placed) void api.fitBar(wrap.offsetWidth, wrap.offsetHeight, bar.offsetTop, false).catch(() => undefined);
     };
     fit();
     const ro = new ResizeObserver(fit);

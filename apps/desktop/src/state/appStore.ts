@@ -1,3 +1,4 @@
+import { listen } from "@tauri-apps/api/event";
 import { create } from "zustand";
 import { isTauri } from "../platform";
 import { flushAutosave } from "./editorStore";
@@ -28,3 +29,13 @@ export const useAppStore = create<AppState>((set) => ({
     set({ screen: "home", dir: null });
   },
 }));
+
+/** In the app: a recording that was just stopped opens in the editor (Rust sends its folder,
+ *  already allowed for the editor, as `recorder://open-project`). */
+export function openStoppedRecordings(): void {
+  if (!isTauri()) return;
+  void listen<string>("recorder://open-project", async (e) => {
+    await flushAutosave();
+    useAppStore.getState().openProject(e.payload);
+  });
+}

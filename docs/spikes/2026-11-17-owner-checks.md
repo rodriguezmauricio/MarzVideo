@@ -1,6 +1,6 @@
 # Checks that need Mauricio at the PC (2026-11-17)
 
-Six checks the engine work could not run without taking over the screen, the speakers or the
+Seven checks (six for the engine, one for the recorder app) the work could not run without taking over the screen, the speakers or the
 mouse. Each one is a block: what it proves, the exact commands, what PASS looks like. Paste the
 output of each back to Claude.
 
@@ -130,3 +130,27 @@ target\release\marz-capture.exe record samples\hz60.marz --secs 30 --report
 PASS: the first line prints `@ 60 Hz`, `written frames` equals `expected` (1,799 or 1,800), `repeats` under 0.5 %,
 and `wgc frames` is at least 55 per second. If WGC frames are well under 60 per second, send the report: the
 minimum update interval needs a different value on 60 Hz screens.
+
+---
+
+## 7. Recorder hotkeys while another app has focus (the app, not the CLI)
+
+Proves: the recorder hotkeys are global (they work while you type in another app), the bar follows them,
+and the live zooms land in the editor. Claude ran the same steps through the bar's commands; only you can
+press the real keys.
+
+1. Start the app: `pnpm --filter @marz/desktop app:dev` (or the built app). On Home press New recording.
+2. Region mode. Drag two zoom presets inside the region (they become Zoom 1 and Zoom 2). Pick your mic.
+3. Click into another app (a browser or Notepad) so it has focus. Then press, a few seconds apart:
+   - Ctrl+Shift+R (starts; the bar turns into the recording bar with the timer)
+   - Ctrl+1, then Ctrl+2, then Ctrl+0 (zoom 1, zoom 2, zoom out: the matching bar button turns accent, then none)
+   - Ctrl+Shift+P, wait 5 s, Ctrl+Shift+P again (the Pause button turns accent with a play icon; the timer stops, then runs on)
+   - Ctrl+Shift+M, say something for 5 s, Ctrl+Shift+M again (the Mute button reads Muted, then shows the meter)
+   - Ctrl+Shift+R (stops; the recorder closes and the editor opens the recording)
+
+PASS: the bar reacts to every key while the other app keeps focus, no key types anything into that app,
+and the editor shows two zoom blocks (Zoom 1 then Zoom 2) at the times you pressed Ctrl+1 and Ctrl+2, ending
+at Ctrl+0. The muted 5 s are silent on the mic lane, the length is the wall time minus the pause, and neither
+bar nor the red border is in the video. If a key does nothing, check the bar's error line for
+"Hotkey ... is taken by another app" and send it.
+

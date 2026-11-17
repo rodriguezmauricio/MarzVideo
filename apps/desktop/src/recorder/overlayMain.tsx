@@ -3,7 +3,7 @@ import { createRoot } from "react-dom/client";
 import "./recorder.css";
 import { Overlay } from "./Overlay";
 import { isFake } from "./recorderApi";
-import { SetupBar } from "./SetupBar";
+import { Bar } from "./RecordingBar";
 import { initSetup } from "./setupInit";
 
 initSetup();
@@ -12,6 +12,6 @@ const withBar = isFake() && new URLSearchParams(window.location.search).has("bar
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <Overlay>{withBar && <SetupBar placed />}</Overlay>
+    <Overlay>{withBar && <Bar placed />}</Overlay>
   </StrictMode>,
 );

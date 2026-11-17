@@ -23,7 +23,7 @@ const tauriApi: ProjectsApi = {
   },
   recover: async (dir) => void (await invoke<number>("recover_project", { dir })),
   discard: (dir) => invoke<void>("discard_project", { dir }),
-  // The recorder is Task 12; the command is a stub until then.
+  // Opens the recorder windows; a stopped recording comes back as `recorder://open-project`.
   openRecorder: () => invoke<void>("open_recorder"),
 };
 

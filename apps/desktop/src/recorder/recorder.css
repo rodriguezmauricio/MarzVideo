@@ -81,3 +81,33 @@ html.rec-page, html.rec-page body, html.rec-page #root { background: transparent
 .rb-rec:disabled { cursor: default; }
 .rb-rec.starting { color: var(--faint); }
 .rb-chip { margin-top: 2px; display: flex; align-items: center; gap: 8px; padding: 6px 12px; background: var(--ink); border: 1px solid var(--line); color: var(--faint); }
+
+/* ---- while recording: mockup Recorder-Recording.dc.html ---- */
+.rec-ov.recording { pointer-events: none; }
+.rr-dim { position: absolute; background: var(--dim-rec); }
+.rr-area { position: absolute; z-index: 5; border: 3px solid var(--rec); }
+.rr-preset { position: absolute; z-index: 5; border: 2px solid var(--accent); }
+.rr-chip { position: absolute; z-index: 20; display: flex; align-items: center; gap: 8px; padding: 6px 12px; background: var(--ink); border: 1px solid var(--rec); white-space: nowrap; }
+.rr-chip > i { width: 8px; height: 8px; background: var(--rec); flex: none; }
+
+/* bar while recording: bottom centre, y 716. The bar window's page sits on the window's bottom edge,
+   so growing the window upward (tooltip room) never moves the bar under the pointer. */
+html.bar-page, html.bar-page body { height: 100%; }
+html.bar-page #root { height: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; }
+.rb-wrap.tipping { padding-top: 28px; }
+.rb-wrap.rec .rb-chip { margin-top: 4px; }
+.rec-ov.recording .rb-wrap { pointer-events: auto; }
+.rr-bar { gap: 10px; padding: 10px; }
+.rr-time { display: flex; align-items: center; gap: 10px; padding: 0 14px 0 6px; }
+.rr-sq { width: 14px; height: 14px; background: var(--rec); flex: none; }
+.rr-time b { font-family: var(--font-display); font-weight: 700; font-size: 30px; letter-spacing: -0.02em; line-height: 1; }
+.rr-b { position: relative; display: inline-flex; align-items: center; gap: 8px; height: 44px; padding: 0 14px; border: 1px solid var(--line); }
+.rr-b.sq { width: 44px; padding: 0; justify-content: center; }
+.rr-b.on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 500; }
+.rr-b > b { font-weight: 500; display: inline-grid; place-items: center; width: 20px; height: 20px; border: 1px solid currentColor; }
+.rr-b:disabled { color: var(--faint); cursor: default; }
+.rr-muted { width: 96px; }
+.rr-stop { position: relative; display: flex; align-items: center; justify-content: center; gap: 8px; height: 44px; padding: 0 16px; background: var(--rec); color: var(--rec-ink); font-weight: 500; }
+.rr-stop:disabled { cursor: default; }
+.rr-tip { position: absolute; z-index: 30; bottom: 52px; left: 0; padding: 7px 10px; background: var(--paper); color: var(--ink); font-weight: 500; white-space: nowrap; pointer-events: none; }
+.rr-stop .rr-tip { left: auto; right: 0; }

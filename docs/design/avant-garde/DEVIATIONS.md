@@ -60,3 +60,13 @@ Checked in Edge at 1440 x 900 (`recorder.html?fake&bar`, the mockup's desktop as
 - **The mic picker opens the system list** (a native select under the 1px line box). Its open list is drawn by Windows, not in the design. Long names cut at 240 px with an ellipsis, so the bar can be wider than 1080 (1189 on this PC with the Intel array mic).
 - **"Starting..." is faint on the rec fill,** as section 6 says; that contrast is low (it is a short disabled state).
 - **Bar and overlay transparency:** the parts of the bar window around the bar and chip are transparent but still take clicks (small strip under the bar).
+
+## Recorder while recording (checked 2026-11-17)
+
+Checked in Edge at 1440 x 900 (`recorder.html?fake&bar&state=recording`, the mockup's desktop as backdrop, Terminal output hovered) against `Recorder-Recording.dc.html`. Region border, dimming, live preset, top-left chip (240, 96, 457 x 28), bar top (716), button tops (727) and the "never captured" chip (513, 786) land on the mockup's pixels; the tooltip lands at 764, 690 (mockup 765, 690). 0.86% of pixels differ, from the items below and glyph anti-aliasing.
+
+- **Bar is 941 px wide** (mockup 879). In the mockup `.win button { border: 0; padding: 0 }` beats `.pb` and `.fb`, so Pause and Mute lose their 1px line border and Mute and Stop lose their side padding (STOP touches the button edge). The build keeps the border and padding the classes ask for, as on Home. Mute is 150 px (mockup 120), Stop 87 px (mockup 55).
+- **Paused, muted, tooltips for every button, Full screen chip text, no-mic Mute, warnings and failures** are not in the mockup; added to DESIGN-SYSTEM.md section 6 first.
+- **`dim-rec` token** (`rgba(5,5,4,.4)`, the mockup's value) added to `tokens.css` for the dimming while recording; setup keeps `dim`.
+- **Tooltip room:** the bar window grows 28 px upward while the pointer is over it, so a tooltip fits; the bar does not move. While the pointer is elsewhere the window is the bar's size, so nothing above the bar takes clicks.
+

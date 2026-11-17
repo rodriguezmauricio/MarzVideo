@@ -1,10 +1,13 @@
 // The recorder overlay: covers the whole monitor (transparent window). Mode picker top centre,
 // capture region with handles and size chip, zoom presets. DESIGN-SYSTEM.md section 6 "Recorder".
+// While recording (Rust reported Recording) the window is click-through and shows only the 3px rec
+// border, the dimming, the live preset and the "Recording this region" chip.
 // Works in CSS pixels; the store keeps the region in physical pixels.
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { Icon, type IconName } from "../components/Icon";
+import { useRecLive } from "./recLive";
 import { recorderApi } from "./recorderApi";
-import { addPreset, useRecorder, type Mode } from "./recorderStore";
+import { addPreset, sessionPresetId, useRecorder, type Mode } from "./recorderStore";
 import {
   dragRect,
   moveRect,
@@ -57,6 +60,7 @@ export function Overlay({ children }: { children?: ReactNode }) {
   const [live, setLive] = useState<{ area?: PxRect; preset?: { id: string; rect: PxRect }; draft?: PxRect } | null>(null);
   const [renaming, setRenaming] = useState<string | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
+  const recording = useRecLive((l) => l.rec.recording);
 
   const shown = live?.area ?? area;
   const at = (e: { clientX: number; clientY: number }): Pt => ({ x: e.clientX, y: e.clientY });
@@ -127,6 +131,7 @@ export function Overlay({ children }: { children?: ReactNode }) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.target as HTMLElement | null)?.tagName === "INPUT") return;
+      if (useRecLive.getState().rec.recording) return; // Stop or Ctrl+Shift+R ends a recording, not Esc
       if (e.key === "Escape") {
         e.preventDefault();
         void api.close();
@@ -153,6 +158,8 @@ export function Overlay({ children }: { children?: ReactNode }) {
         { left: shown.x + shown.w, top: shown.y, width: screen.width - shown.x - shown.w, height: shown.h },
       ];
   const phys = toPhysical(shown, scale);
+
+  if (recording) return <RecordingView area={area} full={full} screen={screen}>{children}</RecordingView>;
 
   return (
     <div ref={rootRef} className="rec-ov" onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp}>
@@ -264,6 +271,37 @@ export function Overlay({ children }: { children?: ReactNode }) {
           Close
           <span className="hk">Esc</span>
         </button>
+      </div>
+      {children}
+    </div>
+  );
+}
+
+/** The overlay while recording: never takes clicks (the window is click-through too). */
+function RecordingView({ area, full, screen, children }: { area: PxRect; full: boolean; screen: { width: number; height: number }; children?: ReactNode }) {
+  const presets = useRecorder((s) => s.presets);
+  const activeId = useRecLive((l) => l.rec.activePreset);
+  const active = presets.find((p) => sessionPresetId(p.id) === activeId);
+  const r = active ? presetPx(active.rect, area) : null;
+  const dims = full
+    ? []
+    : [
+        { left: 0, top: 0, width: screen.width, height: area.y },
+        { left: 0, top: area.y + area.h, width: screen.width, height: screen.height - area.y - area.h },
+        { left: 0, top: area.y, width: area.x, height: area.h },
+        { left: area.x + area.w, top: area.y, width: screen.width - area.x - area.w, height: area.h },
+      ];
+  const chip = full ? { left: 24, top: 100 } : { left: area.x, top: Math.max(0, area.y - 34) };
+  return (
+    <div className="rec-ov recording">
+      {dims.map((st, i) => (
+        <div key={i} className="rr-dim" style={st} />
+      ))}
+      <div className="rr-area" style={{ left: area.x, top: area.y, width: area.w, height: area.h }} />
+      {r && <div className="rr-preset" style={{ left: r.x, top: r.y, width: r.w, height: r.h }} />}
+      <div className="rr-chip" style={chip}>
+        <i />
+        {full ? "Recording this screen. Autosaving every few seconds" : "Recording this region. Autosaving every few seconds"}
       </div>
       {children}
     </div>
