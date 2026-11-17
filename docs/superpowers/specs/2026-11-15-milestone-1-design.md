@@ -1,6 +1,6 @@
 # Marz Recorder — Milestone 1 Design
 
-**Status:** APPROVED by Mauricio on 2026-11-15, as written. Next: implementation plan.
+**Status:** APPROVED by Mauricio on 2026-11-15, as written. Build order steps 1 to 6 are built (2026-11-17); the owner checks in `docs/spikes/2026-11-17-owner-checks.md` are still open. Home and the recorder screens are part of M1 (approved 2026-11-17).
 **Date:** 2026-11-15
 **Full product spec:** `docs/product-spec.md`
 
@@ -19,7 +19,7 @@ archive) comes after M1 is in daily use.
 - Record screen video, mic audio and an event log as **separate files** on one shared clock.
 - Open the recording in an editor with synced playback, a timeline, and editable zoom blocks.
 - Auto-suggest zooms from click clusters; user accepts, tweaks or deletes.
-- Cut sections out. Export a 16:9 MP4 (H.264).
+- Cut sections out. Export an MP4 (H.264): a 16:9 YouTube preset (1920 x 1080 at the source frame rate, 60 max) and a vertical preset (1080 x 1920 at 30 fps, the 16:9 frame letterboxed). The preset is an export choice; `project.output` does not change.
 - Undo/redo and autosave.
 
 ## Non-goals for M1
@@ -143,8 +143,11 @@ normalized 0–1 relative to the source frame, so edits survive resolution/proxy
 ## Technical calls (Claude's, open to correction)
 
 1. **One renderer for preview and export.** The compositor draws a frame for any time `t`. Preview
-   plays it live; export steps it frame by frame and pipes the pixels to FFmpeg, which only encodes.
-   The product spec's "FFmpeg pipeline" for compositing is dropped because two renderers would drift.
+   plays it live; export steps it frame by frame. The webview encodes the frames (WebCodecs
+   `VideoEncoder`, hardware first, falling back to no preference); FFmpeg only muxes the audio and
+   writes the MP4. (Changed 2026-11-17, approved by Mauricio: the first plan piped raw pixels to
+   FFmpeg for encoding.) The product spec's "FFmpeg pipeline" for compositing is dropped because two
+   renderers would drift.
 2. **Compositor starts on Canvas 2D / WebGL2 behind an interface, WebGPU later.** M1 only needs
    crop + scale + cursor; a simpler backend is testable everywhere. The interface keeps the WebGPU
    swap cheap when layouts and masks arrive.
@@ -152,13 +155,13 @@ normalized 0–1 relative to the source frame, so edits survive resolution/proxy
    To verify on Windows first: frame timestamps, cursor exclusion, and excluding our own windows
    from capture (`SetWindowDisplayAffinity` / `WDA_EXCLUDEFROMCAPTURE`).
 4. **Mic via the `wasapi` crate**, written straight to WAV.
-5. **Encoding via an FFmpeg sidecar process**, fragmented MP4, hardware encoder probed at startup
-   with `libx264` fallback.
+5. **Recording encode via an FFmpeg sidecar process**, fragmented MP4 without B-frames, hardware
+   encoder probed at startup with `libx264` fallback. Minimum FFmpeg 5.1.
 6. **Monorepo with pnpm workspaces:** `apps/desktop` (Tauri + React), `packages/*` (format,
    timeline, compositor, …), `crates/capture` (Rust).
 
-Calls 3–5 are unverified until tried on the Windows machine; the first local session should spike
-them before anything is built on top.
+Calls 3–5 were unverified until tried on the Windows machine; the first local session spiked them
+before anything was built on top.
 
 **Spiked 2026-11-16: calls 3 to 5 hold** on Windows (60 fps CFR at 1080p, mic drift about 1 ms over
 3 min, own window and cursor excluded). Two required changes and the numbers: `docs/spikes/2026-11-16-capture-spike.md`.

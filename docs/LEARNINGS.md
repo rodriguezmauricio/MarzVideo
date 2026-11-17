@@ -19,11 +19,11 @@
 - Holding Z or C (key repeat) stacks duplicate blocks.
 - A missing or unplayable `screen.mp4` leaves a black preview with no message.
 - `parseProject` accepts `durationUs: 0` and zero sizes; an unknown `easing` or `origin` value rejects the whole project.
-- Dev server middleware has no try/catch; its `project.json` write is not atomic (dev only: the Tauri storage writes `project.json.tmp` and renames since Task 11).
+- Dev server middleware has no try/catch; its `project.json` write is not atomic (dev only). The Tauri storage writes `project.json.tmp` and renames, so the atomic write is closed for the app (2026-11-17).
 - Header clock shows source length, not export length. The spec line "the timeline maps to output time" now differs from the code (playhead is in source time).
 - Sample uses `testsrc` (built-in timestamp) instead of `testsrc2`; there is no `usePlayback.ts` (logic lives in `Preview.tsx`).
 - No committed Playwright tests: the browser checks were run by hand.
-- Pin down for the recorder: how `durationUs` relates to the track lengths, and which mouse `button` values it writes.
+- Closed 2026-11-17: recorder pin-downs. `durationUs` is the stop time on the QPC clock minus t0, and both tracks are padded or cut to it (crash recovery uses the shorter track). Mouse `button` is `left`, `right` or `middle` only; other buttons are not written.
 - `drawFrame` should scale by the media's real pixel size, not `project.source`, before proxies arrive.
 
 - [2026-11-16] [claude] WGC's default minimum update interval snaps to every 3rd refresh on a 165 Hz screen, so capture gets 55 fps. Request half a frame (8.3 ms for 60 fps) and slot frames by timestamp; that holds 60 fps CFR.
@@ -31,7 +31,7 @@
 - [2026-11-16] [claude] The first WASAPI packet arrives up to 0.7 s after Start, and the mic drops about 20 ms once shortly after (no discontinuity flag). Warm up both tracks before taking t0, and pad mic gaps from the QPC position.
 - [2026-11-16] [claude] A low-level mouse hook does not see `SetCursorPos` moves (scripts, remote tools). Poll `GetCursorPos` on a timer as well, or the cursor track freezes.
 - [2026-11-16] [claude] `h264_nvenc` accepts BGRA on stdin directly, so the FFmpeg sidecar does no CPU colour conversion (about a quarter of one core at 1080p60).
-- [2026-11-17] [claude] WGC frame timestamps can be up to about 9.5 ms ahead of QPC now (the present time), so frames past the stop time are already queued when stop is read. The CFR writer holds three slots back before writing, or the video gets one frame too many.
+- [2026-11-17] [claude] WGC stamps frames up to about 10 ms ahead of QPC now (the present time), so frames past the stop time are already queued when stop is read. The CFR writer holds back `ceil(20 ms / slot) + 1` slots (`hold_slots`) before writing, or the video gets one frame too many.
 - [2026-11-17] [claude] Capture tests on this laptop record the live desktop: when Mauricio is using it, the content changes and repeat counts are not comparable. Run the 3-minute comparison with nobody at the machine. In PowerShell, pass `[NullString]::Value`, not `$null`, to a `string` P/Invoke parameter (FindWindow), or it becomes "".
 - [2026-11-17] [claude] The raw BGRA pipe to FFmpeg holds 60 fps at 1440p (no steady-state stalls over 5 ms) but only barely at 4K (about 2 GB/s, two of four runs under 59 fps, most writes one to two slots late), so capture above 2560 x 1440 pixels is capped at 30 fps. Re-measure with `pipe-bench` on any new encoder or machine before lifting the cap.
 - [2026-11-17] [claude] The sync probe's printed render latency is WASAPI stream latency plus queue time only; it leaves out the speaker and mic input paths, so judge sync on spread (17 ms) and mean absolute offset (45 ms) first. `pnpm sync-check` on a synthetic sample (`makeSample` with `syncOffsetMs`) reads the exact offset, which is the check that the analyzer itself is right.
@@ -46,3 +46,8 @@
 - [2026-11-17] [claude] In Chromium `video.currentTime` is the raw MP4 presentation time (screen.mp4 starts at the B-frame delay, 50 to 67 ms, no edit list), so export decodes by raw cts. But a paused seek to a time just before a keyframe (within that delay) shows the keyframe instead: pick preview-vs-export compare times away from keyframes (Task 16 PSNR step).
 - [2026-11-17] [claude] With B-frames screen.mp4 (fragmented, no edit list) starts at the reorder delay (50 ms with nvenc at 60 fps), but frame 0 is the frame captured at `screen.offsetUs`; mapping source time to raw pts showed the picture 50 ms late in preview and export, and `pnpm sync-check` on the folder (frame index based) cannot see it. Fixed: the recorder encodes with `-bf 0`, and preview and export map with `mediaTimeUs(project, srcUs, firstFrameUs)` (first cts from mp4box; the preview reads it with a 1 MB Range request) so older recordings line up too.
 - [2026-11-17] [claude] Export frames are taken with floor semantics (the source frame current at that time, like the playing video), so a flash lands up to one output frame late in the export (25 ms with a 41.7 ms screen offset at 30 fps). A sync check against the raw project must allow one output frame, or align the screen offset to the output frame grid.
+- [2026-11-17] [claude] WGC sends no frame at all on a static screen, so a recording of an unchanging desktop would have no video. Keep the last warm-up frame as slot 0 and repeat it; the stop path must not wait for a new frame.
+- [2026-11-17] [claude] `h264_nvenc` with B-frames puts the first frame at 0.033 to 0.05 s and shifts picture against audio. Record with `-bf 0` (frame 0 at 0, `screen.offsetUs` is the real first-frame time).
+- [2026-11-17] [claude] `apad=whole_dur` on an empty `atrim` hangs FFmpeg. For a segment past the end of the mic, generate silence (`anullsrc`) instead of padding an empty input.
+- [2026-11-17] [claude] Chromium `video.seekable.start(0)` is 0 even when the first frame is later, so it cannot tell the first frame time. Read the first cts from the MP4 (mp4box) instead.
+- [2026-11-17] [claude] Windows 125% scaling on a 1080p laptop gives a webview of about 1536 x 780, so a 1440 x 900 layout overflows. Check every screen at 1280 x 720 and at the real window size, not only 1440 x 900.

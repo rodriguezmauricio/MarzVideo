@@ -7,7 +7,7 @@ Windows-first screen recorder + non-destructive editor (Tauri 2, Rust, React/TS)
 1. `docs/product-spec.md` — the full product vision.
 2. `docs/superpowers/specs/2026-11-15-milestone-1-design.md` — what is being built now (Milestone 1)
    and the `project.marz` format contract.
-3. `docs/design/avant-garde/DESIGN-SYSTEM.md` — the approved visual design (Editorial Brutalism). Binding. Also `tokens.css`, `icons.md`, `README.md` (screen list), and the `.dc.html` mockups (reference only). Editor screens are M1; Home and Recorder screens are for later milestones.
+3. `docs/design/avant-garde/DESIGN-SYSTEM.md` — the approved visual design (Editorial Brutalism). Binding. Also `tokens.css`, `icons.md`, `README.md` (screen list), and the `.dc.html` mockups (reference only). Editor, Home and Recorder screens are all M1 (Home and Recorder approved into M1 on 2026-11-17).
 
 ## Current status
 
@@ -20,7 +20,19 @@ Windows-first screen recorder + non-destructive editor (Tauri 2, Rust, React/TS)
 - **Done:** editor restyled to the Editorial Brutalism design (2026-11-16). Deviations: `docs/design/avant-garde/DEVIATIONS.md`.
 - **Done:** capture spike (2026-11-16): `crates/capture` is throwaway spike code; findings and numbers in
   `docs/spikes/2026-11-16-capture-spike.md`. The capture approach holds on Windows.
-- **Not done:** capture engine, Tauri shell, recorder toolbar, export (steps 4 to 6).
+- **Done:** M1 build order steps 4 to 6 (plan: `docs/superpowers/plans/2026-11-17-m1-capture-shell-export.md`).
+  Capture engine (`crates/capture`, CLI `marz-capture record|recover`), Tauri shell with Home, recorder
+  bars, global hotkeys, live zooms and crash recovery, and MP4 export (`crates/export`, `apps/desktop/src/export`).
+- **Export:** the webview encodes (WebCodecs, hardware first), FFmpeg only muxes audio and writes the MP4.
+  Presets: YouTube 1920 x 1080 at source fps (60 max), vertical 1080 x 1920 at 30 fps letterboxed. The preset
+  is an export choice, `project.output` is unchanged. Measured: about 15 MB/min YouTube, 5 MB/min vertical,
+  about 3x faster than real time. Minimum FFmpeg 5.1 (`-fps_mode`).
+- **Capture facts:** no B-frames (first frame at 0; preview and export align to the first frame time for
+  older files). Above 1440p capture is capped at 30 fps. The app opens maximized; the editor fits down to 1280 x 720.
+- **Not checked by hand yet:** the owner checks in `docs/spikes/2026-11-17-owner-checks.md` (clean 3-minute run,
+  flash and beep sync, clicks, static screen, mic unplug, 60 Hz, real hotkeys), plus: open New recording once and
+  look at the overlay, play an export in Windows Media Player, upload one export of each preset privately and
+  check text sharpness.
 
 ## Design rules (binding, read DESIGN-SYSTEM.md before touching any UI)
 
@@ -40,14 +52,23 @@ Claude drifts from the design. These rules stop that.
 ```
 pnpm install
 pnpm sample                          # writes samples/demo.marz (gitignored)
-pnpm --filter @marz/desktop dev      # open http://localhost:5173/?project=demo
+pnpm --filter @marz/desktop dev      # plain browser: open http://localhost:5173/?project=demo
+pnpm --filter @marz/desktop app:dev  # Tauri app (Windows; port 5173 must be free, strictPort)
 pnpm test && pnpm typecheck
+cargo test --workspace
+pnpm design:check
+pnpm sync-check <folder.marz|file.mp4>
+target/release/marz-capture record|recover   # CLI recorder (cargo build --release -p marz-capture)
 ```
+
+Package tests: `pnpm --filter <pkg> exec vitest run` (packages have no test script).
 
 ## Next steps (in order)
 
-1. Write the plan for the capture engine, then Tauri shell, recorder toolbar and export.
-2. Known gaps from the final review, to schedule: see "Deferred" in `docs/LEARNINGS.md`.
+1. Mauricio runs the owner checks (list above).
+2. Fix what the final review finds.
+3. Merge the branch.
+4. Remaining gaps to schedule: see "Deferred" in `docs/LEARNINGS.md`.
 
 ## Rules
 

@@ -45,8 +45,8 @@ Rules: no border radius, no shadows, no transitions on state change, no gradient
 | `Editor-Nothing-Selected.dc.html` | Editor, nothing selected (All changes saved) | M1 |
 | `Editor-Cut-Selected.dc.html` | Editor, cut selected, "No usable events file" bar, "Save failed. Retrying..." | M1 |
 | `Timeline-Lanes.dc.html` | Timeline with all lanes expanded | M1 |
-| `Home.dc.html`, `Home-Empty.dc.html` | Projects list with recover banner, empty state | Later |
-| `Recorder-Setup.dc.html`, `Recorder-Recording.dc.html` | Floating bars, region, zoom presets | M1 (capture engine built) |
+| `Home.dc.html`, `Home-Empty.dc.html` | Projects list with recover banner, empty state | M1 (approved 2026-11-17) |
+| `Recorder-Setup.dc.html`, `Recorder-Recording.dc.html` | Floating bars, region, zoom presets | M1 (approved 2026-11-17) |
 | `States.dc.html` | Save status, warning bar, badges, tooltips | M1 |
 
 Every tool has an icon, a label and its hotkey. Hotkeys: Play Space, Add zoom Z, Add cut C, Auto zoom A, Delete Del, Undo Ctrl+Z, Redo Ctrl+Shift+Z, New recording Ctrl+Shift+R. Recorder (only while it is open): Record / stop Ctrl+Shift+R, Pause / resume Ctrl+Shift+P, Mute mic Ctrl+Shift+M, zoom presets Ctrl+1 to Ctrl+9, Zoom out Ctrl+0, Close Esc.
