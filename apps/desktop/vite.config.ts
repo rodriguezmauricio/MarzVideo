@@ -11,7 +11,11 @@ export default defineConfig({
   server: { port: 5173, strictPort: true },
   build: {
     rollupOptions: {
-      input: { index: resolve(__dirname, "index.html") },
+      input: {
+        index: resolve(__dirname, "index.html"),
+        recorder: resolve(__dirname, "recorder.html"),
+        bar: resolve(__dirname, "bar.html"),
+      },
     },
   },
 });

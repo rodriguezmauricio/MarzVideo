@@ -1,0 +1,83 @@
+/* Recorder overlay and bar: DESIGN-SYSTEM.md section 6 "Recorder", mockup Recorder-Setup.dc.html
+   (1440 x 900). Both windows are transparent; only the drawn parts are opaque. */
+@import "../styles/tokens.css";
+@import "../styles/fonts.css";
+@import "tailwindcss/preflight.css" layer(base);
+
+html.rec-page, html.rec-page body, html.rec-page #root { background: transparent; overflow: hidden; }
+.hk { color: var(--faint); }
+
+/* ---- overlay ---- */
+.rec-ov { position: fixed; inset: 0; user-select: none; }
+.ro-dim { position: absolute; background: var(--dim); cursor: crosshair; }
+.ro-area { position: absolute; border: 2px dashed var(--paper); z-index: 5; cursor: move; }
+.ro-area.full { border: 0; cursor: default; }
+.ro-in { position: absolute; inset: 6px; cursor: crosshair; }
+.ro-area.full .ro-in { inset: 0; }
+.ro-h { position: absolute; z-index: 6; background: var(--paper); }
+.ro-h.corner { width: 14px; height: 14px; margin: -7px 0 0 -7px; border: 2px solid var(--ink); }
+.ro-h.hbar { width: 28px; height: 8px; margin: -4px 0 0 -14px; border: 1px solid var(--ink); }
+.ro-h.vbar { width: 8px; height: 28px; margin: -14px 0 0 -4px; border: 1px solid var(--ink); }
+.h-nw, .h-se { cursor: nwse-resize; }
+.h-ne, .h-sw { cursor: nesw-resize; }
+.h-n, .h-s { cursor: ns-resize; }
+.h-e, .h-w { cursor: ew-resize; }
+
+/* size chip: paper, ink, lock icon */
+.ro-chip { position: absolute; z-index: 6; height: 24px; display: flex; align-items: center; gap: 8px; padding: 0 10px; background: var(--paper); color: var(--ink); font-weight: 500; white-space: nowrap; }
+.ro-lock { display: flex; align-items: center; }
+.ro-lock[aria-pressed="false"] { color: var(--faint-on-paper); }
+.ro-num { width: 64px; height: 24px; border: 1px solid var(--ink); background: transparent; color: var(--ink); font: inherit; letter-spacing: inherit; padding: 0 6px; }
+
+/* zoom presets: dashed accent, 7% wash, accent tag */
+.ro-preset {
+  position: absolute; z-index: 5; border: 2px dashed var(--accent); cursor: move;
+  background: color-mix(in srgb, var(--accent) 7%, transparent);
+}
+.ro-preset.draft { pointer-events: none; }
+.ro-tag { position: absolute; left: -2px; top: -26px; height: 24px; display: flex; align-items: center; gap: 8px; padding: 0 8px; background: var(--accent); color: var(--accent-ink); font-weight: 500; white-space: nowrap; cursor: default; }
+.ro-tag b { font-weight: 500; }
+.ro-name { cursor: text; }
+.ro-rename { font: inherit; letter-spacing: inherit; text-transform: none; color: var(--accent-ink); background: transparent; border: 0; border-bottom: 1px solid var(--accent-ink); padding: 0; outline: 0; }
+.ro-x { display: flex; align-items: center; }
+.ro-ph { position: absolute; width: 12px; height: 12px; margin: -6px 0 0 -6px; background: var(--paper); border: 2px solid var(--ink); }
+.ro-ph:nth-of-type(1), .ro-ph:nth-of-type(3) { cursor: nwse-resize; }
+.ro-ph:nth-of-type(2), .ro-ph:nth-of-type(4) { cursor: nesw-resize; }
+
+/* mode picker: floating, top centre, y 28 */
+.ro-modes { position: absolute; z-index: 20; top: 28px; left: 50%; transform: translateX(-50%); display: flex; background: var(--ink); border: 1px solid var(--paper); white-space: nowrap; }
+.ro-mode { display: flex; align-items: center; gap: 8px; height: 40px; padding: 0 16px; border-right: 1px solid var(--line); }
+.ro-mode:last-child { border-right: 0; }
+.ro-mode.on { background: var(--accent); color: var(--accent-ink); font-weight: 500; }
+.ro-mode.off { color: var(--faint); cursor: default; }
+.ro-later, .rb-later { border: 1px dashed var(--later); padding: 3px 7px; font-size: 10px; }
+
+/* ---- bar before recording: floating, bottom centre, y 704 ---- */
+.rb-wrap { position: relative; display: inline-flex; flex-direction: column; align-items: center; white-space: nowrap; }
+.rb-wrap.placed { position: absolute; z-index: 20; left: 50%; transform: translateX(-50%); }
+.rb-stack { display: flex; flex-direction: column; }
+.rb-err { height: 24px; display: flex; align-items: center; gap: 8px; padding: 0 16px; background: var(--paper); color: var(--ink); font-weight: 500; border: 1px solid var(--paper); }
+.rb-bar { display: flex; align-items: center; gap: 16px; padding: 10px 12px 10px 16px; background: var(--ink); border: 1px solid var(--paper); }
+.rb-mic { display: flex; align-items: center; gap: 12px; }
+.rb-pick { position: relative; display: flex; align-items: center; gap: 8px; height: 34px; padding: 0 10px; border: 1px solid var(--line); cursor: pointer; }
+.rb-name { max-width: 240px; overflow: hidden; text-overflow: ellipsis; }
+.rb-pick select { position: absolute; inset: 0; width: 100%; opacity: 0; cursor: pointer; font: inherit; }
+.rb-pick select:disabled { cursor: default; }
+.rb-pick:has(select:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
+.rb-meter { display: flex; gap: 2px; align-items: center; }
+.rb-meter i { width: 5px; background: var(--thumb-line); }
+.rb-meter i.lit { background: var(--accent); }
+.rb-sep { width: 1px; height: 28px; background: var(--line); flex: none; }
+.rb-cam { display: flex; align-items: center; gap: 10px; color: var(--faint); }
+.rb-cursor { display: flex; align-items: center; gap: 10px; }
+.rtg { position: relative; width: 34px; height: 18px; border: 1px solid var(--paper); flex: none; }
+.rtg > i, .rtg.off::after { position: absolute; top: 2px; left: 2px; width: 12px; height: 12px; background: var(--paper); }
+.rtg.on { background: var(--accent); border-color: var(--accent); }
+.rtg.on > i { left: 18px; background: var(--ink); }
+.rtg.off { border-color: var(--later); }
+.rtg.off::after { content: ""; background: var(--later); }
+.rb-rec { display: flex; align-items: center; justify-content: center; gap: 10px; height: 48px; padding: 0 20px; background: var(--rec); color: var(--rec-ink); font-weight: 500; }
+.rb-rec .hk { color: inherit; font-size: 10px; font-weight: 400; }
+.rb-rec:disabled { cursor: default; }
+.rb-rec.starting { color: var(--faint); }
+.rb-chip { margin-top: 2px; display: flex; align-items: center; gap: 8px; padding: 6px 12px; background: var(--ink); border: 1px solid var(--line); color: var(--faint); }

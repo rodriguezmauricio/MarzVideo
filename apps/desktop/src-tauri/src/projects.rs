@@ -276,10 +276,6 @@ mod recycle {
     }
 }
 
-/// Stub: the recorder is built in Task 12. The page calls this from "New recording".
-#[tauri::command]
-pub fn open_recorder() {}
-
 #[cfg(test)]
 mod tests {
     use super::*;

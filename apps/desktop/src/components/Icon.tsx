@@ -62,6 +62,40 @@ const PATHS = {
     </>
   ),
   folder: <path d="M3 7h6l2 2h10v10H3z" />,
+  fullscreen: <rect x="3" y="5" width="18" height="14" />,
+  window: (
+    <>
+      <rect x="3" y="5" width="18" height="14" />
+      <path d="M3 9h18" />
+    </>
+  ),
+  region: <path d="M4 8V4h4M16 4h4v4M20 16v4h-4M8 20H4v-4" />,
+  exact: (
+    <>
+      <rect x="3" y="8" width="18" height="8" />
+      <path d="M7 8v3M11 8v4M15 8v3M19 8v4" />
+    </>
+  ),
+  mic: (
+    <>
+      <rect x="9" y="3" width="6" height="11" />
+      <path d="M5 11a7 7 0 0014 0M12 18v3" />
+    </>
+  ),
+  camera: (
+    <>
+      <rect x="3" y="6" width="13" height="12" />
+      <path d="M16 10l5-3v10l-5-3" />
+    </>
+  ),
+  cursor: <path d="M5 3l13 6-5.5 1.8L10 16z" />,
+  eyeoff: (
+    <>
+      <path d="M3 12s3.5-6 9-6 9 6 9 6-3.5 6-9 6-9-6-9-6z" />
+      <path d="M4 4l16 16" />
+    </>
+  ),
+  close: <path d="M6 6l12 12M18 6L6 18" />,
   dot: <circle cx="12" cy="12" r="6" />,
   stop: <rect x="6" y="6" width="12" height="12" />,
 } as const;

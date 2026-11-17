@@ -120,8 +120,8 @@ impl MicShared {
 }
 
 /// What the thread hands back to `MicHandle::stop`.
-struct MicOutput {
-    wav: BufWriter<File>,
+struct MicOutput<W> {
+    wav: W,
     timeline: MicTimeline,
 }
 
@@ -129,7 +129,7 @@ pub struct MicHandle {
     pub device_name: String,
     shared: Arc<MicShared>,
     stop: Arc<AtomicBool>,
-    thread: JoinHandle<Result<MicOutput, CaptureError>>,
+    thread: JoinHandle<Result<MicOutput<BufWriter<File>>, CaptureError>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -185,18 +185,28 @@ fn write_silence(w: &mut impl Write, frames: u64) -> io::Result<()> {
 pub fn start(device_id: Option<&str>, wav_path: &Path, shared: Arc<MicShared>) -> Result<MicHandle, CaptureError> {
     let mut file = File::create(wav_path)?;
     write_wav_header(&mut file, 0)?;
-    let wav = BufWriter::new(file);
+    let (device_name, stop, thread) = spawn(device_id, BufWriter::new(file), shared.clone())?;
+    Ok(MicHandle { device_name, shared, stop, thread })
+}
+
+/// Spawn the mic thread writing into `wav` and wait until the stream runs.
+#[allow(clippy::type_complexity)]
+fn spawn<W: Write + Send + 'static>(
+    device_id: Option<&str>,
+    wav: W,
+    shared: Arc<MicShared>,
+) -> Result<(String, Arc<AtomicBool>, JoinHandle<Result<MicOutput<W>, CaptureError>>), CaptureError> {
     let id = device_id.map(str::to_string);
     let stop = Arc::new(AtomicBool::new(false));
     let (ready_tx, ready_rx) = mpsc::channel::<Result<String, CaptureError>>();
     let thread = {
-        let (stop, shared) = (stop.clone(), shared.clone());
+        let stop = stop.clone();
         thread::Builder::new()
             .name("marz-mic".into())
             .spawn(move || mic_thread(id, wav, shared, stop, ready_tx))?
     };
     match ready_rx.recv() {
-        Ok(Ok(device_name)) => Ok(MicHandle { device_name, shared, stop, thread }),
+        Ok(Ok(device_name)) => Ok((device_name, stop, thread)),
         Ok(Err(e)) => {
             let _ = thread.join();
             Err(e)
@@ -208,18 +218,53 @@ pub fn start(device_id: Option<&str>, wav_path: &Path, shared: Arc<MicShared>) -
     }
 }
 
+/// A mic opened for the setup meter only: the same capture loop, nothing written, the clock never
+/// set (so every packet is dropped after its peak is measured).
+pub struct MeterHandle {
+    pub device_name: String,
+    shared: Arc<MicShared>,
+    stop: Arc<AtomicBool>,
+    thread: JoinHandle<Result<MicOutput<io::Sink>, CaptureError>>,
+}
+
+/// Open `device_id` (None = the default mic) in shared mode for the level meter, without recording.
+pub fn start_meter(device_id: Option<&str>) -> Result<MeterHandle, CaptureError> {
+    let (warn, _ignored) = mpsc::channel();
+    let shared = MicShared::new(super::new_clock(), warn);
+    let (device_name, stop, thread) = spawn(device_id, io::sink(), shared.clone())?;
+    Ok(MeterHandle { device_name, shared, stop, thread })
+}
+
+impl MeterHandle {
+    /// Peak level 0..1 of the last 50 ms.
+    pub fn level(&self) -> f32 {
+        self.shared.level()
+    }
+
+    /// True once the device was lost (the meter then stays at 0).
+    pub fn lost(&self) -> bool {
+        self.shared.lost.load(Ordering::SeqCst)
+    }
+
+    /// Stop the stream and join the thread.
+    pub fn stop(self) {
+        self.stop.store(true, Ordering::SeqCst);
+        let _ = self.thread.join();
+    }
+}
+
 enum LoopError {
     Device,
     Io(io::Error),
 }
 
-fn mic_thread(
+fn mic_thread<W: Write>(
     id: Option<String>,
-    mut wav: BufWriter<File>,
+    mut wav: W,
     shared: Arc<MicShared>,
     stop: Arc<AtomicBool>,
     ready: mpsc::Sender<Result<String, CaptureError>>,
-) -> Result<MicOutput, CaptureError> {
+) -> Result<MicOutput<W>, CaptureError> {
     let dev_err = |what: &str, e: wasapi::WasapiError| CaptureError::Device(format!("microphone {what}: {e}"));
     let setup = || -> Result<_, CaptureError> {
         let _ = initialize_mta();

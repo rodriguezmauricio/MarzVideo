@@ -50,3 +50,13 @@ Checked 2026-11-16 with 1440 x 900 Edge screenshots of the four M1 editor states
 - **Discard asks in the banner** (bold question, Discard and Keep) instead of a dialog, so no new component was needed. Added to section 6.
 - **A recording that needs recovery is only a banner**, not also a row, as in the mockup (the interrupted recording is not in the list).
 - At 1280 x 680 the empty state's tracks preview runs past the bottom; the screen scrolls.
+
+## Recorder setup (checked 2026-11-17)
+
+Checked in Edge at 1440 x 900 (`recorder.html?fake&bar`, the mockup's desktop as backdrop) against `Recorder-Setup.dc.html`. Region, handles, size chip, presets, bar (180, 704, 1080 x 70) and the "never captured" chip land on the mockup's pixels. 0.72% of pixels differ; besides the items below that is glyph anti-aliasing (bundled fonts against the mockup's web fonts).
+
+- **Mode picker is wider** (793 px, mockup 499): Window carries the dashed "Not in this version" tag and a fifth "Close / Esc" segment was added. Both are in DESIGN-SYSTEM.md section 6.
+- **Preset tags end in a 12px close icon** (removes the preset), as added to section 6. The mockup has none.
+- **The mic picker opens the system list** (a native select under the 1px line box). Its open list is drawn by Windows, not in the design. Long names cut at 240 px with an ellipsis, so the bar can be wider than 1080 (1189 on this PC with the Intel array mic).
+- **"Starting..." is faint on the rec fill,** as section 6 says; that contrast is low (it is a short disabled state).
+- **Bar and overlay transparency:** the parts of the bar window around the bar and chip are transparent but still take clicks (small strip under the bar).
