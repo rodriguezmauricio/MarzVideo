@@ -88,8 +88,9 @@ function finish(mode: Mode, flashUs: number[], beepUs: number[], clickUs: number
   const flashDeltas = pairNearest(flashUs, beepUs, FLASH_PAIR_GAP_US);
   const flash = summarize(flashDeltas);
   const flashMeanAbsMs = meanAbsMs(flashDeltas);
-  const click = summarize(pairNearest(clickUs, soundUs, CLICK_PAIR_GAP_US));
-  const verdict = mode === "flash" ? judgeFlash(flash, flashMeanAbsMs, latencyMs) : judgeClicks(click);
+  const clickDeltas = pairNearest(clickUs, soundUs, CLICK_PAIR_GAP_US);
+  const click = summarize(clickDeltas);
+  const verdict = mode === "flash" ? judgeFlash(flash, flashMeanAbsMs, latencyMs) : judgeClicks(click, meanAbsMs(clickDeltas));
   return {
     flashes: flashUs.length,
     beeps: beepUs.length,

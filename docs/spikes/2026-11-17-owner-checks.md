@@ -46,7 +46,7 @@ target\release\marz-capture.exe record samples\sync.marz --secs 63 --sync-probe
 pnpm sync-check samples\sync.marz
 ```
 
-The recorder prints the render latency WASAPI reports. `pnpm sync-check` prints PASS or FAIL.
+The recorder prints the render latency of the sound engine. `pnpm sync-check` prints PASS or FAIL.
 
 PASS (all four lines say `ok`):
 
@@ -75,7 +75,7 @@ target\release\marz-capture.exe record samples\clicks.marz --secs 30
 pnpm sync-check samples\clicks.marz --mode click
 ```
 
-PASS: `click to sound` shows 10 pairs (8 or more is a usable read) and a mean of at most 20 ms. `PASS` on the last line.
+PASS: `click to sound` shows 8 or more pairs (10 are made) and a mean absolute offset of at most 20 ms. `PASS` on the last line.
 
 ---
 

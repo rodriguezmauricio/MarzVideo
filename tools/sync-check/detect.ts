@@ -104,7 +104,8 @@ export const FLASH_MIN_PAIRS = 20;
 export const FLASH_MAX_SPREAD_MS = 17;
 export const FLASH_MAX_MEAN_ABS_MS = 45;
 export const FLASH_LATENCY_TOLERANCE_MS = 10;
-export const CLICK_MAX_MEAN_MS = 20;
+export const CLICK_MAX_MEAN_ABS_MS = 20;
+export const CLICK_MIN_PAIRS = 8;
 
 const mark = (ok: boolean) => (ok ? "ok  " : "FAIL");
 
@@ -127,8 +128,11 @@ export function judgeFlash(s: Summary, meanAbsOffsetMs: number, renderLatencyMs:
   return { pass, lines };
 }
 
-/** Click-to-sound criterion: mean at most 20 ms, and at least one pair. */
-export function judgeClicks(s: Summary): Verdict {
-  const ok = s.count > 0 && Math.abs(s.meanMs) <= CLICK_MAX_MEAN_MS;
-  return { pass: ok, lines: [`${mark(ok)}  click to sound: ${s.count} pairs, mean ${s.meanMs.toFixed(1)} ms (at most ${CLICK_MAX_MEAN_MS})`] };
+/** Click-to-sound criteria: at least 8 pairs and a mean of absolute deltas of at most 20 ms (so +30 and -30 do not cancel). */
+export function judgeClicks(s: Summary, meanAbsOffsetMs: number): Verdict {
+  const checks = [
+    { ok: s.count >= CLICK_MIN_PAIRS, line: `pairs: ${s.count} (need ${CLICK_MIN_PAIRS})` },
+    { ok: s.count > 0 && meanAbsOffsetMs <= CLICK_MAX_MEAN_ABS_MS, line: `mean absolute click to sound: ${meanAbsOffsetMs.toFixed(1)} ms (at most ${CLICK_MAX_MEAN_ABS_MS}; signed mean ${s.meanMs.toFixed(1)} ms)` },
+  ];
+  return { pass: checks.every((c) => c.ok), lines: checks.map((c) => `${mark(c.ok)}  ${c.line}`) };
 }

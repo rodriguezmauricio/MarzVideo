@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, test } from "vitest";
 import { makeSample } from "../make-sample/make-sample";
-import { detectFlashes, detectOnsets, judgeClicks, judgeFlash, pairNearest, summarize } from "./detect";
+import { detectFlashes, detectOnsets, judgeClicks, judgeFlash, meanAbsMs, pairNearest, summarize } from "./detect";
 import { analyzeProject } from "./sync-check";
 
 /** Deterministic pseudo noise in [-amp, amp]. */
@@ -115,32 +115,45 @@ describe("verdicts", () => {
     expect(j.pass).toBe(true);
     expect(j.lines.join("\n")).toMatch(/not checked/);
   });
-  test("click passes at 20 ms or less and fails above, or with no pairs", () => {
-    expect(judgeClicks({ count: 10, meanMs: 12, minMs: 5, maxMs: 20, spreadMs: 15 }).pass).toBe(true);
-    expect(judgeClicks({ count: 10, meanMs: 25, minMs: 20, maxMs: 30, spreadMs: 10 }).pass).toBe(false);
-    expect(judgeClicks(summarize([])).pass).toBe(false);
+  test("click passes at 20 ms mean absolute or less with at least 8 pairs", () => {
+    expect(judgeClicks({ count: 10, meanMs: 12, minMs: 5, maxMs: 20, spreadMs: 15 }, 12).pass).toBe(true);
+    expect(judgeClicks({ count: 8, meanMs: 12, minMs: 5, maxMs: 20, spreadMs: 15 }, 12).pass).toBe(true);
+    expect(judgeClicks({ count: 10, meanMs: 25, minMs: 20, maxMs: 30, spreadMs: 10 }, 25).pass).toBe(false);
+    expect(judgeClicks(summarize([]), 0).pass).toBe(false);
+  });
+  test("click fails with fewer than 8 pairs, even when they are exact", () => {
+    expect(judgeClicks({ count: 7, meanMs: 5, minMs: 5, maxMs: 5, spreadMs: 0 }, 5).pass).toBe(false);
+    expect(judgeClicks({ count: 1, meanMs: 5, minMs: 5, maxMs: 5, spreadMs: 0 }, 5).pass).toBe(false);
+  });
+  test("click +30 ms and -30 ms do not cancel: the mean of absolute deltas is judged", () => {
+    const deltas = [30_000, -30_000, 30_000, -30_000, 30_000, -30_000, 30_000, -30_000];
+    const s = summarize(deltas);
+    expect(s.meanMs).toBe(0);
+    expect(judgeClicks(s, meanAbsMs(deltas)).pass).toBe(false);
   });
 });
 
 describe("analyzer on a synthetic sample", () => {
-  const frame = 1000 / 30;
+  // Flash frames sit on frame boundaries in the sample, so the read is exact; 3 ms still catches a
+  // flipped offset sign (the 12.4 ms mic offset would shift the read by 24.8 ms).
+  const tolerance = 3;
   const make = async (syncOffsetMs: number) => {
     const dir = join(mkdtempSync(join(tmpdir(), "marz-sync-")), "sync.marz");
     await makeSample(dir, { durationSec: 11, syncOffsetMs });
     return analyzeProject(dir);
   };
 
-  test("syncOffsetMs 0 reports mean 0 ms within 1 frame", async () => {
+  test("syncOffsetMs 0 reports mean 0 ms within 3 ms", async () => {
     const r = await make(0);
     expect(r.flashes).toBe(3);
     expect(r.beeps).toBe(3);
     expect(r.flash.count).toBe(3);
-    expect(Math.abs(r.flash.meanMs)).toBeLessThanOrEqual(frame);
+    expect(Math.abs(r.flash.meanMs)).toBeLessThanOrEqual(tolerance);
   }, 60_000);
 
-  test("syncOffsetMs 30 reports mean 30 ms within 1 frame", async () => {
+  test("syncOffsetMs 30 reports mean 30 ms within 3 ms", async () => {
     const r = await make(30);
     expect(r.flash.count).toBe(3);
-    expect(Math.abs(r.flash.meanMs - 30)).toBeLessThanOrEqual(frame);
+    expect(Math.abs(r.flash.meanMs - 30)).toBeLessThanOrEqual(tolerance);
   }, 60_000);
 });
