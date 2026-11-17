@@ -1859,6 +1859,7 @@ dependencies = [
 name = "marz-capture"
 version = "0.1.0"
 dependencies = [
+ "marz-export",
  "serde",
  "serde_json",
  "wasapi",
@@ -1877,6 +1878,14 @@ dependencies = [
  "tauri-build",
  "tauri-plugin-dialog",
  "windows",
+]
+
+[[package]]
+name = "marz-export"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
