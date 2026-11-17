@@ -15,15 +15,20 @@ impl Slotter {
     }
 
     /// Slot for a frame at `rec_hns`; the first frame is slot 0. None when the slot is not after the
-    /// last accepted one, so the caller can skip the GPU copy.
-    pub fn accept(&mut self, rec_hns: i64) -> Option<u64> {
+    /// last committed one, so the caller can skip the GPU copy. Only remembers the first timestamp:
+    /// the slot stays free until `commit`, so a dropped frame does not consume it.
+    pub fn slot_for(&mut self, rec_hns: i64) -> Option<u64> {
         let first = *self.first.get_or_insert(rec_hns);
         let idx = (((rec_hns - first) as f64) / self.frame_hns).round().max(0.0) as u64;
         if self.last.is_some_and(|l| idx <= l) {
             return None;
         }
-        self.last = Some(idx);
         Some(idx)
+    }
+
+    /// Record `idx` as the last slot sent. Call only after the frame was handed to the writer.
+    pub fn commit(&mut self, idx: u64) {
+        self.last = Some(self.last.map_or(idx, |l| l.max(idx)));
     }
 
     /// Index of the last slot for a recording of `duration_us` (frame count is the rounded duration
@@ -107,21 +112,33 @@ mod tests {
         let mut accepted = 0;
         for n in 0..90i64 {
             let t = n * 10_000_000 / 90; // 90 frames per second
-            if let Some(i) = s.accept(t) {
+            if let Some(i) = s.slot_for(t) {
                 assert!(last.is_none_or(|l| i > l), "index {i} not after {last:?}");
+                s.commit(i);
                 last = Some(i);
                 accepted += 1;
             }
         }
-        assert_eq!(s.accept(0), None); // going backwards is never accepted
+        assert_eq!(s.slot_for(0), None); // going backwards is never accepted
         assert!((55..=60).contains(&accepted), "accepted {accepted}");
     }
 
     #[test]
     fn first_frame_is_slot_zero_and_offsets_are_relative() {
         let mut s = Slotter::new(60);
-        assert_eq!(s.accept(5_000_000), Some(0));
-        assert_eq!(s.accept(5_000_000 + 10_000_000 / 60 * 3), Some(3));
+        assert_eq!(s.slot_for(5_000_000), Some(0));
+        s.commit(0);
+        assert_eq!(s.slot_for(5_000_000 + 10_000_000 / 60 * 3), Some(3));
+    }
+
+    #[test]
+    fn dropped_frame_retried_in_same_slot() {
+        let mut s = Slotter::new(60);
+        let k = s.slot_for(0).unwrap();
+        // no commit: the send failed, so the next frame in the same slot is still accepted
+        assert_eq!(s.slot_for(10_000), Some(k));
+        s.commit(k);
+        assert_eq!(s.slot_for(10_000), None);
     }
 
     #[test]
