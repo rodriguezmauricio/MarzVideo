@@ -55,6 +55,13 @@ const PATHS = {
       <path d="M12 10v4M12 17.2v.01" />
     </>
   ),
+  gear: (
+    <>
+      <circle cx="12" cy="12" r="3" />
+      <path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1" />
+    </>
+  ),
+  folder: <path d="M3 7h6l2 2h10v10H3z" />,
   dot: <circle cx="12" cy="12" r="6" />,
   stop: <rect x="6" y="6" width="12" height="12" />,
 } as const;
@@ -63,11 +70,13 @@ const SOLID = new Set(["play", "dot", "stop"]);
 
 export type IconName = keyof typeof PATHS;
 
-export function Icon({ name, size = 15 }: { name: IconName; size?: number }) {
+/** `turn` rotates the icon, as the mockups do for the "Open" arrow (down turned -90). */
+export function Icon({ name, size = 15, turn }: { name: IconName; size?: number; turn?: number }) {
   const solid = SOLID.has(name);
   return (
     <svg
       className="ic"
+      style={turn ? { transform: `rotate(${turn}deg)` } : undefined}
       width={size}
       height={size}
       viewBox="0 0 24 24"

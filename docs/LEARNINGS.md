@@ -19,7 +19,7 @@
 - Holding Z or C (key repeat) stacks duplicate blocks.
 - A missing or unplayable `screen.mp4` leaves a black preview with no message.
 - `parseProject` accepts `durationUs: 0` and zero sizes; an unknown `easing` or `origin` value rejects the whole project.
-- Dev server middleware has no try/catch; the `project.json` write is not atomic (the Tauri storage should write a temp file and rename).
+- Dev server middleware has no try/catch; its `project.json` write is not atomic (dev only: the Tauri storage writes `project.json.tmp` and renames since Task 11).
 - Header clock shows source length, not export length. The spec line "the timeline maps to output time" now differs from the code (playhead is in source time).
 - Sample uses `testsrc` (built-in timestamp) instead of `testsrc2`; there is no `usePlayback.ts` (logic lives in `Preview.tsx`).
 - No committed Playwright tests: the browser checks were run by hand.
@@ -35,3 +35,5 @@
 - [2026-11-17] [claude] Capture tests on this laptop record the live desktop: when Mauricio is using it, the content changes and repeat counts are not comparable. Run the 3-minute comparison with nobody at the machine. In PowerShell, pass `[NullString]::Value`, not `$null`, to a `string` P/Invoke parameter (FindWindow), or it becomes "".
 - [2026-11-17] [claude] The raw BGRA pipe to FFmpeg holds 60 fps at 1440p (no steady-state stalls over 5 ms) but only barely at 4K (about 2 GB/s, two of four runs under 59 fps, most writes one to two slots late), so capture above 2560 x 1440 pixels is capped at 30 fps. Re-measure with `pipe-bench` on any new encoder or machine before lifting the cap.
 - [2026-11-17] [claude] The sync probe's printed render latency is WASAPI stream latency plus queue time only; it leaves out the speaker and mic input paths, so judge sync on spread (17 ms) and mean absolute offset (45 ms) first. `pnpm sync-check` on a synthetic sample (`makeSample` with `syncOffsetMs`) reads the exact offset, which is the check that the analyzer itself is right.
+- [2026-11-17] [claude] In the Tauri app media comes from the asset protocol, another origin than the page. A video drawn to a canvas that is read back (`toDataURL`) needs `crossOrigin = "anonymous"`, or the canvas is tainted and the timeline thumbnails stay empty while playback still works.
+- [2026-11-17] [claude] The Tauri window can be driven without touching the desktop: start `tauri dev` with `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=9333` and attach Playwright with `chromium.connectOverCDP`. Input goes only to the webview.

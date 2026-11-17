@@ -162,6 +162,11 @@ Rec square (14px) + timer (display 30px), Pause, Mute mic with meter, divider, o
 - Recover banner: ink row, 56px, 2px paper top, hatched red square (24px), "Interrupted: Pricing page walkthrough. The video up to 03:12 is safe.", buttons Recover (accent) and Discard (1px paper border).
 - Recent projects: 68px ruled rows, never cards. Columns: index "01" (faint), 96 x 54 thumbnail (1px line), project name display 26px, length mono 500, meta in faint ("3 zooms, 1 cut, edited 2 hours ago"), "Open" with arrow. Table header: "Recent projects" / "Last edited, newest first".
 - Empty: giant "Nothing yet." (230px), one sentence, same two buttons, and a ruled preview of the three tracks (Screen, Mic, Clicks) as dashed empty rows saying "Appears here after you record".
+- Top strip on Home: 14px accent square + "Marz Recorder" (mono 500) left; "Settings" (gear icon, 1px paper border, 30px high) right.
+- Hero buttons: mono 500 at 13px (hotkey 10px), 16px side padding, icon 16px. Banner buttons: 34px high, 16px side padding.
+- Discard asks first, inside the same banner: bold "Move <name> to the Recycle Bin?" + faint "You can restore it from there.", buttons Discard (1px paper border) and Keep (1px paper border). Discard never deletes; it moves the folder to the Recycle Bin.
+- Errors on Home (a folder that is not a project, a failed recover or discard) use the Warning bar under the strip: "This folder is not a Marz project. Pick a folder that ends in .marz."
+- Window sizes, Home: the hero keeps 276px; its buttons stay 24px from the right edge. Banners and the table header keep their heights; the rows scroll under the header. Empty keeps its positions; the tracks preview stays 24px from the right edge and the screen scrolls when it is shorter than the content.
 
 ### Icons
 24px viewBox, 2px stroke, `stroke-linecap: square`, `stroke-linejoin: miter`, no fill (Play, record dot and stop are solid). Size 12-16px in UI. Never use an icon library with rounded strokes. Path data for every icon is in `icons.md`; copy from there.

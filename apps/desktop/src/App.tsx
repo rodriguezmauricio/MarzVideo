@@ -1,12 +1,16 @@
 import { useEffect, useState } from "react";
+import { Home } from "./home/Home";
 import { Icon } from "./components/Icon";
 import { Inspector } from "./components/Inspector";
 import { Preview } from "./components/Preview";
 import { mmss, mmsst } from "./components/timecode";
 import { Timeline } from "./components/Timeline";
 import { Toolbar } from "./components/Toolbar";
+import { WarningBar } from "./components/WarningBar";
 import { addCutAtPlayhead, addZoomAtPlayhead, deleteSelection, runAutoZoom } from "./state/actions";
+import { useAppStore } from "./state/appStore";
 import { flushAutosave, useEditorStore } from "./state/editorStore";
+import { pickStorage } from "./storage/pickStorage";
 import type { SaveStatus } from "./storage/autosave";
 
 /** Save status: three states (DESIGN-SYSTEM.md "Save status"). A pending debounced save counts as saving. */
@@ -27,21 +31,32 @@ function SaveState({ status }: { status: SaveStatus }) {
   );
 }
 
-/** Paper bar under the strip. The first sentence of the warning is bold. */
-function WarningBar({ text }: { text: string }) {
-  const cut = text.indexOf(". ");
-  const lead = cut === -1 ? text : text.slice(0, cut + 1);
-  const rest = cut === -1 ? "" : text.slice(cut + 1);
+/** Home or the editor (appStore). */
+export function App() {
+  const screen = useAppStore((s) => s.screen);
+  const dir = useAppStore((s) => s.dir);
+  return screen === "editor" && dir ? <Editor key={dir} dir={dir} /> : <Home />;
+}
+
+/** "Projects": saves any pending edit, then goes back to Home. */
+function BackLink() {
+  const goHome = useAppStore((s) => s.goHome);
   return (
-    <div className="warn" role="status">
-      <Icon name="alert" size={13} />
-      <b>{lead}</b>
-      {rest}
-    </div>
+    <a
+      className="back"
+      href="#"
+      onClick={(e) => {
+        e.preventDefault();
+        void goHome();
+      }}
+    >
+      <Icon name="back" size={14} />
+      Projects
+    </a>
   );
 }
 
-export function App() {
+function Editor({ dir }: { dir: string }) {
   const status = useEditorStore((s) => s.status);
   const error = useEditorStore((s) => s.error);
   const project = useEditorStore((s) => s.project);
@@ -52,8 +67,8 @@ export function App() {
   const [lanesExpanded, setLanesExpanded] = useState(false);
 
   useEffect(() => {
-    void load(new URLSearchParams(location.search).get("project") ?? "demo");
-  }, [load]);
+    void load(pickStorage(dir));
+  }, [load, dir]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -90,9 +105,12 @@ export function App() {
 
   if (status === "error")
     return (
-      <div className="msg-error" role="alert">
-        <Icon name="alert" size={13} />
-        Could not open the project: {error}
+      <div className="msg">
+        <BackLink />
+        <div className="msg-error" role="alert">
+          <Icon name="alert" size={13} />
+          Could not open the project: {error}
+        </div>
       </div>
     );
   if (status !== "ready" || !project) return <div className="msg">Opening project...</div>;
@@ -102,11 +120,7 @@ export function App() {
       <div className="grid-lines" aria-hidden="true" />
       <header className="strip">
         <div className="strip-l">
-          {/* Home (the projects list) is a later milestone, so this link has nowhere to go yet. */}
-          <a className="back" aria-disabled="true">
-            <Icon name="back" size={14} />
-            Projects
-          </a>
+          <BackLink />
           <span className="faint">/</span>
           <b className="proj">{project.name}</b>
           <SaveState status={saveStatus} />

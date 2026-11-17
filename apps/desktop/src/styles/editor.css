@@ -7,7 +7,7 @@
 input { font: inherit; color: inherit; letter-spacing: inherit; text-transform: inherit; }
 
 .msg { padding: 24px; color: var(--faint); }
-.msg-error { margin: 24px; padding: 8px 12px; display: inline-flex; align-items: center; gap: 8px; background: var(--paper); color: var(--ink); font-weight: 500; }
+.msg-error { margin: 24px 0 0; padding: 8px 12px; display: inline-flex; align-items: center; gap: 8px; background: var(--paper); color: var(--ink); font-weight: 500; }
 
 .app { position: relative; width: 100%; height: 100vh; overflow: hidden; display: flex; flex-direction: column; background: var(--ink); }
 .ic { flex: none; display: block; }
@@ -24,7 +24,7 @@ input { font: inherit; color: inherit; letter-spacing: inherit; text-transform: 
 .strip { position: relative; z-index: 3; flex: none; height: var(--strip-h); border-bottom: 1px solid var(--line); display: flex; align-items: center; justify-content: space-between; padding: 0 24px; }
 .strip-l { display: flex; align-items: center; gap: 18px; }
 .strip-r { display: flex; align-items: center; gap: 20px; }
-.back { display: flex; align-items: center; gap: 8px; color: var(--paper); cursor: default; }
+.back { display: flex; align-items: center; gap: 8px; color: var(--paper); cursor: pointer; }
 .faint { color: var(--faint); }
 .proj { font-weight: 500; }
 .save { display: flex; align-items: center; gap: 8px; color: var(--faint); }

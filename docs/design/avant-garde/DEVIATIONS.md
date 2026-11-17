@@ -39,3 +39,14 @@ Checked 2026-11-16 with 1440 x 900 Edge screenshots of the four M1 editor states
 - At 680 tall the timeline shows the four working lanes and one Later lane (Camera); the other Later lanes are cut off from the bottom. At heights between the checked ones a Later lane can show partly.
 - At 1280 wide the preview caption "Full frame. Select a zoom or cut..." wraps to two lines (there is room under the preview).
 - The 12-column grid lines keep the 116px pitch from the left margin, so on windows wider than 1440 the last strip of the window has no grid line, and the inspector edge is not on a column line at other widths.
+
+## Home (checked 2026-11-17)
+
+- Checked in Edge at 1440 x 900 against `Home.dc.html` and `Home-Empty.dc.html` (fake rows behind `?home=fake` and `?home=empty`), plus 1536 x 780 and 1280 x 680. Hero, banner, header, rows and the empty state sit on the mockup positions (hero buttons at x 916, y 246; rows from y 410; empty buttons at 24, 540; tracks at 760, 520).
+- **Buttons have side padding.** In the mockups `.win button { padding: 0 }` beats `.fb { padding: 0 16px }`, so the dot icon, the hotkey and the Recover and Discard labels touch the button edges. The build keeps the 16px padding the `.fb` class asks for.
+- **Thumbnails are a real frame** of `screen.mp4` (0.5 s in), not the drawn app placeholders of the mockup. In the browser fake rows show the demo sample.
+- **Settings is inert** (no settings in M1), drawn as in the mockup with the tooltip "Settings come in a later version", like Export was before it was built.
+- **New recording does nothing yet.** The recorder is Task 12; the button and Ctrl+Shift+R call a stub command.
+- **Discard asks in the banner** (bold question, Discard and Keep) instead of a dialog, so no new component was needed. Added to section 6.
+- **A recording that needs recovery is only a banner**, not also a row, as in the mockup (the interrupted recording is not in the list).
+- At 1280 x 680 the empty state's tracks preview runs past the bottom; the screen scrolls.
