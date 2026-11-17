@@ -4,7 +4,7 @@
 //! marz-capture record <out.marz> [--secs N] [--fps N] [--encoder E] [--monitor N] [--region x,y,w,h]
 //!                     [--no-mic] [--mic-id ID] [--hide-cursor] [--report]
 //!                     [--pause-at a,b,...] [--resume-at a,b,...] [--zoom-at a,b,...]
-//!                     [--simulate-mic-loss-at SECS] [--simulate-static-screen]
+//!                     [--simulate-mic-loss-at SECS] [--simulate-static-screen] [--sync-probe]
 //! marz-capture recover <dir>
 //! ```
 //!
@@ -12,12 +12,16 @@
 //! alternates zoom in (built-in preset "Zoom 1", the centre quarter) and zoom out. Hotkeys work
 //! while recording: Ctrl+Shift+R stops, Ctrl+Shift+P pauses or resumes, Ctrl+Shift+M mutes,
 //! Ctrl+1 zooms, Ctrl+0 zooms out.
+//!
+//! `--sync-probe` covers the monitor with a black window that flashes white and beeps every 3 s
+//! (first flash 2 s in), and writes `sync-probe.json` beside the project. Run `--secs 63` and then
+//! `pnpm sync-check <out.marz>`. It plays sound and flashes the whole screen: leave the PC alone.
 
 const USAGE: &str = "usage:
   marz-capture record <out.marz> [--secs N] [--fps N] [--encoder E] [--monitor N] [--region x,y,w,h]
                       [--no-mic] [--mic-id ID] [--hide-cursor] [--report]
                       [--pause-at a,b,...] [--resume-at a,b,...] [--zoom-at a,b,...]
-                      [--simulate-mic-loss-at SECS] [--simulate-static-screen]
+                      [--simulate-mic-loss-at SECS] [--simulate-static-screen] [--sync-probe]
   marz-capture recover <dir>";
 
 #[cfg(not(windows))]
@@ -60,6 +64,7 @@ mod cli {
     use marz_capture::win::mic::list_mics;
     use marz_capture::win::monitors::list_monitors;
     use marz_capture::win::session::{RecordOptions, Session, SessionEvent, StopReport};
+    use marz_capture::win::sync_probe;
     use marz_capture::win::set_dpi_awareness;
     use windows::Win32::Foundation::{CloseHandle, FILETIME, HANDLE};
     use windows::Win32::System::Threading::{GetCurrentProcess, GetProcessTimes, OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION};
@@ -111,6 +116,7 @@ mod cli {
         zoom_at: Vec<f64>,
         mic_loss_at: Option<f64>,
         simulate_static: bool,
+        sync_probe: bool,
     }
 
     fn parse_record(args: &[String]) -> Result<RecordArgs, CliError> {
@@ -133,6 +139,7 @@ mod cli {
             zoom_at: Vec::new(),
             mic_loss_at: None,
             simulate_static: false,
+            sync_probe: false,
         };
         fn num<T: std::str::FromStr>(flag: &str, v: Option<&String>) -> Result<T, CliError> {
             v.and_then(|s| s.trim().parse().ok()).ok_or_else(|| CliError::Usage(format!("{flag} needs a number")))
@@ -164,6 +171,7 @@ mod cli {
                 "--zoom-at" => a.zoom_at = list(flag, it.next())?,
                 "--simulate-mic-loss-at" => a.mic_loss_at = Some(num(flag, it.next())?),
                 "--simulate-static-screen" => a.simulate_static = true,
+                "--sync-probe" => a.sync_probe = true,
                 other => return Err(usage(format!("unknown flag: {other}"))),
             }
         }
@@ -216,6 +224,17 @@ mod cli {
             presets: vec![ZoomPreset { id: PRESET_ID.into(), name: "Zoom 1".into(), rect: NormRect { x: 0.25, y: 0.25, w: 0.5, h: 0.5 } }],
             encoder: a.encoder.clone(),
         };
+
+        // The probe window goes up before the recording starts, so the screen is black from t0.
+        let mut probe = None;
+        if a.sync_probe {
+            if opts.mic_id.is_none() {
+                return Err(CliError::Usage("--sync-probe needs the microphone (drop --no-mic)".into()));
+            }
+            let m = monitors.iter().find(|m| m.index == monitor).ok_or_else(|| CliError::Usage(format!("no monitor {monitor}")))?;
+            probe = Some(sync_probe::start((m.x, m.y), (m.width, m.height))?);
+            println!("sync probe: black window over the monitor, a white flash and a beep every {} s from 2 s in. Leave the PC alone.", sync_probe::INTERVAL_S);
+        }
 
         let (tx, rx) = mpsc::channel::<SessionEvent>();
         let session = match Session::start(opts, Box::new(move |e| {
@@ -342,10 +361,15 @@ mod cli {
         let cpu1 = cpu_s(me);
         let ffcpu1 = ff.map_or(0.0, cpu_s);
         let report = session.stop();
+        let probe_report = probe.take().map(sync_probe::SyncProbe::stop);
         for ev in rx.try_iter() {
             print_event(&ev);
         }
         let report = report?;
+        if let Some(p) = &probe_report {
+            print!("{}", p.text());
+            fs::write(report.dir.join("sync-probe.json"), p.to_json())?;
+        }
         let ffcpu_total = ff.map_or(0.0, cpu_s);
         if let Some(h) = ff {
             let _ = unsafe { CloseHandle(h) };

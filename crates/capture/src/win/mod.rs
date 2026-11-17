@@ -30,6 +30,7 @@ pub mod monitors;
 pub mod qpc;
 pub mod screen;
 pub mod session;
+pub mod sync_probe;
 
 use std::sync::{mpsc, Arc, Mutex, Once};
 
