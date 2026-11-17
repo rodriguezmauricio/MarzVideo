@@ -11,6 +11,19 @@ use std::thread::JoinHandle;
 
 const STDERR_LINES: usize = 20;
 
+/// A `Command` that never opens a console window on Windows, so a GUI app does not flash one for
+/// every FFmpeg or ffprobe spawn. Every production spawn in this crate goes through it.
+pub fn command(program: impl AsRef<OsStr>) -> Command {
+    let mut cmd = Command::new(program);
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        cmd.creation_flags(CREATE_NO_WINDOW);
+    }
+    cmd
+}
+
 fn exe_name(base: &str) -> String {
     if cfg!(windows) { format!("{base}.exe") } else { base.to_string() }
 }
@@ -67,7 +80,7 @@ fn find_tool_in(name: &str, env_override: Option<&OsStr>, exe_dir: Option<&Path>
 /// First of the hardware H.264 encoders that encodes one 256 x 256 BGRA frame, else `libx264`.
 pub fn probe_encoder(ffmpeg: &Path) -> String {
     for enc in ["h264_nvenc", "h264_amf", "h264_qsv"] {
-        let ok = Command::new(ffmpeg)
+        let ok = command(ffmpeg)
             .args(["-hide_banner", "-loglevel", "error", "-f", "lavfi", "-i", "color=c=black:s=256x256:r=30,format=bgra", "-frames:v", "1", "-c:v", enc, "-f", "null", "-"])
             .stdin(Stdio::null())
             .stdout(Stdio::null())
@@ -114,7 +127,7 @@ pub struct ScreenEncoder {
 
 impl ScreenEncoder {
     pub fn spawn(ffmpeg: &Path, args: &[String]) -> Result<Self, CaptureError> {
-        let mut child = Command::new(ffmpeg).args(args).stdin(Stdio::piped()).stdout(Stdio::null()).stderr(Stdio::piped()).spawn()?;
+        let mut child = command(ffmpeg).args(args).stdin(Stdio::piped()).stdout(Stdio::null()).stderr(Stdio::piped()).spawn()?;
         let stdin = child.stdin.take();
         // Drain stderr on its own thread so the pipe never fills and stalls FFmpeg; keep the tail.
         let stderr = child.stderr.take().map(|pipe| {

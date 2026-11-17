@@ -9,7 +9,6 @@ use serde_json::Value;
 use std::fs::OpenOptions;
 use std::io::{self, Seek, SeekFrom, Write};
 use std::path::Path;
-use std::process::Command;
 
 const WAV_HEADER_BYTES: u64 = 44;
 const WAV_RATE: i64 = 48_000;
@@ -55,7 +54,7 @@ pub fn recover(dir: &Path, ffprobe: &Path) -> Result<RecoverReport, CaptureError
 /// Length of a truncated fragmented MP4: the last packet's time plus one frame. The container
 /// duration is unreliable when the file was cut mid-fragment, so read the packet times instead.
 fn screen_duration_us(ffprobe: &Path, screen: &Path, fps: u32) -> Result<i64, CaptureError> {
-    let out = Command::new(ffprobe)
+    let out = crate::ffmpeg::command(ffprobe)
         .args(["-v", "error", "-show_entries", "packet=pts_time", "-select_streams", "v:0", "-of", "csv=p=0"])
         .arg(screen)
         .output()?;
