@@ -20,23 +20,38 @@ fn mic_path(job: &ExportJob) -> Option<PathBuf> {
     job.mic.as_ref().filter(|m| !m.muted).map(|m| job.project_dir.join(&m.file))
 }
 
-/// The `-filter_complex` graph that cuts the mic to the kept segments, ending in the `[aout]` pad.
-/// The mic is input 1. None when there is no usable mic (no mic, muted, or no segments): the caller
-/// then writes a silent track.
-///
-/// Each segment is mapped to the mic timeline by subtracting `offset_us`. A segment that starts
-/// before the mic is padded with silence at its start (`adelay`); one that ends before the mic
-/// starts is pure silence. Every segment is padded to its exact length so a short mic file cannot
-/// shift the segments after it.
+/// Overlap with the mic shorter than this (1 ms, 48 samples) counts as no overlap: `atrim` of such a
+/// sliver can come out empty, and `apad` on an empty stream never ends.
+const MIN_OVERLAP_US: i64 = 1_000;
+
+/// `audio_filter` with the mic file's length read from its WAV header (project_dir/mic.file). If the
+/// header cannot be read the length is unknown and the mic is assumed long enough.
 pub fn audio_filter(job: &ExportJob) -> Option<String> {
+    let len = mic_path(job).and_then(|p| crate::wav::wav_duration_us(&p));
+    audio_filter_with(job, len)
+}
+
+/// The `-filter_complex` graph that cuts the mic to the kept segments, ending in the `[aout]` pad.
+/// The mic is input 1 and is `mic_len_us` long (None: unknown). None when there is no usable mic
+/// (no mic, muted, or no segments): the caller then writes a silent track.
+///
+/// Each segment is mapped to the mic timeline by subtracting `offset_us`.
+/// - It overlaps the mic: `atrim` of the overlap, `adelay` for the part before the mic starts, and
+///   `apad` to the exact segment length for the part after the mic ends. The input of `apad` is never
+///   empty, so it ends.
+/// - It lies wholly before the mic starts or wholly after it ends: a generated silence of exactly
+///   the segment length. (An `atrim` that returns nothing would hang `apad` or break timestamps.)
+pub fn audio_filter_with(job: &ExportJob, mic_len_us: Option<i64>) -> Option<String> {
     let mic = job.mic.as_ref().filter(|m| !m.muted)?;
     let segs: Vec<_> = job.segments.iter().filter(|s| s.src_end_us > s.src_start_us).collect();
     if segs.is_empty() {
         return None;
     }
     let offset = mic.offset_us;
-    // Segments that read the mic (the others are silence made from nothing).
-    let readers = segs.iter().filter(|s| s.src_end_us - offset > 0).count();
+    let mic_len = mic_len_us.unwrap_or(i64::MAX);
+    // Overlap of a segment with the mic, on the mic timeline.
+    let overlap = |s: &crate::Segment| (s.src_end_us - offset).min(mic_len) - (s.src_start_us - offset).max(0);
+    let readers = segs.iter().filter(|s| overlap(s) >= MIN_OVERLAP_US).count();
 
     let mut parts: Vec<String> = Vec::new();
     // One format for every branch so `concat` accepts them: 48 kHz mono float.
@@ -55,8 +70,8 @@ pub fn audio_filter(job: &ExportJob) -> Option<String> {
         let len = s.src_end_us - s.src_start_us;
         let mic_start = s.src_start_us - offset;
         let mic_end = s.src_end_us - offset;
-        if mic_end <= 0 {
-            parts.push(format!("anullsrc=r=48000:cl=mono:d={},aformat=sample_fmts=fltp[a{i}]", secs(len)));
+        if overlap(s) < MIN_OVERLAP_US {
+            parts.push(format!("anullsrc=r=48000:cl=mono:d={0},aformat=sample_fmts=fltp,atrim=end={0}[a{i}]", secs(len)));
         } else {
             let mut chain = format!("[s{reader}]atrim=start={}:end={},asetpts=PTS-STARTPTS", secs(mic_start), secs(mic_end));
             if mic_start < 0 {
@@ -172,6 +187,56 @@ mod tests {
         assert!(f.contains("anullsrc=r=48000:cl=mono:d=0.400000"), "{f}");
         assert!(f.contains("atrim=start=0.100000:end=1.100000"), "{f}");
         assert!(f.contains("concat=n=2:v=0:a=1"), "{f}");
+    }
+
+    #[test]
+    fn filter_uses_silence_for_a_segment_past_the_mic_end() {
+        // 1 s mic: the second segment (1.2 s to 1.7 s) starts after it ended.
+        let j = job(vec![seg(0, 1_000_000, 0), seg(1_200_000, 1_700_000, 1_000_000)], Some(mic(0)), 1_500_000);
+        let f = audio_filter_with(&j, Some(1_000_000)).unwrap();
+        assert!(f.contains("anullsrc=r=48000:cl=mono:d=0.500000"), "{f}");
+        assert!(!f.contains("atrim=start=1.200000"), "{f}");
+        assert!(!f.contains("asplit"), "only one segment reads the mic: {f}");
+        assert!(f.contains("concat=n=2:v=0:a=1"), "{f}");
+    }
+
+    #[test]
+    fn filter_pads_a_segment_straddling_the_mic_end() {
+        let j = job(vec![seg(500_000, 1_500_000, 0)], Some(mic(0)), 1_000_000);
+        let f = audio_filter_with(&j, Some(1_000_000)).unwrap();
+        assert!(f.contains("atrim=start=0.500000:end=1.500000,asetpts=PTS-STARTPTS,apad=whole_dur=1.000000"), "{f}");
+        assert!(!f.contains("anullsrc"), "{f}");
+    }
+
+    #[test]
+    fn filter_treats_a_sliver_of_overlap_as_silence() {
+        // Only 0.2 ms of mic left: an atrim that short can come out empty.
+        let j = job(vec![seg(999_800, 1_999_800, 0)], Some(mic(0)), 1_000_000);
+        let f = audio_filter_with(&j, Some(1_000_000)).unwrap();
+        assert!(f.contains("anullsrc"), "{f}");
+        assert!(!f.contains("[1:a]"), "{f}");
+    }
+
+    #[test]
+    fn filter_reads_the_mic_length_from_the_wav_header() {
+        let dir = std::env::temp_dir().join(format!("marz-args-wav-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        // 44-byte header + 0.5 s of 48 kHz mono 16-bit.
+        let mut b = Vec::new();
+        b.extend_from_slice(b"RIFF    WAVEfmt ");
+        b.extend_from_slice(&16u32.to_le_bytes());
+        b.extend_from_slice(&[1, 0, 1, 0]);
+        b.extend_from_slice(&48_000u32.to_le_bytes());
+        b.extend_from_slice(&96_000u32.to_le_bytes());
+        b.extend_from_slice(&[2, 0, 16, 0]);
+        b.extend_from_slice(b"data");
+        b.extend_from_slice(&48_000u32.to_le_bytes());
+        b.extend_from_slice(&vec![0u8; 48_000]);
+        std::fs::write(dir.join("mic.wav"), b).unwrap();
+        let mut j = job(vec![seg(0, 500_000, 0), seg(600_000, 1_100_000, 500_000)], Some(mic(0)), 1_000_000);
+        j.project_dir = dir;
+        let f = audio_filter(&j).unwrap();
+        assert!(f.contains("anullsrc=r=48000:cl=mono:d=0.500000"), "{f}");
     }
 
     #[test]

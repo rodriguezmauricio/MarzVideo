@@ -4,12 +4,13 @@
 pub mod args;
 pub mod process;
 pub mod tools;
+pub mod wav;
 
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
-pub use args::{audio_filter, ffmpeg_args};
-pub use process::{ExportProcess, ExportReport};
+pub use args::{audio_filter, audio_filter_with, ffmpeg_args};
+pub use process::{CancelHandle, ExportProcess, ExportReport};
 
 /// One kept source range. Same fields as `Segment` in `packages/timeline/src/segments.ts`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
