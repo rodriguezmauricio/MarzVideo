@@ -2,7 +2,8 @@ import { useEffect, useMemo, useRef } from "react";
 import { drawFrame, frameAt } from "@marz/compositor";
 import { keptSegments, outputToSource } from "@marz/timeline";
 import { useEditorStore } from "../state/editorStore";
-import { mediaTimeUs, nextPlaybackTime, playbackEnded, startTimeForPlay } from "../playback/clock";
+import { mediaTimeUs, nextPlaybackTime, playbackEnded, sourceTimeUs, startTimeForPlay } from "../playback/clock";
+import { readFirstFrameUs } from "../playback/firstFrame";
 import { mmss } from "./timecode";
 import { ZoomOverlay } from "./ZoomOverlay";
 
@@ -23,7 +24,8 @@ export function Preview() {
   const audioRef = useRef<HTMLAudioElement>(null);
 
   const segs = useMemo(() => keptSegments(project.durationUs, project.edits.cuts), [project.durationUs, project.edits.cuts]);
-  const screenOffset = project.tracks.screen.offsetUs;
+  // Presentation time of frame 0 in screen.mp4 (0 without B-frames). 0 until the file's start is read.
+  const firstFrame = useRef(0);
   const mic = project.tracks.mic;
 
   // Latest values for the animation loop without restarting it.
@@ -37,7 +39,7 @@ export function Preview() {
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
     const { project: p, editing } = live.current;
-    const srcUs = Math.round(video.currentTime * 1e6) + screenOffset;
+    const srcUs = sourceTimeUs(p, Math.round(video.currentTime * 1e6), firstFrame.current);
     const { events } = useEditorStore.getState();
     const shown = editing ? { ...p, edits: { ...p.edits, zooms: [] } } : p;
     drawFrame(ctx, video, frameAt(shown, events, srcUs), p.output);
@@ -46,9 +48,23 @@ export function Preview() {
   const seekMedia = (srcUs: number) => {
     const video = videoRef.current;
     const audio = audioRef.current;
-    if (video) video.currentTime = Math.max(0, mediaTimeUs(project, srcUs) / 1e6);
+    if (video) video.currentTime = Math.max(0, mediaTimeUs(project, srcUs, firstFrame.current) / 1e6);
     if (audio && mic) audio.currentTime = Math.max(0, (srcUs - mic.offsetUs) / 1e6);
   };
+
+  // Read where frame 0 sits in screen.mp4 (a Range request on the file's start), then show the playhead again.
+  const screenUrl = storage.fileUrl(project.tracks.screen.file);
+  useEffect(() => {
+    let active = true;
+    void readFirstFrameUs(screenUrl).then((us) => {
+      if (!active || us === firstFrame.current) return;
+      firstFrame.current = us;
+      seekMedia(useEditorStore.getState().playheadUs);
+    });
+    return () => {
+      active = false;
+    };
+  }, [screenUrl]);
 
   // User seeks.
   useEffect(() => {
@@ -113,7 +129,7 @@ export function Preview() {
 
     let raf = 0;
     const loop = () => {
-      const srcUs = Math.round(video.currentTime * 1e6) + screenOffset;
+      const srcUs = sourceTimeUs(live.current.project, Math.round(video.currentTime * 1e6), firstFrame.current);
       if (playbackEnded(live.current.segs, srcUs, video.ended)) {
         useEditorStore.getState().pause();
         useEditorStore.getState().seek(live.current.project.durationUs);

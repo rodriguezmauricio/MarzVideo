@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vitest";
 import { keptSegments } from "@marz/timeline";
 import type { Project } from "@marz/format";
-import { mediaTimeUs, nextPlaybackTime } from "./clock";
+import { mediaTimeUs, nextPlaybackTime, sourceTimeUs } from "./clock";
 
 const D = 10_000_000;
 const cut = (id: string, startUs: number, endUs: number) => ({ id, startUs, endUs });
@@ -71,7 +71,20 @@ describe("mediaTimeUs", () => {
   const project = { tracks: { screen: { file: "screen.mp4", offsetUs: 250_000 } } } as unknown as Project;
 
   test("subtracts the screen track offset", () => {
-    expect(mediaTimeUs(project, 1_000_000)).toBe(750_000);
-    expect(mediaTimeUs(project, 0)).toBe(-250_000);
+    expect(mediaTimeUs(project, 1_000_000, 0)).toBe(750_000);
+    expect(mediaTimeUs(project, 0, 0)).toBe(-250_000);
+  });
+
+  test("frame 0 sits at the file's first presentation time", () => {
+    // B-frame file: frame 0 is presented at 50 ms but was captured at offsetUs.
+    expect(mediaTimeUs(project, 250_000, 50_000)).toBe(50_000);
+    expect(mediaTimeUs(project, 1_000_000, 50_000)).toBe(800_000);
+  });
+
+  test("sourceTimeUs is the inverse", () => {
+    for (const first of [0, 50_000, 66_667]) {
+      for (const src of [0, 250_000, 1_234_567]) expect(sourceTimeUs(project, mediaTimeUs(project, src, first), first)).toBe(src);
+    }
+    expect(sourceTimeUs(project, 50_000, 50_000)).toBe(250_000);
   });
 });

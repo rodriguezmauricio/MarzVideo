@@ -5,6 +5,8 @@ export interface FrameSource {
   /** The frame shown at media time `mediaUs`: the latest with timestamp at or before it (the first frame before
    *  the first timestamp). The caller owns the returned frame and must close it. */
   frameAt(mediaUs: number): Promise<VideoFrame>;
+  /** Presentation time of the first frame (the smallest cts): 0 without B-frames, the reorder delay with them. */
+  readonly firstFrameUs: number;
   close(): void;
 }
 
@@ -47,7 +49,8 @@ async function demux(url: string): Promise<{ bytes: Uint8Array; samples: Indexed
   const entry = trak.mdia.minf.stbl.stsd.entries[0] as VisualSampleEntry;
   const toUs = (t: number, scale: number) => Math.round((t * 1e6) / scale);
   // Media time is the container's presentation time (cts), as video.currentTime in Chromium, which Preview
-  // reads. screen.mp4 has no edit list and starts at the B-frame delay (e.g. 66,667 us); that is kept.
+  // reads. screen.mp4 has no edit list; older recordings (B-frames) start at the reorder delay, which
+  // `firstFrameUs` reports so callers map source time with `mediaTimeUs(project, srcUs, firstFrameUs)`.
   const samples: Indexed[] = trak.samples.map((s: Sample) => ({
     ptsUs: toUs(s.cts, s.timescale),
     dtsUs: toUs(s.dts, s.timescale),
@@ -152,6 +155,7 @@ export async function createFrameSource(url: string): Promise<FrameSource> {
   };
 
   return {
+    firstFrameUs: samples.reduce((m, s) => Math.min(m, s.ptsUs), Infinity),
     async frameAt(mediaUs) {
       if (error) throw error;
       const k = keyFor(mediaUs);

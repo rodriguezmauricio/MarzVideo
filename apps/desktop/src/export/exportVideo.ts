@@ -100,7 +100,7 @@ export async function exportProject(opts: ExportOptions): Promise<ExportReport> 
       if (signal.aborted) throw abortError();
       if (failure) throw failure;
 
-      const frame = await source.frameAt(mediaTimeUs(project, srcUs));
+      const frame = await source.frameAt(mediaTimeUs(project, srcUs, source.firstFrameUs));
       try {
         drawFrame(compCtx, frame, frameAt(project, events, srcUs), out);
       } finally {

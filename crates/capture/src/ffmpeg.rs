@@ -54,8 +54,8 @@ pub fn probe_encoder(ffmpeg: &Path) -> String {
     "libx264".to_string()
 }
 
-/// FFmpeg arguments: raw BGRA frames on `pipe:0`, constant frame rate, fragmented MP4 so a crash
-/// leaves a playable file.
+/// FFmpeg arguments: raw BGRA frames on `pipe:0`, constant frame rate, no B-frames (the first frame
+/// is presented at 0), fragmented MP4 so a crash leaves a playable file.
 pub fn screen_args(encoder: &str, w: u32, h: u32, fps: u32, out: &Path) -> Vec<String> {
     let size = format!("{w}x{h}");
     let fps_s = fps.to_string();
@@ -70,7 +70,9 @@ pub fn screen_args(encoder: &str, w: u32, h: u32, fps: u32, out: &Path) -> Vec<S
     };
     args.extend(enc_args.iter().map(|s| s.to_string()));
     args.extend(
-        ["-g", &fps_s, "-fps_mode", "cfr", "-r", &fps_s, "-movflags", "frag_keyframe+empty_moov+default_base_moof", &out.to_string_lossy()]
+        // `-bf 0`: no B-frames, so frame 0 is presented at 0. With B-frames the first pts is the reorder
+        // delay (50 ms with nvenc at 60 fps) and preview and export would show the picture that late.
+        ["-bf", "0", "-g", &fps_s, "-fps_mode", "cfr", "-r", &fps_s, "-movflags", "frag_keyframe+empty_moov+default_base_moof", &out.to_string_lossy()]
             .iter()
             .map(|s| s.to_string()),
     );
@@ -188,6 +190,46 @@ mod tests {
             .output()
             .unwrap();
         assert_eq!(String::from_utf8_lossy(&probe.stdout).trim(), "10");
+    }
+
+    /// Encode `n` grey frames with `encoder`, then the first frame's pts_time and every pict_type.
+    fn first_pts_and_types(ffmpeg: &Path, ffprobe: &Path, encoder: &str, tag: &str) -> (String, Vec<String>) {
+        let dir = temp_dir(tag);
+        let out = dir.join("out.mp4");
+        let args = screen_args(encoder, 256, 256, 60, &out);
+        let mut enc = ScreenEncoder::spawn(ffmpeg, &args).unwrap();
+        for i in 0..30u8 {
+            enc.write(&vec![i.wrapping_mul(8); 256 * 256 * 4]).unwrap();
+        }
+        enc.finish().unwrap();
+        let probe = |entries: &str| {
+            let o = Command::new(ffprobe).args(["-v", "error", "-select_streams", "v:0", "-show_frames", "-show_entries", entries, "-of", "csv=p=0"]).arg(&out).output().unwrap();
+            String::from_utf8_lossy(&o.stdout).lines().map(|l| l.split(',').next().unwrap_or("").trim().to_string()).filter(|l| !l.is_empty()).collect::<Vec<_>>()
+        };
+        let pts = probe("frame=pts_time");
+        let types = probe("frame=pict_type");
+        assert_eq!(types.len(), 30, "{encoder}: {types:?}");
+        (pts[0].clone(), types)
+    }
+
+    /// Frame 0 is the frame captured at `screen.offsetUs`, so it must be presented at 0 (no B-frame
+    /// delay), for every encoder this machine has. Preview and export map source time on that.
+    #[test]
+    fn first_frame_is_at_zero_without_b_frames() {
+        let (Ok(ffmpeg), Ok(ffprobe)) = (find_ffmpeg(), find_ffprobe()) else {
+            eprintln!("skipped first_frame_is_at_zero_without_b_frames: ffmpeg or ffprobe not found");
+            return;
+        };
+        let mut encoders = vec!["libx264".to_string()];
+        let hw = probe_encoder(&ffmpeg);
+        if hw != "libx264" {
+            encoders.push(hw);
+        }
+        for enc in encoders {
+            let (pts, types) = first_pts_and_types(&ffmpeg, &ffprobe, &enc, &format!("bf-{enc}"));
+            assert_eq!(pts.parse::<f64>().unwrap(), 0.0, "{enc}: first pts {pts}");
+            assert!(!types.iter().any(|t| t == "B"), "{enc}: B-frames {types:?}");
+        }
     }
 
     #[test]
