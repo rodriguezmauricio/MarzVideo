@@ -23,6 +23,7 @@ Template:
 | `layers` | `<path d="M12 4l9 5-9 5-9-5z"/><path d="M3 14l9 5 9-5"/>` |
 | `lock` | `<rect x="5" y="11" width="14" height="9"/><path d="M8 11V8a4 4 0 018 0v3"/>` |
 | `fullscreen` | `<rect x="3" y="5" width="18" height="14"/>` |
+| `portrait` | `<rect x="7" y="3" width="10" height="18"/>` |
 | `window` | `<rect x="3" y="5" width="18" height="14"/><path d="M3 9h18"/>` |
 | `region` | `<path d="M4 8V4h4M16 4h4v4M20 16v4h-4M8 20H4v-4"/>` |
 | `exact` | `<rect x="3" y="8" width="18" height="8"/><path d="M7 8v3M11 8v4M15 8v3M19 8v4"/>` |

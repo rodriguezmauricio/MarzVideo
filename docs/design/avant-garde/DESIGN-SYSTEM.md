@@ -105,6 +105,20 @@ Left: back link "Projects" (underlined, arrow icon), "/", project title (mono 50
 ### Warning bar (24px, under the strip, shifts content down 24px)
 Paper background, ink text, alert icon, bold lead sentence. Text: "No usable events file. Click effects and auto zoom are unavailable. You can still add zooms and cuts by hand." Auto zoom row and Click highlight toggle become faint/disabled.
 
+### Export (Export MP4 button in the top strip, hotkey Ctrl+E)
+- Idle: the strip button above. Tooltip "Export MP4 / Ctrl+E", right-aligned to the button.
+- Preset panel: a click or Ctrl+E drops a paper panel straight under the button: top on the strip's bottom line, right edge on the button's right edge, 348 wide (the inspector width). Paper fill, ink text, 1px ink border and 1px ink rule between rows, no shadow. Two rows, 34px high, 12px side padding. Left: icon 15px + label (mono 500). Right: the size in `faint-on-paper`, then an 8px marker slot.
+  - "YouTube" (`fullscreen` icon) / "1920 x 1080, 60 fps". The fps is the one the export uses: the source fps, at most 60 ("1920 x 1080, 30 fps" for a 30 fps recording).
+  - "Instagram and TikTok" (`portrait` icon) / "1080 x 1920, 30 fps".
+  - The last used row (YouTube the first time) has the 8px accent square with a 1px ink outline in its marker slot (on paper the accent alone is too light).
+  - Hover or arrow-key highlight: the row inverts to ink background, paper text, `faint` size. Enter picks the highlighted row (the last used one when the panel opens), a click picks the clicked row. Esc, Ctrl+E or a click outside closes the panel.
+- Save dialog: the native Windows save dialog (drawn by Windows), titled "Export MP4", starting in the projects folder's `Exports` folder (made on first export), file name `<project name> YouTube.mp4` or `<project name> Vertical.mp4`, type MP4. Cancel in the dialog changes nothing. Windows asks before replacing a file.
+- Exporting: the button's place shows "Exporting 42%" (mono 500, paper, whole percent, width fixed to "Exporting 100%") and a Cancel button right of it: 30px high, 1px paper border, paper text, `close` icon + "Cancel", tooltip "Cancel export. Nothing is written" (no hotkey on purpose: a stray key must not throw away a long export). A 2px accent line runs along the bottom of the top strip from the left edge, its width the progress, over the 1px line. Editing stays possible; the export uses the project as it was when the preset was picked. Ctrl+E does nothing and the "Projects" link is faint with the tooltip "Cancel or wait for the export first" while it runs.
+- Done: the save status slot shows the 8px accent square + "Exported." (faint) + "Show in folder" (paper, underlined, like the back link), which opens Explorer with the file selected. It stays until the next edit or the next export, then the save status returns.
+- Cancelled: back to idle. No message; no file is written and an existing file with that name is untouched.
+- Failed: the Warning bar "Export failed. <reason>. Your project is unchanged." It replaces any other warning until the next export starts. Reasons: "FFmpeg is missing. Install it or set MARZ_FFMPEG", "This folder cannot be written to. Pick another folder", "This computer cannot encode H.264 video", "FFmpeg stopped with an error" (the details go to the console).
+- Empty output (every part is cut): the button has no fill, a 1px line border and faint text and does nothing; tooltip "Nothing left to export. Every part is cut.". Ctrl+E does nothing.
+
 ### Playhead timecode (editor hero)
 `mm:ss` in display 250px, paper, at left 18px top 30px. It sits BEHIND the preview and is partly covered on purpose. Under it a faint line: "Playhead 01:03.0 / Length 02:40.0".
 
