@@ -14,11 +14,17 @@ use crate::slots::{CfrWriter, FrameSink};
 /// Frames in flight between capture and writer (the spike's queue depth).
 pub const QUEUE_FRAMES: usize = 6;
 
-/// A frame is written only once a frame `HOLD_SLOTS` slots later arrived (or capture stopped).
-/// WGC timestamps can be ahead of QPC now (the frame's present time), so at the moment the stop
-/// time is read, frames one or two slots past the end can already be queued; holding three
-/// slots back keeps them out of the video.
-pub const HOLD_SLOTS: u64 = 3;
+/// How far a WGC timestamp can be ahead of QPC now: the frame's present time, up to one refresh
+/// (16.7 ms on a 60 Hz screen, 9.5 ms measured at 165 Hz), plus margin.
+pub const HOLD_US: u64 = 20_000;
+
+/// Slots the writer holds back: a frame is written only once a frame this many slots later
+/// arrived (or capture stopped). At the moment the stop time is read, frames up to `HOLD_US`
+/// past it can already be queued; holding `ceil(HOLD_US / slot) + 1` slots keeps them out of the
+/// video. 3 at 60 fps, 6 at 240 fps.
+pub fn hold_slots(fps: u32) -> u64 {
+    (HOLD_US * u64::from(fps.max(1))).div_ceil(1_000_000) + 1
+}
 
 /// One output frame: slot index and tightly packed BGRA pixels.
 pub type SlotFrame = (u64, Vec<u8>);
@@ -75,13 +81,15 @@ pub fn new_end_idx() -> Arc<AtomicU64> {
 /// stop duration, before it stops the capture (`Slotter::end_index(duration_us - screen offsetUs)`);
 /// without it the end is not padded. Frames after it (they arrive while WGC
 /// stops) are discarded, so the video is exactly `end_idx + 1` frames.
+/// `fps` sets the hold-back (`hold_slots`).
 /// Returns the sink (always, so the session can finish or kill FFmpeg) and the first write error.
-pub fn run_writer<S: FrameSink>(ends: WriterEnds, mut sink: S, end_idx: Arc<AtomicU64>, stats: Arc<WriterStats>) -> (S, io::Result<()>) {
+pub fn run_writer<S: FrameSink>(ends: WriterEnds, mut sink: S, fps: u32, end_idx: Arc<AtomicU64>, stats: Arc<WriterStats>) -> (S, io::Result<()>) {
+    let hold = hold_slots(fps);
     let result = (|| {
         let mut w = CfrWriter::new(ByRef(&mut sink));
-        // Write a frame only once a frame `HOLD_SLOTS` later arrived (or capture stopped): frames
-        // just past the stop time can arrive before the end is known (see `HOLD_SLOTS`).
-        let mut pending: VecDeque<SlotFrame> = VecDeque::with_capacity(HOLD_SLOTS as usize + 1);
+        // Write a frame only once a frame `hold` slots later arrived (or capture stopped): frames
+        // just past the stop time can arrive before the end is known (see `hold_slots`).
+        let mut pending: VecDeque<SlotFrame> = VecDeque::with_capacity(hold as usize + 1);
         let write = |w: &mut CfrWriter<_>, (idx, px): SlotFrame| -> io::Result<()> {
             if idx > end_idx.load(Ordering::SeqCst) {
                 let _ = ends.pool.send(px);
@@ -98,7 +106,7 @@ pub fn run_writer<S: FrameSink>(ends: WriterEnds, mut sink: S, end_idx: Arc<Atom
         for frame in ends.frames.iter() {
             let newest = frame.0;
             pending.push_back(frame);
-            while pending.front().is_some_and(|f| f.0 + HOLD_SLOTS <= newest) {
+            while pending.front().is_some_and(|f| f.0 + hold <= newest) {
                 let Some(f) = pending.pop_front() else { break };
                 write(&mut w, f)?;
             }
@@ -157,12 +165,12 @@ mod tests {
         let stats = Arc::new(WriterStats::default());
         let writer = {
             let (e, s) = (end_idx.clone(), stats.clone());
-            thread::spawn(move || run_writer(ends, sink, e, s))
+            thread::spawn(move || run_writer(ends, sink, 60, e, s))
         };
-        for idx in 0..=END + HOLD_SLOTS {
+        for idx in 0..=END + hold_slots(60) {
             cap.frames.send((idx, vec![idx as u8])).unwrap();
         }
-        // Slot END is written only once END + HOLD_SLOTS was received, all while the end is unset.
+        // Slot END is written only once END + hold was received, all while the end is unset.
         while written.recv().unwrap() < (END + 1) as usize {}
         end_idx.store(END, Ordering::SeqCst);
         drop(cap);
@@ -173,6 +181,43 @@ mod tests {
         assert_eq!(frames.last().unwrap(), &vec![END as u8], "the last real frame is written");
         assert_eq!(stats.written.load(Ordering::SeqCst), END + 1);
         assert_eq!(stats.repeated.load(Ordering::SeqCst), 0);
+    }
+
+    #[test]
+    fn hold_follows_the_fps() {
+        // ceil(20 ms / slot) + 1
+        assert_eq!(hold_slots(60), 3); // slot 16.7 ms: ceil(1.2) + 1
+        assert_eq!(hold_slots(240), 6); // slot 4.2 ms: ceil(4.8) + 1
+        assert_eq!(hold_slots(50), 2); // exactly one slot: ceil(1.0) + 1
+        assert_eq!(hold_slots(30), 2);
+    }
+
+    #[test]
+    fn two_frames_past_the_end_queued_before_the_end_is_known_are_dropped() {
+        // Frames END + 1 and END + 2 (up to 33 ms past the stop at 60 fps) are already queued
+        // when the end is stored. With a hold below 3 the writer would have written END + 1.
+        const END: u64 = 2;
+        let (cap, ends) = frame_pipe();
+        let (sink, frames, written) = collect();
+        let end_idx = new_end_idx();
+        let stats = Arc::new(WriterStats::default());
+        for idx in 0..=END + 2 {
+            cap.frames.send((idx, vec![idx as u8])).unwrap();
+        }
+        let writer = {
+            let (e, s) = (end_idx.clone(), stats.clone());
+            thread::spawn(move || run_writer(ends, sink, 60, e, s))
+        };
+        while written.recv().unwrap() < END as usize {}
+        // Give the writer time to take every queued frame; the hold keeps END and later pending.
+        thread::sleep(std::time::Duration::from_millis(100));
+        assert_eq!(stats.written.load(Ordering::SeqCst), END, "only slots before END written while the end is unset");
+        end_idx.store(END, Ordering::SeqCst);
+        drop(cap);
+        let (_sink, res) = writer.join().unwrap();
+        res.unwrap();
+        let firsts: Vec<u8> = frames.lock().unwrap().iter().map(|f| f[0]).collect();
+        assert_eq!(firsts, vec![0, 1, 2], "frames past the end are dropped");
     }
 
     #[test]
@@ -187,7 +232,7 @@ mod tests {
         end_idx.store(6, Ordering::SeqCst);
         let CaptureEnds { frames: tx, pool } = cap;
         drop(tx);
-        let (_sink, res) = run_writer(ends, sink, end_idx, stats.clone());
+        let (_sink, res) = run_writer(ends, sink, 60, end_idx, stats.clone());
         res.unwrap();
         let frames = frames.lock().unwrap();
         let firsts: Vec<u8> = frames.iter().map(|f| f[0]).collect();
@@ -205,7 +250,7 @@ mod tests {
         cap.frames.send((0, vec![0])).unwrap();
         cap.frames.send((2, vec![2])).unwrap();
         drop(cap);
-        let (_sink, res) = run_writer(ends, sink, new_end_idx(), Arc::new(WriterStats::default()));
+        let (_sink, res) = run_writer(ends, sink, 60, new_end_idx(), Arc::new(WriterStats::default()));
         res.unwrap();
         assert_eq!(frames.lock().unwrap().len(), 3);
     }
@@ -223,7 +268,7 @@ mod tests {
         cap.frames.send((0, vec![0])).unwrap();
         drop(cap);
         let stats = Arc::new(WriterStats::default());
-        let (_sink, res) = run_writer(ends, Broken, new_end_idx(), stats.clone());
+        let (_sink, res) = run_writer(ends, Broken, 60, new_end_idx(), stats.clone());
         assert_eq!(res.unwrap_err().kind(), io::ErrorKind::BrokenPipe);
         assert!(stats.failed.load(Ordering::SeqCst));
     }

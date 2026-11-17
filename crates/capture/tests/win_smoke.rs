@@ -67,7 +67,7 @@ fn smoke_two_seconds() {
     let writer = {
         let (e, s) = (end_idx.clone(), wstats.clone());
         let sink = CountSink { frames: 0, frame_bytes: w as usize * h as usize * 4 };
-        thread::spawn(move || run_writer(writer_ends, sink, e, s))
+        thread::spawn(move || run_writer(writer_ends, sink, fps, e, s))
     };
     let screen = screen::start(rect, fps, cap_ends, screen_sh.clone()).unwrap();
 

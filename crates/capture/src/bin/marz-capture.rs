@@ -4,7 +4,7 @@
 //! marz-capture record <out.marz> [--secs N] [--fps N] [--encoder E] [--monitor N] [--region x,y,w,h]
 //!                     [--no-mic] [--mic-id ID] [--hide-cursor] [--report]
 //!                     [--pause-at a,b,...] [--resume-at a,b,...] [--zoom-at a,b,...]
-//!                     [--simulate-mic-loss-at SECS]
+//!                     [--simulate-mic-loss-at SECS] [--simulate-static-screen]
 //! marz-capture recover <dir>
 //! ```
 //!
@@ -17,7 +17,7 @@ const USAGE: &str = "usage:
   marz-capture record <out.marz> [--secs N] [--fps N] [--encoder E] [--monitor N] [--region x,y,w,h]
                       [--no-mic] [--mic-id ID] [--hide-cursor] [--report]
                       [--pause-at a,b,...] [--resume-at a,b,...] [--zoom-at a,b,...]
-                      [--simulate-mic-loss-at SECS]
+                      [--simulate-mic-loss-at SECS] [--simulate-static-screen]
   marz-capture recover <dir>";
 
 #[cfg(not(windows))]
@@ -110,6 +110,7 @@ mod cli {
         resume_at: Vec<f64>,
         zoom_at: Vec<f64>,
         mic_loss_at: Option<f64>,
+        simulate_static: bool,
     }
 
     fn parse_record(args: &[String]) -> Result<RecordArgs, CliError> {
@@ -131,6 +132,7 @@ mod cli {
             resume_at: Vec::new(),
             zoom_at: Vec::new(),
             mic_loss_at: None,
+            simulate_static: false,
         };
         fn num<T: std::str::FromStr>(flag: &str, v: Option<&String>) -> Result<T, CliError> {
             v.and_then(|s| s.trim().parse().ok()).ok_or_else(|| CliError::Usage(format!("{flag} needs a number")))
@@ -161,6 +163,7 @@ mod cli {
                 "--resume-at" => a.resume_at = list(flag, it.next())?,
                 "--zoom-at" => a.zoom_at = list(flag, it.next())?,
                 "--simulate-mic-loss-at" => a.mic_loss_at = Some(num(flag, it.next())?),
+                "--simulate-static-screen" => a.simulate_static = true,
                 other => return Err(usage(format!("unknown flag: {other}"))),
             }
         }
@@ -227,6 +230,9 @@ mod cli {
                 return Err(if shown { CliError::Shown } else { e.into() });
             }
         };
+        if a.simulate_static {
+            session.simulate_static_screen();
+        }
         let started = Instant::now();
         let encoder = session.encoder().to_string();
         println!("encoder: {encoder}");

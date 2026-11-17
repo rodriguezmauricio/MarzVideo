@@ -7,7 +7,7 @@
 
 use std::sync::atomic::{AtomicBool, AtomicI64, AtomicU64, Ordering};
 use std::sync::mpsc::TrySendError;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use windows_capture::capture::{CaptureControl, Context, GraphicsCaptureApiHandler};
@@ -95,6 +95,11 @@ pub struct ScreenShared {
     pub warm: AtomicBool,
     /// Recording time (hns) of output slot 0; `i64::MIN` until the first frame is sent.
     first_rec_hns: AtomicI64,
+    /// The latest frame seen before t0 (cropped). WGC sends nothing while the screen is static, so
+    /// when no frame arrives after t0 the session writes this one as slot 0.
+    warm_frame: Mutex<Option<Vec<u8>>>,
+    /// Test hook: frames after t0 are ignored, as if the screen were static (`--simulate-static-screen`).
+    simulate_static: AtomicBool,
     pub stats: ScreenStats,
     pub warn: Warnings,
 }
@@ -105,6 +110,8 @@ impl ScreenShared {
             clock,
             warm: AtomicBool::new(false),
             first_rec_hns: AtomicI64::new(i64::MIN),
+            warm_frame: Mutex::new(None),
+            simulate_static: AtomicBool::new(false),
             stats: ScreenStats::default(),
             warn,
         })
@@ -121,6 +128,17 @@ impl ScreenShared {
             i64::MIN => None,
             hns => Some(hns / 10),
         }
+    }
+
+    /// Ignore every frame after t0 from now on, as WGC does on a static screen. For tests: a
+    /// static desktop cannot be guaranteed on a machine in use.
+    pub fn simulate_static(&self) {
+        self.simulate_static.store(true, Ordering::SeqCst);
+    }
+
+    /// Take the latest pre-t0 frame (see `warm_frame`). Call after the capture stopped.
+    pub(crate) fn take_warm_frame(&self) -> Option<Vec<u8>> {
+        self.warm_frame.lock().ok()?.take()
     }
 }
 
@@ -166,8 +184,15 @@ impl GraphicsCaptureApiHandler for Handler {
             sh.stats.max_gap_hns.fetch_max((ts - prev).max(0) as u64, Ordering::Relaxed);
         }
         let Some(rec) = rec_hns(&sh.clock, ts) else {
+            // Warm-up (clock not set yet): keep the latest frame for a static-screen recording.
+            if sh.clock.lock().is_ok_and(|c| c.is_none()) {
+                self.keep_warm_frame(frame);
+            }
             return Ok(()); // warm-up, or paused
         };
+        if sh.simulate_static.load(Ordering::SeqCst) {
+            return Ok(());
+        }
         let Some(idx) = self.slotter.slot_for(rec) else {
             sh.stats.merged.fetch_add(1, Ordering::Relaxed);
             return Ok(());
@@ -210,6 +235,21 @@ impl GraphicsCaptureApiHandler for Handler {
             Err(TrySendError::Disconnected((_, b))) => self.spare = Some(b), // writer gone; session reports it
         }
         Ok(())
+    }
+}
+
+impl Handler {
+    /// Copy the crop of a warm-up frame into `ScreenShared::warm_frame`, reusing its buffer.
+    fn keep_warm_frame(&mut self, frame: &mut Frame) {
+        let c = self.f.crop;
+        if frame.width() < c.x as u32 + c.w || frame.height() < c.y as u32 + c.h {
+            return;
+        }
+        let Ok(mut slot) = self.f.shared.warm_frame.lock() else { return };
+        let mut buf = slot.take().unwrap_or_default();
+        if copy_crop(frame, c, &mut buf).is_ok() {
+            *slot = Some(buf);
+        }
     }
 }
 

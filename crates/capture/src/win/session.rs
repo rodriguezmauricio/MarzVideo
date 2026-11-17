@@ -12,7 +12,8 @@ use std::fs::{self, File};
 use std::io::{self, BufWriter};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::{mpsc, Arc, Mutex};
+use std::sync::mpsc::{self, SyncSender};
+use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
@@ -28,7 +29,7 @@ use crate::ffmpeg::{self, ScreenEncoder};
 use crate::project::{self, LiveZoomMark, MicMeta, ProjectMeta, ZoomPreset, CRASH_MARKER};
 use crate::region::{normalize_region, PxRect};
 use crate::slots::Slotter;
-use crate::writer::{self, WriterStats};
+use crate::writer::{self, SlotFrame, WriterStats};
 use crate::CaptureError;
 
 pub const MIC_DID_NOT_START: &str = "The microphone did not start. Pick another one or record without it.";
@@ -141,14 +142,17 @@ struct Partial {
     input: Option<InputHandle>,
     mic: Option<MicHandle>,
     screen: Option<ScreenHandle>,
+    /// The session's own frame sender (for the static-screen slot 0). Dropped before the writer is joined.
+    frames_tx: Option<SyncSender<SlotFrame>>,
     writer: Option<WriterThread>,
 }
 
 impl Partial {
     fn abort(mut self) {
         if let Some(s) = self.screen.take() {
-            let _ = s.stop(); // drops the frame sender, so the writer loop ends
+            let _ = s.stop(); // drops the capture's frame sender
         }
+        drop(self.frames_tx.take()); // the last sender: the writer loop ends
         if let Some(w) = self.writer.take()
             && let Ok((enc, _)) = w.join()
         {
@@ -251,6 +255,9 @@ pub struct Session {
     screen: ScreenHandle,
     mic: Option<MicHandle>,
     input: InputHandle,
+    /// A second frame sender so the writer keeps running after WGC stops, until `stop` has
+    /// written the static-screen slot 0 if no frame arrived after t0.
+    frames_tx: SyncSender<SlotFrame>,
     writer: WriterThread,
     end_idx: Arc<AtomicU64>,
     wstats: Arc<WriterStats>,
@@ -299,7 +306,7 @@ impl Session {
             return Err(CaptureError::User(NAME_TAKEN.into()));
         }
         fs::create_dir_all(&dir)?;
-        let mut p = Partial { dir: dir.clone(), created_dir: !existed, encoder: None, input: None, mic: None, screen: None, writer: None };
+        let mut p = Partial { dir: dir.clone(), created_dir: !existed, encoder: None, input: None, mic: None, screen: None, frames_tx: None, writer: None };
         let created_at = project::iso_utc_now();
         let meta = ProjectMeta {
             id: new_guid(),
@@ -344,6 +351,7 @@ impl Session {
         }
         let screen_sh = ScreenShared::new(clock.clone(), warn_tx);
         let (cap_ends, writer_ends) = writer::frame_pipe();
+        p.frames_tx = Some(cap_ends.frames.clone());
         let warm_start = Instant::now();
         p.screen = Some(or_abort!(p, screen::start(rect, fps, cap_ends, screen_sh.clone())));
         let end_idx = writer::new_end_idx();
@@ -351,7 +359,7 @@ impl Session {
         {
             let (e, s) = (end_idx.clone(), wstats.clone());
             let enc = p.encoder.take().expect("encoder spawned above");
-            let spawned = thread::Builder::new().name("marz-writer".into()).spawn(move || writer::run_writer(writer_ends, enc, e, s));
+            let spawned = thread::Builder::new().name("marz-writer".into()).spawn(move || writer::run_writer(writer_ends, enc, fps, e, s));
             p.writer = Some(or_abort!(p, spawned));
         }
 
@@ -374,7 +382,8 @@ impl Session {
         if let Ok(mut c) = clock.lock() {
             *c = Some(RecClock::new(t0));
         }
-        let header = EventsHeader { width: w, height: h, fps, started_at: created_at };
+        // startedAt is t0 (createdAt was taken before the FFmpeg probe and can be seconds earlier).
+        let header = EventsHeader { width: w, height: h, fps, started_at: project::iso_utc_now() };
         let log = or_abort!(p, EventLog::new(BufWriter::new(events_file), header, rect.origin, fps));
         if let Ok(mut g) = input_sh.log.lock() {
             *g = Some(log);
@@ -394,7 +403,7 @@ impl Session {
         };
         let fwd = or_abort!(p, thread::Builder::new().name("marz-session".into()).spawn(move || fwd.run()));
 
-        let Partial { input, mic, screen, writer, .. } = p;
+        let Partial { input, mic, screen, frames_tx, writer, .. } = p;
         let session = Session {
             dir,
             meta,
@@ -407,6 +416,7 @@ impl Session {
             screen: screen.expect("started"),
             mic,
             input: input.expect("started"),
+            frames_tx: frames_tx.expect("created"),
             writer: writer.expect("started"),
             end_idx,
             wstats,
@@ -519,11 +529,13 @@ impl Session {
     /// Live zoom: `Some(id)` zooms into that preset, `None` zooms out of the active one. Unknown
     /// presets, a zoom out with no zoom active, and calls while paused are ignored.
     pub fn zoom(&self, preset_id: Option<&str>) {
+        // Time is read under the zoom lock, so marks are in time order. Lock order: zoom, clock
+        // (released), log; the input thread never takes the zoom lock.
+        let Ok(mut z) = self.zoom.lock() else { return };
         let now = qpc_hns();
         let Some(t) = self.clock.lock().ok().and_then(|g| g.as_ref().and_then(|c| c.rec_hns(now))).map(|h| h / 10) else {
             return;
         };
-        let Ok(mut z) = self.zoom.lock() else { return };
         match preset_id {
             Some(id) => {
                 if !self.meta.presets.iter().any(|p| p.id == id) {
@@ -554,18 +566,23 @@ impl Session {
         }
     }
 
+    /// Ignore screen frames from now on, as on a static screen (the `--simulate-static-screen`
+    /// test flag): exercises the stop path that writes the last warm-up frame as slot 0.
+    pub fn simulate_static_screen(&self) {
+        self.screen_sh.simulate_static();
+    }
+
     /// Stop and finish every file. On an error the crash marker stays, so `recover` can rebuild
     /// the project from what is on disk.
     pub fn stop(self) -> Result<StopReport, CaptureError> {
         let t_stop = qpc_hns();
         let duration_us = self.clock.lock().ok().and_then(|g| g.as_ref().map(|c| c.duration_us(t_stop))).unwrap_or(0);
-        let screen_first = self.screen_sh.first_rec_us();
-        let screen_offset_us = screen_first.unwrap_or(0);
-        let end = Slotter::new(self.meta.fps).end_index(duration_us - screen_offset_us);
+        let slotter = Slotter::new(self.meta.fps);
+        let end_for = |offset_us: i64| slotter.end_index(duration_us - offset_us);
         // Before WGC stops, so the writer pads to the end and drops frames past it.
-        self.end_idx.store(end, Ordering::SeqCst);
+        self.end_idx.store(end_for(self.screen_sh.first_rec_us().unwrap_or(0)), Ordering::SeqCst);
 
-        let Session { dir, mut meta, screen_sh, input, screen, mic, writer, wstats, zoom, fwd_stop, fwd, on_event, .. } = self;
+        let Session { dir, mut meta, screen_sh, input, screen, mic, frames_tx, writer, end_idx, wstats, zoom, fwd_stop, fwd, on_event, .. } = self;
         fwd_stop.store(true, Ordering::SeqCst);
         let warn_rx = fwd.join().ok();
 
@@ -578,6 +595,17 @@ impl Session {
             }
         };
         keep(screen.stop());
+        // WGC is stopped, so the first frame time is final. A static screen sends nothing after t0:
+        // then the last warm-up frame is slot 0 at offset 0, and the writer pads it to the end.
+        let screen_first = screen_sh.first_rec_us();
+        let screen_offset_us = screen_first.unwrap_or(0);
+        let end = end_for(screen_offset_us);
+        end_idx.store(end, Ordering::SeqCst);
+        let mut have_frames = screen_first.is_some();
+        if !have_frames && let Some(px) = screen_sh.take_warm_frame() {
+            have_frames = frames_tx.send((0, px)).is_ok();
+        }
+        drop(frames_tx); // the last sender: the writer pads and ends
         let encoder = match writer.join() {
             Ok((enc, res)) => {
                 keep(res.map_err(|e| CaptureError::Encoder(format!("writing frames to ffmpeg failed: {e}"))));
@@ -600,7 +628,7 @@ impl Session {
         if let Some(enc) = encoder {
             keep(enc.finish());
         }
-        if screen_first.is_none() {
+        if !have_frames {
             keep(Err(CaptureError::Encoder("no screen frames arrived".into())));
         }
 
