@@ -14,7 +14,8 @@ export class ExportFailure extends Error {
   }
 }
 
-function asFailure(e: unknown): unknown {
+/** A Rust `{ reason, detail }` error as an `ExportFailure`; anything else unchanged. */
+export function asFailure(e: unknown): unknown {
   if (e && typeof e === "object" && "reason" in e && typeof (e as { reason: unknown }).reason === "string") {
     const { reason, detail } = e as { reason: string; detail?: string };
     return new ExportFailure(reason, detail ?? "");
@@ -70,4 +71,14 @@ export function createTauriSink(invoke: Invoke = tauriInvoke): ExportSink {
       await call("export_cancel", { id: current });
     },
   };
+}
+
+/** On page load in the app: cancel every export Rust still runs (a reload in the middle of an
+ *  export would leave FFmpeg and a `.part` file behind). Never rejects. */
+export async function cancelLeftoverExports(invoke: Invoke = tauriInvoke): Promise<void> {
+  try {
+    await invoke("export_cancel_all");
+  } catch (e) {
+    console.error("[export] could not cancel leftover exports", e);
+  }
 }

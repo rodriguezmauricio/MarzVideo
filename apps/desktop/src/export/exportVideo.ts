@@ -5,11 +5,14 @@ import { mediaTimeUs } from "../playback/clock";
 import type { ProjectStorage } from "../storage/types";
 import { createFrameSource } from "./frameSource";
 import { outputFrameCount, outputFrameTimes, outputFrameUs, refuseEmpty } from "./outputFrames";
+import { createChunkQueue } from "./chunkQueue";
 import { pickEncoderConfig } from "./encoderConfig";
 import type { ExportPreset } from "./presets";
 import { buildExportJob, type ExportReport, type ExportSink } from "./sink";
 
 const MAX_ENCODE_QUEUE = 8;
+/** Chunks waiting for the sink before the encoder is held back (about half a second of video). */
+const MAX_PENDING_WRITES = 16;
 
 export interface ExportOptions {
   project: Project;
@@ -69,7 +72,14 @@ export async function exportProject(opts: ExportOptions): Promise<ExportReport> 
     wake = null;
     w?.();
   };
-  let sinkChain: Promise<void> = Promise.resolve();
+  const writes = createChunkQueue((data) => sink.chunk(data), {
+    max: MAX_PENDING_WRITES,
+    stopped: () => failure !== null || signal.aborted,
+    onError: (e) => {
+      failure ??= e;
+      poke();
+    },
+  });
 
   try {
     source = await createFrameSource(storage.fileUrl(project.tracks.screen.file));
@@ -79,11 +89,8 @@ export async function exportProject(opts: ExportOptions): Promise<ExportReport> 
       output: (chunk) => {
         const data = new Uint8Array(chunk.byteLength);
         chunk.copyTo(data);
-        // Chunks arrive in decode order; chaining keeps them in that order at the sink.
-        sinkChain = sinkChain.then(() => (failure ? undefined : sink.chunk(data))).catch((e: unknown) => {
-          failure ??= e instanceof Error ? e : new Error(String(e));
-          poke();
-        });
+        // Chunks arrive in decode order; the queue keeps them in that order at the sink.
+        writes.push(data);
       },
       error: (e) => {
         failure ??= e instanceof Error ? e : new Error(String(e));
@@ -113,6 +120,8 @@ export async function exportProject(opts: ExportOptions): Promise<ExportReport> 
       }
 
       while (encoder.encodeQueueSize >= MAX_ENCODE_QUEUE && !failure) await new Promise<void>((r) => (wake = r));
+      await writes.room();
+      if (signal.aborted) throw abortError();
       if (failure) throw failure;
       const vf = new VideoFrame(encCanvas, { timestamp: outputFrameUs(k, fps), duration: frameDurUs });
       try {
@@ -127,7 +136,7 @@ export async function exportProject(opts: ExportOptions): Promise<ExportReport> 
     await encoder.flush();
     encoder.close();
     encoder = null;
-    await sinkChain;
+    await writes.drain();
     if (failure) throw failure;
     source.close();
     source = null;
@@ -135,7 +144,7 @@ export async function exportProject(opts: ExportOptions): Promise<ExportReport> 
   } catch (e) {
     if (encoder && encoder.state !== "closed") encoder.close();
     source?.close();
-    await sinkChain.catch(() => {});
+    await writes.drain();
     await sink.cancel().catch(() => {});
     throw e;
   }

@@ -26,6 +26,7 @@ pub const MISSING_FFMPEG: &str = "FFmpeg is missing. Install it or set MARZ_FFMP
 pub const NOT_WRITABLE: &str = "This folder cannot be written to. Pick another folder";
 pub const FFMPEG_FAILED: &str = "FFmpeg stopped with an error";
 pub const CANCELLED: &str = "Export cancelled";
+pub const INSIDE_PROJECT: &str = "Pick a folder outside the project";
 const NOT_SET_UP: &str = "This export was not set up from the editor";
 
 /// What the page shows: `reason` is a sentence for the warning bar, `detail` goes to the console.
@@ -96,16 +97,44 @@ pub fn export_file_name(project_name: &str, preset: Preset) -> String {
     format!("{name} {suffix}.mp4")
 }
 
-/// The dialog's path with `.mp4` added when the person typed a name without it.
-pub fn with_mp4(path: PathBuf) -> PathBuf {
-    let is_mp4 = path.extension().and_then(|e| e.to_str()).is_some_and(|e| e.eq_ignore_ascii_case("mp4"));
-    if is_mp4 {
-        path
-    } else {
-        let mut s = path.into_os_string();
-        s.push(".mp4");
-        PathBuf::from(s)
+/// What to do with the path the save dialog returned.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Picked {
+    /// Export to this path.
+    Use(PathBuf),
+    /// The name is not `.mp4`: open the dialog again on this `.mp4` name, so the dialog itself
+    /// asks before an existing file is replaced (adding `.mp4` here would skip that question).
+    Ask(PathBuf),
+    /// Inside a project folder, where an export could replace a raw track: `INSIDE_PROJECT`.
+    Refuse,
+}
+
+fn is_mp4(path: &Path) -> bool {
+    path.extension().and_then(|e| e.to_str()).is_some_and(|e| e.eq_ignore_ascii_case("mp4"))
+}
+
+/// Lowercase with forward slashes and no trailing slash, to compare Windows paths.
+fn path_key(p: &Path) -> String {
+    p.to_string_lossy().replace('\\', "/").trim_end_matches('/').to_lowercase()
+}
+
+/// True when `out` lies inside a project: below any `.marz` folder, or below one of the folders
+/// the app opened (`allowed`). Raw tracks live there and are never overwritten.
+pub fn inside_project(out: &Path, allowed: &HashSet<PathBuf>) -> bool {
+    let in_marz = out.ancestors().skip(1).any(|a| a.extension().and_then(|e| e.to_str()).is_some_and(|e| e.eq_ignore_ascii_case("marz")));
+    let key = path_key(out);
+    in_marz || allowed.iter().any(|d| key.starts_with(&format!("{}/", path_key(d))))
+}
+
+/// Check the dialog's path: `.mp4`, outside every project folder.
+pub fn check_picked(path: PathBuf, allowed: &HashSet<PathBuf>) -> Picked {
+    if !is_mp4(&path) {
+        return Picked::Ask(if path.extension().is_some() { path.with_extension("mp4") } else { PathBuf::from(format!("{}.mp4", path.to_string_lossy())) });
     }
+    if inside_project(&path, allowed) {
+        return Picked::Refuse;
+    }
+    Picked::Use(path)
 }
 
 /// A plain file name inside the project folder (no folders, no `..`).
@@ -123,6 +152,9 @@ pub fn validate_job(job: &ExportJob, allowed_dirs: &HashSet<PathBuf>, picked: &H
     }
     if !picked.contains(&job.out_path) {
         return bad("output path did not come from the save dialog");
+    }
+    if inside_project(&job.out_path, allowed_dirs) {
+        return Err(ExportError::new(INSIDE_PROJECT, "output path is inside a project folder"));
     }
     if let Some(mic) = &job.mic
         && !is_plain_file_name(&mic.file)
@@ -264,7 +296,7 @@ impl Exports {
         let _ = r.worker.join();
     }
 
-    /// Cancel everything (the app is closing).
+    /// Cancel everything (the app is closing, or the page reloaded).
     pub fn cancel_all(&self) {
         let ids: Vec<u32> = lock(&self.running).keys().copied().collect();
         for id in ids {
@@ -282,7 +314,9 @@ fn project_name(dir: &Path) -> String {
 }
 
 /// The save dialog for an export, run here so the page never hands over a path. Starts in the
-/// projects folder's `Exports` folder with the default name. None when the person cancels.
+/// projects folder's `Exports` folder with the default name. None when the person cancels. A name
+/// that is not `.mp4` opens the dialog again on the `.mp4` name; a folder inside a project is
+/// refused with `INSIDE_PROJECT`.
 #[tauri::command(async)]
 pub fn pick_export_path(
     app: AppHandle,
@@ -291,25 +325,32 @@ pub fn pick_export_path(
     exports: State<'_, Exports>,
     project_dir: String,
     preset: Preset,
-) -> Result<Option<String>, String> {
-    let dir = projects::checked(&allowed, &project_dir)?;
-    let exports_dir = projects::default_dir(&app)?.join("Exports");
-    std::fs::create_dir_all(&exports_dir).map_err(|e| e.to_string())?;
-    let name = export_file_name(&project_name(&dir), preset);
-    let path = match dev_export_dir() {
-        Some(d) => d.join(&name),
-        None => {
-            let picked = app
-                .dialog()
-                .file()
-                .set_title("Export MP4")
-                .set_parent(&window)
-                .set_directory(&exports_dir)
-                .set_file_name(&name)
-                .add_filter("MP4", &["mp4"])
-                .blocking_save_file();
-            let Some(picked) = picked else { return Ok(None) };
-            with_mp4(picked.into_path().map_err(|e| e.to_string())?)
+) -> Result<Option<String>, ExportError> {
+    let fail = |e: String| ExportError::new(NOT_WRITABLE, e);
+    let dir = projects::checked(&allowed, &project_dir).map_err(|e| ExportError::new(NOT_SET_UP, e))?;
+    let exports_dir = projects::default_dir(&app).map_err(fail)?.join("Exports");
+    std::fs::create_dir_all(&exports_dir).map_err(|e| fail(e.to_string()))?;
+    let mut start = exports_dir.join(export_file_name(&project_name(&dir), preset));
+    let path = loop {
+        let chosen = match dev_export_dir() {
+            Some(d) => d.join(start.file_name().unwrap_or_default()),
+            None => {
+                let mut dialog = app.dialog().file().set_title("Export MP4").set_parent(&window).add_filter("MP4", &["mp4"]);
+                if let Some(parent) = start.parent() {
+                    dialog = dialog.set_directory(parent);
+                }
+                if let Some(name) = start.file_name().and_then(|n| n.to_str()) {
+                    dialog = dialog.set_file_name(name);
+                }
+                let Some(picked) = dialog.blocking_save_file() else { return Ok(None) };
+                picked.into_path().map_err(|e| fail(e.to_string()))?
+            }
+        };
+        let allowed_dirs = lock(&allowed.0).clone();
+        match check_picked(chosen, &allowed_dirs) {
+            Picked::Use(p) => break p,
+            Picked::Ask(p) => start = p,
+            Picked::Refuse => return Err(ExportError::new(INSIDE_PROJECT, "the save dialog picked a project folder")),
         }
     };
     lock(&exports.picked).insert(path.clone());
@@ -370,6 +411,13 @@ pub async fn export_finish(app: AppHandle, id: u32) -> Result<ExportReport, Expo
 pub async fn export_cancel(app: AppHandle, id: Option<u32>) -> Result<(), String> {
     let Some(id) = id else { return Ok(()) };
     tauri::async_runtime::spawn_blocking(move || app.state::<Exports>().cancel(id)).await.map_err(|e| e.to_string())
+}
+
+/// Cancel every running export: the page calls this when it loads, so a reload in the middle of an
+/// export leaves no FFmpeg process and no `.part` file.
+#[tauri::command]
+pub async fn export_cancel_all(app: AppHandle) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || app.state::<Exports>().cancel_all()).await.map_err(|e| e.to_string())
 }
 
 /// Open Explorer with a finished export selected. Only files this app exported.
@@ -441,10 +489,32 @@ mod tests {
     }
 
     #[test]
-    fn dialog_paths_get_an_mp4_extension() {
-        assert_eq!(with_mp4(PathBuf::from("C:/x/clip")), PathBuf::from("C:/x/clip.mp4"));
-        assert_eq!(with_mp4(PathBuf::from("C:/x/clip.MP4")), PathBuf::from("C:/x/clip.MP4"));
-        assert_eq!(with_mp4(PathBuf::from("C:/x/clip.mov")), PathBuf::from("C:/x/clip.mov.mp4"));
+    fn a_name_that_is_not_mp4_goes_back_to_the_dialog_as_mp4() {
+        let none = HashSet::new();
+        assert_eq!(check_picked(PathBuf::from("C:/x/clip.mp4"), &none), Picked::Use(PathBuf::from("C:/x/clip.mp4")));
+        assert_eq!(check_picked(PathBuf::from("C:/x/clip.MP4"), &none), Picked::Use(PathBuf::from("C:/x/clip.MP4")));
+        // Never "clip.mov.mp4" written silently over an existing file: the dialog asks again.
+        assert_eq!(check_picked(PathBuf::from("C:/x/clip.mov"), &none), Picked::Ask(PathBuf::from("C:/x/clip.mp4")));
+        assert_eq!(check_picked(PathBuf::from("C:/x/clip"), &none), Picked::Ask(PathBuf::from("C:/x/clip.mp4")));
+    }
+
+    #[test]
+    fn an_export_inside_a_project_folder_is_refused() {
+        let dir = PathBuf::from("C:/v/a.marz");
+        let allowed = HashSet::from([dir.clone(), PathBuf::from("D:/Other/b")]);
+        for out in ["C:/v/a.marz/screen.mp4", "C:/v/A.MARZ/sub/x.mp4", "C:/elsewhere/c.marz/x.mp4", "D:/Other/b/x.mp4", "d:/other/B/x.mp4"] {
+            assert!(inside_project(Path::new(out), &allowed), "{out}");
+            assert_eq!(check_picked(PathBuf::from(out), &allowed), Picked::Refuse, "{out}");
+        }
+        for out in ["C:/v/Exports/a YouTube.mp4", "C:/v/a.marz.mp4", "D:/Other/bb/x.mp4", "C:/v/x.mp4"] {
+            assert!(!inside_project(Path::new(out), &allowed), "{out}");
+        }
+        // validate_job refuses it too, with the sentence.
+        let out = dir.join("screen.mp4");
+        let (dirs, picked) = sets(&dir, &out);
+        let err = validate_job(&job(&dir, &out), &dirs, &picked).unwrap_err();
+        assert_eq!(err.reason, INSIDE_PROJECT);
+        assert_eq!(INSIDE_PROJECT, "Pick a folder outside the project");
     }
 
     #[test]
@@ -563,6 +633,22 @@ mod tests {
         assert!(!marz_export::args::part_path(&out).exists());
         assert_eq!(std::fs::read(&out).unwrap(), b"precious");
         assert!(exports.chunk(id, vec![0; 4]).is_err());
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn cancel_all_stops_a_running_export_and_removes_part() {
+        let Ok(ffmpeg) = marz_export::tools::find_ffmpeg() else { return eprintln!("skipped: no ffmpeg") };
+        let dir = temp_dir("cancelall");
+        let out = dir.join("out.mp4");
+        let exports = Exports::default();
+        let id = exports.begin(&ffmpeg, job(&dir, &out)).unwrap();
+        let data = h264(&ffmpeg);
+        exports.chunk(id, data[..data.len() / 2].to_vec()).unwrap();
+        // A page reload: the page asks Rust to cancel whatever it left running.
+        exports.cancel_all();
+        assert!(lock(&exports.running).is_empty());
+        assert!(!out.exists() && !marz_export::args::part_path(&out).exists());
         std::fs::remove_dir_all(&dir).unwrap();
     }
 

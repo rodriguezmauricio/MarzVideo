@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { ExportJobDto } from "./sink";
-import { ExportFailure, createTauriSink, type Invoke } from "./tauriSink";
+import { failureText } from "./exportUi";
+import { ExportFailure, asFailure, cancelLeftoverExports, createTauriSink, type Invoke } from "./tauriSink";
 
 const job = { outPath: "C:/x/a YouTube.mp4" } as ExportJobDto;
 
@@ -77,5 +78,23 @@ describe("tauri sink", () => {
     expect(err).toBeInstanceOf(ExportFailure);
     expect((err as ExportFailure).reason).toBe("FFmpeg is missing. Install it or set MARZ_FFMPEG");
     expect((err as ExportFailure).message).toContain("ffmpeg was not found");
+  });
+});
+
+describe("leftover exports", () => {
+  it("asks Rust to cancel every running export (a page reload mid-export)", async () => {
+    const { invoke, calls } = fakeInvoke({ export_cancel_all: () => undefined });
+    await cancelLeftoverExports(invoke);
+    expect(calls.map((c) => c.cmd)).toEqual(["export_cancel_all"]);
+  });
+
+  it("never rejects, so an export can still start", async () => {
+    const { invoke } = fakeInvoke({ export_cancel_all: () => Promise.reject(new Error("gone")) });
+    await expect(cancelLeftoverExports(invoke)).resolves.toBeUndefined();
+  });
+
+  it("turns the save dialog's refusal into the warning bar sentence", () => {
+    const e = asFailure({ reason: "Pick a folder outside the project", detail: "inside a project folder" });
+    expect(failureText(e)).toBe("Export failed. Pick a folder outside the project. Your project is unchanged.");
   });
 });

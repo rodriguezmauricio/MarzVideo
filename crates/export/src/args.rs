@@ -223,7 +223,7 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
         // 44-byte header + 0.5 s of 48 kHz mono 16-bit.
         let mut b = Vec::new();
-        b.extend_from_slice(b"RIFF    WAVEfmt ");
+        b.extend_from_slice(b"RIFF\0\0\0\0WAVEfmt ");
         b.extend_from_slice(&16u32.to_le_bytes());
         b.extend_from_slice(&[1, 0, 1, 0]);
         b.extend_from_slice(&48_000u32.to_le_bytes());

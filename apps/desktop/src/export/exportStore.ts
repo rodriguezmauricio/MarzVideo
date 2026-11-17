@@ -8,7 +8,7 @@ import { exportProject } from "./exportVideo";
 import { failureText, panelKey, percent, readLastPreset, writeLastPreset, type PanelState } from "./exportUi";
 import { createMemorySink } from "./memorySink";
 import { PRESETS, type ExportPresetId } from "./presets";
-import { createTauriSink } from "./tauriSink";
+import { asFailure, cancelLeftoverExports, createTauriSink } from "./tauriSink";
 
 export type ExportPhase = "idle" | "picking" | "exporting" | "done" | "failed";
 
@@ -46,6 +46,9 @@ function storage(): Storage | null {
 }
 
 const FILE_SUFFIX: Record<ExportPresetId, string> = { youtube: "YouTube", vertical: "Vertical" };
+
+/** Exports left running by the page before a reload are cancelled on load; a new one waits for that. */
+const leftovers: Promise<void> = isTauri() ? cancelLeftoverExports() : Promise.resolve();
 
 export const useExportStore = create<ExportState>((set, get) => ({
   panel: { open: false, highlight: "youtube" },
@@ -86,10 +89,12 @@ export const useExportStore = create<ExportState>((set, get) => ({
     let outPath: string | null;
     try {
       // The app asks Rust, which runs the save dialog; the browser build keeps the file in memory.
+      await leftovers;
       outPath = isTauri() ? await invoke<string | null>("pick_export_path", { projectDir: dir, preset: id }) : `${project.name} ${FILE_SUFFIX[id]}.mp4`;
     } catch (e) {
       console.error("[export] save dialog failed", e);
-      return set({ phase: "failed", failure: failureText(e) });
+      // Rust's sentence, e.g. "Pick a folder outside the project".
+      return set({ phase: "failed", failure: failureText(asFailure(e)) });
     }
     if (!outPath) return set({ phase: "idle" });
 
