@@ -74,8 +74,8 @@ struct ZoomLine<'a> {
     #[serde(rename = "tUs")]
     t_us: i64,
     r#type: &'static str,
-    #[serde(rename = "presetId", skip_serializing_if = "Option::is_none")]
-    preset_id: Option<&'a str>,
+    #[serde(rename = "presetId")]
+    preset_id: &'a str,
     action: ZoomAction,
 }
 
@@ -142,19 +142,8 @@ impl<W: Write> EventLog<W> {
         self.write_line(rec_us, &line);
     }
 
-    /// `In` needs a preset id; without one nothing is written and the error is kept for `flush`.
-    /// `Out` never writes a preset id.
-    pub fn zoom(&mut self, rec_us: i64, preset_id: Option<&str>, action: ZoomAction) {
-        let preset_id = match action {
-            ZoomAction::In => {
-                if preset_id.is_none() {
-                    self.keep_error(io::Error::new(io::ErrorKind::InvalidInput, "zoom in needs a preset id"));
-                    return;
-                }
-                preset_id
-            }
-            ZoomAction::Out => None,
-        };
+    /// Both `In` and `Out` carry a preset id; an `Out` line names the zoom being ended.
+    pub fn zoom(&mut self, rec_us: i64, preset_id: &str, action: ZoomAction) {
         self.write_line(rec_us, &ZoomLine { t_us: rec_us, r#type: "zoom", preset_id, action });
     }
 
@@ -329,35 +318,17 @@ mod tests {
     #[test]
     fn zoom_in_has_preset() {
         let mut log = new_log((0, 0));
-        log.zoom(4_100_000, Some("p1"), ZoomAction::In);
+        log.zoom(4_100_000, "p1", ZoomAction::In);
         let out = text(log);
         assert_eq!(lines(&out), vec![HEADER_LINE, r#"{"tUs":4100000,"type":"zoom","presetId":"p1","action":"in"}"#]);
     }
 
     #[test]
-    fn zoom_out_has_no_preset() {
+    fn zoom_out_names_its_preset() {
         let mut log = new_log((0, 0));
-        log.zoom(8_200_000, None, ZoomAction::Out);
-        // A preset id passed with Out is not written.
-        log.zoom(9_000_000, Some("p1"), ZoomAction::Out);
+        log.zoom(8_200_000, "p1", ZoomAction::Out);
         let out = text(log);
-        assert_eq!(
-            lines(&out),
-            vec![
-                HEADER_LINE,
-                r#"{"tUs":8200000,"type":"zoom","action":"out"}"#,
-                r#"{"tUs":9000000,"type":"zoom","action":"out"}"#,
-            ]
-        );
-    }
-
-    #[test]
-    fn zoom_in_without_preset_is_an_error_and_writes_nothing() {
-        let mut log = new_log((0, 0));
-        log.zoom(1_000, None, ZoomAction::In);
-        assert!(log.flush().is_err());
-        let out = text(log);
-        assert_eq!(lines(&out), vec![HEADER_LINE]);
+        assert_eq!(lines(&out), vec![HEADER_LINE, r#"{"tUs":8200000,"type":"zoom","presetId":"p1","action":"out"}"#]);
     }
 
     #[test]
@@ -428,8 +399,8 @@ mod tests {
         log.click(903_000, Button::Left, false, 1210, 650);
         log.click(1_200_000, Button::Right, true, 640, 360);
         log.click(1_250_000, Button::Right, false, 640, 360);
-        log.zoom(4_100_000, Some("p1"), ZoomAction::In);
-        log.zoom(8_200_000, None, ZoomAction::Out);
+        log.zoom(4_100_000, "p1", ZoomAction::In);
+        log.zoom(8_200_000, "p1", ZoomAction::Out);
         log.pause(9_000_000);
         log.resume(9_000_000);
         log.flush().unwrap();

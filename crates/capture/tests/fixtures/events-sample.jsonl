@@ -6,6 +6,6 @@
 {"tUs":1200000,"type":"click","button":"right","state":"down","x":640,"y":360}
 {"tUs":1250000,"type":"click","button":"right","state":"up","x":640,"y":360}
 {"tUs":4100000,"type":"zoom","presetId":"p1","action":"in"}
-{"tUs":8200000,"type":"zoom","action":"out"}
+{"tUs":8200000,"type":"zoom","presetId":"p1","action":"out"}
 {"tUs":9000000,"type":"pause"}
 {"tUs":9000000,"type":"resume"}

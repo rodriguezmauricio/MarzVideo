@@ -74,8 +74,10 @@ describe("parseEvents with the Rust writer fixture", () => {
     const url = new URL("../../../crates/capture/tests/fixtures/events-sample.jsonl", import.meta.url);
     const { header, events } = parseEvents(readFileSync(url, "utf8"));
     expect(header).toEqual({ version: 1, source: { width: 2560, height: 1440, fps: 60 }, startedAt: "2026-11-17T10:00:00Z" });
-    // The writer's `zoom out` line has no presetId, which the current ZoomEventSchema skips as an odd event.
-    expect(events.map((e) => e.type)).toEqual(["cursor", "cursor", "click", "click", "click", "click", "zoom", "pause", "resume"]);
-    expect(events.find((e) => e.type === "zoom")).toEqual({ tUs: 4100000, type: "zoom", presetId: "p1", action: "in" });
+    expect(events.map((e) => e.type)).toEqual(["cursor", "cursor", "click", "click", "click", "click", "zoom", "zoom", "pause", "resume"]);
+    expect(events.filter((e) => e.type === "zoom")).toEqual([
+      { tUs: 4100000, type: "zoom", presetId: "p1", action: "in" },
+      { tUs: 8200000, type: "zoom", presetId: "p1", action: "out" },
+    ]);
   });
 });
