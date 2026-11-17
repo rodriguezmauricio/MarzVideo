@@ -58,20 +58,34 @@ function buildEvents(durationSec: number): string {
   return lines.map((l) => JSON.stringify(l)).join("\n") + "\n";
 }
 
-export async function makeSample(outDir: string, opts: { durationSec?: number } = {}): Promise<void> {
+/**
+ * `syncOffsetMs` switches picture and sound to a sync test: a black screen that flashes white for
+ * 100 ms every 3 s (from 3 s on), and a 1 kHz 100 ms beep at the same moments on a quiet bed, the
+ * beep arriving `syncOffsetMs` after the flash in recording time. The mic offset is compensated,
+ * so `pnpm sync-check` should read exactly that offset.
+ */
+export async function makeSample(outDir: string, opts: { durationSec?: number; syncOffsetMs?: number } = {}): Promise<void> {
   const durationSec = opts.durationSec ?? 20;
+  const sync = opts.syncOffsetMs !== undefined;
   await mkdir(outDir, { recursive: true });
 
+  const videoSource = sync
+    ? `color=c=black:size=${W}x${H}:rate=${FPS}:duration=${durationSec},drawbox=x=0:y=0:w=iw:h=ih:color=white:t=fill:enable='gte(t,3)*lt(mod(t,3),0.1)'`
+    : `testsrc=size=${W}x${H}:rate=${FPS}:duration=${durationSec}`;
   await run("ffmpeg", [
     "-y", "-v", "error",
-    "-f", "lavfi", "-i", `testsrc=size=${W}x${H}:rate=${FPS}:duration=${durationSec}`,
+    "-f", "lavfi", "-i", videoSource,
     "-c:v", "libx264", "-pix_fmt", "yuv420p", "-g", String(FPS), "-r", String(FPS),
     "-movflags", "frag_keyframe+empty_moov+default_base_moof",
     join(outDir, "screen.mp4"),
   ]);
 
   // 440 Hz tone plus a 1.5 kHz beep at the start of every second, so sync is audible.
-  const expr = "0.1*sin(2*PI*440*t)+0.6*sin(2*PI*1500*t)*lt(mod(t,1),0.05)";
+  // In sync mode the beep starts (syncOffset - micOffset) after the flash, in file time.
+  const u = `(t-(${((opts.syncOffsetMs ?? 0) / 1000 - MIC_OFFSET_US / 1_000_000).toFixed(6)}))`;
+  const expr = sync
+    ? `0.01*sin(2*PI*440*t)+0.6*sin(2*PI*1000*${u})*gte(${u},3)*lt(mod(${u},3),0.1)`
+    : "0.1*sin(2*PI*440*t)+0.6*sin(2*PI*1500*t)*lt(mod(t,1),0.05)";
   await run("ffmpeg", [
     "-y", "-v", "error",
     "-f", "lavfi", "-i", `aevalsrc='${expr}':s=48000:d=${durationSec}`,

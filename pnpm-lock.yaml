@@ -88,6 +88,12 @@ importers:
         specifier: workspace:*
         version: link:../../packages/format
 
+  tools/sync-check:
+    dependencies:
+      '@marz/format':
+        specifier: workspace:*
+        version: link:../../packages/format
+
 packages:
 
   '@emnapi/core@2.0.0-beta.2':

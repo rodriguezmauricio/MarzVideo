@@ -1,0 +1,11 @@
+{
+  "name": "@marz/sync-check",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "sync-check": "tsx sync-check.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": { "@marz/format": "workspace:*" }
+}
