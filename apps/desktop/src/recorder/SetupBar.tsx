@@ -5,7 +5,7 @@ import { Icon } from "../components/Icon";
 import { NO_FFMPEG, NO_MIC, recorderApi, type BarInfo } from "./recorderApi";
 import { useRecLive } from "./recLive";
 import { currentSetup, recordOptions, useRecorder } from "./recorderStore";
-import { meterLit, METER_BARS } from "./regionMath";
+import { captureSize, FPS_CAPPED, fpsCapped, meterLit, METER_BARS } from "./regionMath";
 
 const BAR_HEIGHTS = [8, 11, 14, 17];
 
@@ -61,6 +61,9 @@ export function SetupBar({ placed = false }: { placed?: boolean }) {
   const error =
     info && !info.ffmpeg ? NO_FFMPEG : (regionError ?? startError ?? failed ?? (info && mics.length === 0 ? NO_MIC : null) ?? warning);
   const blocked = !info || !info.ffmpeg || regionError !== null;
+  // A fact, not an error: above 2560 x 1440 the engine records at 30 fps. An error takes its place.
+  const size = captureSize(s.mode, s.region, api.monitor);
+  const note = !error && fpsCapped(size.width, size.height) ? `${FPS_CAPPED}.` : null;
 
   const record = async () => {
     if (phase !== "setup" || blocked) return;
@@ -117,6 +120,11 @@ export function SetupBar({ placed = false }: { placed?: boolean }) {
           <div className="rb-err" role="status">
             <Icon name="alert" size={13} />
             {error}
+          </div>
+        )}
+        {note && (
+          <div className="rb-err rb-note" role="status">
+            {note}
           </div>
         )}
         <div ref={barRef} className="rb-bar">

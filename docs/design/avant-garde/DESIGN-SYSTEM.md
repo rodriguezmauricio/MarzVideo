@@ -14,7 +14,7 @@ If you catch yourself doing one of these, stop and re-read this file.
 
 1. Rounded corners. `border-radius` is 0 everywhere. The only circle in the app is the click-highlight ring drawn on the preview.
 2. Shadows, glows, blur, glass, frosted panels, backdrop filters. The only `box-shadow` allowed is the 999px dimming trick around the zoom area and the 2px selection ring on a timeline block.
-3. Gradients. Only two exist: the 12-column grid lines and the red cut hatching. No gradient fills, no gradient text.
+3. Gradients. Only three exist: the 12-column grid lines, the red cut hatching, and the hatched red square on the Home recover banner (the same hatching). No gradient fills, no gradient text.
 4. A second accent. Blue, purple, green, orange are forbidden. Recording red is not an accent, it is reserved (see section 3).
 5. Tailwind default palette or utilities (`bg-slate-900`, `rounded-lg`, `shadow-md`, `ring-2`). The theme in `tokens.css` deletes them on purpose. Do not re-enable them.
 6. Inter, Roboto, system-ui, Arial, Helvetica, JetBrains Mono, Space Grotesk, IBM Plex, DM Sans or any other default font. Fonts are Familjen Grotesk and Martian Mono only.
@@ -101,6 +101,7 @@ Left: back link "Projects" (underlined, arrow icon), "/", project title (mono 50
 - All changes saved: 8px accent square + faint text.
 - Saving...: 8px square with 1px accent outline (hollow) + faint text.
 - Save failed. Retrying...: paper block, ink text, 500 weight, alert icon. Not red.
+- "Projects" saves first. While the save fails the editor stays open with "Save failed. Retrying..." (click "Projects" again once it reads "All changes saved"). Closing the window also saves first; it closes after 3 s at most.
 
 ### Warning bar (24px, under the strip, shifts content down 24px)
 Paper background, ink text, alert icon, bold lead sentence. Text: "No usable events file. Click effects and auto zoom are unavailable. You can still add zooms and cuts by hand." Auto zoom row and Click highlight toggle become faint/disabled.
@@ -112,11 +113,11 @@ Paper background, ink text, alert icon, bold lead sentence. Text: "No usable eve
   - "Instagram and TikTok" (`portrait` icon) / "1080 x 1920, 30 fps".
   - The last used row (YouTube the first time) has the 8px accent square with a 1px ink outline in its marker slot (on paper the accent alone is too light).
   - Hover or arrow-key highlight: the row inverts to ink background, paper text, `faint` size. Enter picks the highlighted row (the last used one when the panel opens), a click picks the clicked row. Esc, Ctrl+E or a click outside closes the panel.
-- Save dialog: the native Windows save dialog (drawn by Windows), titled "Export MP4", starting in the projects folder's `Exports` folder (made on first export), file name `<project name> YouTube.mp4` or `<project name> Vertical.mp4`, type MP4. Cancel in the dialog changes nothing. Windows asks before replacing a file.
+- Save dialog: the native Windows save dialog (drawn by Windows), titled "Export MP4", starting in the projects folder's `Exports` folder (made on first export), file name `<project name> YouTube.mp4` or `<project name> Vertical.mp4`, type MP4. Cancel in the dialog changes nothing. Windows asks before replacing a file. A name typed with another extension ("clip.mov") opens the dialog again on "clip.mp4", so that question is always asked.
 - Exporting: the button's place shows "Exporting 42%" (mono 500, paper, whole percent, width fixed to "Exporting 100%") and a Cancel button right of it: 30px high, 1px paper border, paper text, `close` icon + "Cancel", tooltip "Cancel export. Nothing is written" (no hotkey on purpose: a stray key must not throw away a long export). A 2px accent line runs along the bottom of the top strip from the left edge, its width the progress, over the 1px line. Editing stays possible; the export uses the project as it was when the preset was picked. Ctrl+E does nothing and the "Projects" link is faint with the tooltip "Cancel or wait for the export first" while it runs.
 - Done: the save status slot shows the 8px accent square + "Exported." (faint) + "Show in folder" (paper, underlined, like the back link), which opens Explorer with the file selected. It stays until the next edit or the next export, then the save status returns.
 - Cancelled: back to idle. No message; no file is written and an existing file with that name is untouched.
-- Failed: the Warning bar "Export failed. <reason>. Your project is unchanged." It replaces any other warning until the next export starts. Reasons: "FFmpeg is missing. Install it or set MARZ_FFMPEG", "This folder cannot be written to. Pick another folder", "This computer cannot encode H.264 video", "FFmpeg stopped with an error", "The video could not be encoded" (anything else in the webview). The details go to the console.
+- Failed: the Warning bar "Export failed. <reason>. Your project is unchanged." It replaces any other warning until the next export starts. Reasons: "FFmpeg is missing. Install it or set MARZ_FFMPEG", "This folder cannot be written to. Pick another folder", "Pick a folder outside the project" (the save dialog picked a folder inside a `.marz` project, where the export could replace a raw track), "This computer cannot encode H.264 video", "FFmpeg stopped with an error", "The video could not be encoded" (anything else in the webview). The details go to the console.
 - Empty output (every part is cut): the button has no fill, a 1px line border and faint text and does nothing; tooltip "Nothing left to export. Every part is cut.". Ctrl+E does nothing.
 
 ### Playhead timecode (editor hero)
@@ -183,6 +184,7 @@ Ink, 1px paper border, padding 10 x 12 x 10 x 16. In order: mic icon, mic picker
 - The mic picker opens the system list of microphones. With no microphone it reads "No microphone" and the meter stays unlit.
 - Starting state: after Record, the Record button reads "Starting..." in faint on the same rec fill with the dot icon, disabled, until the engine reports Recording. No countdown.
 - Error line: a paper block attached to the top of the bar, the bar's full width, 24px high, ink text, mono 500, alert icon 13px (the Warning bar treatment). Sentences: "No microphone found. Recording without sound.", "Region is too small. Drag at least 64 x 64.", "FFmpeg is missing. Install it or set MARZ_FFMPEG.". Not red. It goes away when the cause is gone.
+- Note line: the error line's block without the alert icon, for a fact that does not block Record. Only one: "This screen records at 30 fps." while the capture area (the region, or the monitor in Full screen) is larger than 2560 x 1440 pixels; the recording then runs at 30 fps instead of 60. An error line takes its place while there is one.
 
 ### Recorder: hotkeys (registered only while the recorder is open)
 Record / stop Ctrl+Shift+R, Pause / resume Ctrl+Shift+P, Mute mic Ctrl+Shift+M, zoom presets Ctrl+1 to Ctrl+9, Zoom out Ctrl+0. Esc closes the recorder before recording. Each control that has a hotkey shows it next to its label in faint (on accent or rec: in the control's text colour).
@@ -190,11 +192,11 @@ Record / stop Ctrl+Shift+R, Pause / resume Ctrl+Shift+P, Mute mic Ctrl+Shift+M, 
 ### Recorder: bar WHILE recording (floating, bottom centre, y 716)
 Rec square (14px) + timer (display 30px), Pause, Mute mic with meter, divider, one button per zoom preset ("1 Cart total", active = accent fill), Zoom out, divider, Stop (rec fill, white). Top-left chip: "Recording this region. Autosaving every few seconds" with red 1px border and square rec indicator. Region border 3px solid rec. Same "never captured" chip below.
 - Buttons are 44px high with a 1px line border and 14px side padding; Stop has 16px. Gap 10, padding 10. The chip below sits 4px under the bar.
-- Every button has an icon and a label; the hotkeys are in the tooltips. Pause: pause icon + "Pause" (the button keeps the width of "Resume"). Presets: zoomadd icon (16px) + number box + name ("1 Cart total"). Mute: mic icon + meter. Zoom out: zoomout icon + "Zoom out". Stop: stop icon + "Stop".
+- Every button has an icon and a label; the hotkeys are in the tooltips. Pause: pause icon + "Pause" (the button keeps the width of "Resume"). Presets: zoomadd icon (16px) + number box + name ("1 Cart total"). Mute: mic icon + "Mute" (the button keeps the width of "Unmute") + meter. Zoom out: zoomout icon + "Zoom out". Stop: stop icon + "Stop".
 - The bar and the "Recording" chip appear only once the engine reports Recording; until then the setup bar shows "Starting...". The timer is recording time (pauses excluded), `mm:ss`, `h:mm:ss` from one hour.
 - Paused: the Pause button turns accent with the play icon and reads "Resume"; the timer stops.
-- Muted: the Mute button turns accent with the mic-off icon, and "Muted" (the meter's width) replaces the meter.
-- Tooltips on hover or focus, above the button (the Tooltips style): "Pause / Ctrl+Shift+P", "Resume / Ctrl+Shift+P", "Mute mic / Ctrl+Shift+M", "Unmute mic / Ctrl+Shift+M", "Zoom to Cart total / Ctrl+1", "Zoom out / Ctrl+0", "Stop and open in the editor / Ctrl+Shift+R" (right-aligned to Stop). Without a mic the Mute button is faint and reads "Recording without a mic".
+- Muted: the Mute button turns accent with the mic-off icon and reads "Unmute"; the meter stays in place, unlit.
+- Tooltips on hover or focus, above the button (the Tooltips style): "Pause / Ctrl+Shift+P", "Resume / Ctrl+Shift+P", "Mute mic / Ctrl+Shift+M", "Unmute mic / Ctrl+Shift+M", "Zoom to Cart total / Ctrl+1", "Zoom out / Ctrl+0", "Stop and open in the editor / Ctrl+Shift+R" (right-aligned to Stop). Without a mic the Mute button is faint (label "Mute", meter unlit) and its tooltip reads "Recording without a mic".
 - Overlay while recording: never takes clicks. Outside the region dimmed with `dim-rec`; only the live preset is drawn (2px solid accent, no tag). Full screen: the 3px border runs around the monitor and the chip reads "Recording this screen. Autosaving every few seconds" at left 24, top 100.
 - Warnings while recording ("Hotkey Ctrl+1 is taken by another app", "Microphone disconnected. Recording continues without sound.") use the error line on top of the bar. An engine failure ends the recording and returns to the setup bar with its sentence on the error line. Esc does nothing while recording. Closing the bar or the overlay window (Alt+F4) stops the recording and opens it in the editor.
 - A stop that cannot finish the files shows Home with the Warning bar "Recording could not be finished. Recover it below." above the recover banner.

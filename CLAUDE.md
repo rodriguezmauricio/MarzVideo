@@ -18,8 +18,8 @@ Windows-first screen recorder + non-destructive editor (Tauri 2, Rust, React/TS)
   editor in `apps/desktop` (synced playback, timeline, zoom and cut blocks, auto zoom, undo/redo, autosave).
   Checked in a browser (Edge via Playwright) against the sample project.
 - **Done:** editor restyled to the Editorial Brutalism design (2026-11-16). Deviations: `docs/design/avant-garde/DEVIATIONS.md`.
-- **Done:** capture spike (2026-11-16): `crates/capture` is throwaway spike code; findings and numbers in
-  `docs/spikes/2026-11-16-capture-spike.md`. The capture approach holds on Windows.
+- **Done:** capture spike (2026-11-16): findings and numbers in `docs/spikes/2026-11-16-capture-spike.md`.
+  The capture approach holds on Windows; the spike code grew into the capture engine in `crates/capture`.
 - **Done:** M1 build order steps 4 to 6 (plan: `docs/superpowers/plans/2026-11-17-m1-capture-shell-export.md`).
   Capture engine (`crates/capture`, CLI `marz-capture record|recover`), Tauri shell with Home, recorder
   bars, global hotkeys, live zooms and crash recovery, and MP4 export (`crates/export`, `apps/desktop/src/export`).
@@ -28,7 +28,8 @@ Windows-first screen recorder + non-destructive editor (Tauri 2, Rust, React/TS)
   is an export choice, `project.output` is unchanged. Measured: about 15 MB/min YouTube, 5 MB/min vertical,
   about 3x faster than real time. Minimum FFmpeg 5.1 (`-fps_mode`).
 - **Capture facts:** no B-frames (first frame at 0; preview and export align to the first frame time for
-  older files). Above 1440p capture is capped at 30 fps. The app opens maximized; the editor fits down to 1280 x 720.
+  older files). A capture area larger than 2560 x 1440 records at 30 fps instead of 60 (the engine lowers it, the
+  setup bar says so before Record). The app opens maximized; the editor fits down to 1280 x 720.
 - **Not checked by hand yet:** the owner checks in `docs/spikes/2026-11-17-owner-checks.md` (clean 3-minute run,
   flash and beep sync, clicks, static screen, mic unplug, 60 Hz, real hotkeys), plus: open New recording once and
   look at the overlay, play an export in Windows Media Player, upload one export of each preset privately and
@@ -40,7 +41,7 @@ Claude drifts from the design. These rules stop that.
 
 - Look: ink `#0B0B0A` and paper `#ECEAE4`, ONE accent `#D4FF3A`, recording red `#E0352B` only for recording and cuts. All values live in `apps/desktop/src/styles/tokens.css` (copy of `docs/design/avant-garde/tokens.css`). Never write a hex colour elsewhere.
 - Fonts: Familjen Grotesk (display) and Martian Mono (labels, 11px, uppercase). No Inter, system-ui, Roboto, Arial.
-- No border radius, no shadows, no blur, no gradients (except grid lines and cut hatching), no transitions. Tailwind's default theme is deleted in tokens.css; do not re-enable it.
+- No border radius, no shadows, no blur, no gradients (except grid lines and the red hatching on cuts and the recover banner), no transitions. Tailwind's default theme is deleted in tokens.css; do not re-enable it.
 - Layout: 12-column visible grid, ruled lines, giant timecode, vertical tool ledger with hotkeys, paper-colored inspector, always-visible timeline lanes. Never cards, pills or centered layouts.
 - Every tool has an icon, a label and its hotkey. Copy: sentence case source, verbs first, no "successfully", "please", emoji.
 - Do not invent styles or sizes. If something is missing, add it to DESIGN-SYSTEM.md in the same style first.
@@ -76,7 +77,8 @@ Package tests: `pnpm --filter <pkg> exec vitest run` (packages have no test scri
 - The `project.marz` format is the contract between recorder and editor. Don't change it without
   updating the design doc and telling Mauricio.
 - The editor must keep running in a plain browser against the sample project, so cloud (Linux)
-  sessions can build and test it. Windows-only code stays in `crates/capture` and the Tauri shell.
+  sessions can build and test it: no Tauri call on the browser path (gate it with `isTauri()`; a static
+  `@tauri-apps/api` import is inert there). Windows-only code stays in `crates/capture/src/win` and the Tauri shell.
 - Don't claim capture/Tauri code works unless it was run on Windows.
 - Stay inside M1 scope. Park other ideas instead of building them.
 - Mauricio is short on time: answers straight to the point.

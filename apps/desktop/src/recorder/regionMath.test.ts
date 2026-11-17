@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { dragRect, fromNorm, meterLit, moveRect, presetFromDrag, presetPx, resizeRect, toCss, toNorm, toPhysical } from "./regionMath";
+import { captureSize, dragRect, fpsCapped, fromNorm, meterLit, moveRect, presetFromDrag, presetPx, resizeRect, toCss, toNorm, toPhysical } from "./regionMath";
 
 const MON = { width: 1440, height: 900 };
 const ratio = (r: { w: number; h: number }) => r.w / r.h;
@@ -119,5 +119,20 @@ describe("meterLit", () => {
     expect(meterLit(0.0005)).toBe(0); // -66 dB
     expect(meterLit(1)).toBe(14);
     expect(meterLit(0.0316)).toBe(7); // -30 dB
+  });
+});
+
+describe("fpsCapped", () => {
+  it("is true above 2560 x 1440 physical pixels, as the engine's capture_fps", () => {
+    expect(fpsCapped(2560, 1440)).toBe(false);
+    expect(fpsCapped(1920, 1080)).toBe(false);
+    expect(fpsCapped(3840, 2160)).toBe(true);
+    expect(fpsCapped(3440, 1440)).toBe(true);
+  });
+
+  it("uses the region, or the monitor in Full screen", () => {
+    const mon = { width: 3840, height: 2160 };
+    expect(captureSize("full", { x: 0, y: 0, w: 1280, h: 720 }, mon)).toEqual({ width: 3840, height: 2160 });
+    expect(captureSize("region", { x: 0, y: 0, w: 1280, h: 720 }, mon)).toEqual({ width: 1280, height: 720 });
   });
 });

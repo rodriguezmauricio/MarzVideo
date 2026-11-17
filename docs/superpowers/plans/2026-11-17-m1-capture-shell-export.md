@@ -49,7 +49,7 @@ Not added on purpose: a global-shortcut plugin (hotkeys use `RegisterHotKey` fro
 - Our own windows are excluded from capture with `WDA_EXCLUDEFROMCAPTURE`; the cursor is never drawn into `screen.mp4`.
 - WGC minimum update interval: half a frame (`500_000 / fps` us). Warm up mic and screen before t0; show "recording" only after both deliver.
 - Encoder probe order: `h264_nvenc`, `h264_amf`, `h264_qsv`, `libx264`.
-- The editor still runs in a plain browser against `samples/demo.marz`. Windows-only code lives in `crates/capture/src/win/` and `apps/desktop/src-tauri` only.
+- The editor still runs in a plain browser against `samples/demo.marz`: no Tauri call on the browser path (a static `@tauri-apps/api` import is inert there). Windows-only code lives in `crates/capture/src/win/` and `apps/desktop/src-tauri` only.
 - UI: `DESIGN-SYSTEM.md` is binding. Before every UI commit: `pnpm design:check` passes and a 1440 x 900 Edge screenshot of each changed state matches its mockup; deviations go in `DEVIATIONS.md`. New components are written into `DESIGN-SYSTEM.md` first, in its style.
 - No em-dashes, no emojis in code, docs or commits. Copy: sentence case, verbs first, no "successfully" or "please".
 - Never claim capture, Tauri or export code works unless it ran on Windows. Each task says **Where:** it can be built and tested.

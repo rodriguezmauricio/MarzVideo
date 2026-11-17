@@ -125,16 +125,17 @@ export function RecordingBar({ placed = false }: { placed?: boolean }) {
             {...hover("mute")}
           >
             <Icon name={rec.muted ? "micoff" : "mic"} size={16} />
-            {rec.muted ? (
-              // Same width as the meter, so the bar does not move under the pointer.
-              <span className="rr-muted">Muted</span>
-            ) : (
-              <span className="rb-meter" aria-hidden="true">
-                {Array.from({ length: METER_BARS }, (_, i) => (
-                  <i key={i} className={i < lit ? "lit" : undefined} style={{ height: BAR_HEIGHTS[i % 4] }} />
-                ))}
-              </span>
-            )}
+            {/* Both words in one cell, so the button keeps its width and nothing moves. */}
+            <span className="rr-swap">
+              <span className={rec.muted ? "off" : undefined}>Mute</span>
+              <span className={rec.muted ? undefined : "off"}>Unmute</span>
+            </span>
+            {/* Unlit while muted or without a mic. */}
+            <span className="rb-meter" aria-hidden="true">
+              {Array.from({ length: METER_BARS }, (_, i) => (
+                <i key={i} className={i < lit ? "lit" : undefined} style={{ height: BAR_HEIGHTS[i % 4] }} />
+              ))}
+            </span>
             <Tip id="mute" text={rec.mic ? `${rec.muted ? "Unmute mic" : "Mute mic"} / Ctrl+Shift+M` : "Recording without a mic"} {...tipProps} />
           </button>
           <i className="rb-sep" />

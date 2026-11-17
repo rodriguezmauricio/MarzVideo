@@ -125,3 +125,18 @@ export function meterLit(level: number): number {
   const db = 20 * Math.log10(level);
   return clamp(Math.round(((db + 60) / 60) * METER_BARS), 0, METER_BARS);
 }
+
+/** Capture areas above this (2560 x 1440 physical pixels) record at 30 fps (the engine's
+ *  `region::capture_fps`). */
+const MAX_PIXELS_AT_FULL_RATE = 2560 * 1440;
+export const FPS_CAPPED = "This screen records at 30 fps";
+
+/** True when a `w` x `h` capture area records at 30 fps. */
+export function fpsCapped(w: number, h: number): boolean {
+  return w * h > MAX_PIXELS_AT_FULL_RATE;
+}
+
+/** The area the engine records: the region, or the whole monitor in Full screen (physical pixels). */
+export function captureSize(mode: "full" | "region" | "exact", region: PxRect, monitor: Size): Size {
+  return mode === "full" ? { width: monitor.width, height: monitor.height } : { width: region.w, height: region.h };
+}

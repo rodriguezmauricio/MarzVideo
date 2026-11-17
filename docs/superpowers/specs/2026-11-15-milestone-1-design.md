@@ -57,7 +57,7 @@ The project format must leave room for all of them (see "Format contract").
 |---|---|---|
 | Anywhere (cloud or local) | `packages/format` — types + validators for `project.marz` | Unit tests |
 | Anywhere | Sample project generator (synthetic `screen.mp4`, `mic.wav`, `events.jsonl`) | Output validates against the format |
-| Anywhere | Editor: shell, playback sync, timeline, zoom blocks, auto zoom, cuts, undo/redo | Runs in a plain browser against the sample project; unit + Playwright tests |
+| Anywhere | Editor: shell, playback sync, timeline, zoom blocks, auto zoom, cuts, undo/redo | Runs in a plain browser against the sample project (no Tauri call on the browser path); unit + Playwright tests |
 | Windows only | Capture engine (Rust): WGC screen, WASAPI mic, input hooks, hotkeys, file writing | Record a real clip; output must validate against the format |
 | Windows only | Tauri shell, recorder toolbar, export encode | Manual run on Windows |
 

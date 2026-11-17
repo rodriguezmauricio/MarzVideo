@@ -23,7 +23,7 @@
 - Header clock shows source length, not export length. The spec line "the timeline maps to output time" now differs from the code (playhead is in source time).
 - Sample uses `testsrc` (built-in timestamp) instead of `testsrc2`; there is no `usePlayback.ts` (logic lives in `Preview.tsx`).
 - No committed Playwright tests: the browser checks were run by hand.
-- Closed 2026-11-17: recorder pin-downs. `durationUs` is the stop time on the QPC clock minus t0, and both tracks are padded or cut to it (crash recovery uses the shorter track). Mouse `button` is `left`, `right` or `middle` only; other buttons are not written.
+- Closed 2026-11-17: recorder pin-downs. `durationUs` is the stop time on the QPC clock minus t0, and both tracks are padded or cut to it. Crash recovery takes the length from the screen (`screen.offsetUs` + the last packet + one frame); a shorter mic is kept and padded with silence, a mic without samples is dropped (fixed in the final review: it used to take the shorter track and cut the video to the mic). Mouse `button` is `left`, `right` or `middle` only; other buttons are not written.
 - `drawFrame` should scale by the media's real pixel size, not `project.source`, before proxies arrive.
 
 - [2026-11-16] [claude] WGC's default minimum update interval snaps to every 3rd refresh on a 165 Hz screen, so capture gets 55 fps. Request half a frame (8.3 ms for 60 fps) and slot frames by timestamp; that holds 60 fps CFR.
@@ -51,3 +51,6 @@
 - [2026-11-17] [claude] `apad=whole_dur` on an empty `atrim` hangs FFmpeg. For a segment past the end of the mic, generate silence (`anullsrc`) instead of padding an empty input.
 - [2026-11-17] [claude] Chromium `video.seekable.start(0)` is 0 even when the first frame is later, so it cannot tell the first frame time. Read the first cts from the MP4 (mp4box) instead.
 - [2026-11-17] [claude] Windows 125% scaling on a 1080p laptop gives a webview of about 1536 x 780, so a 1440 x 900 layout overflows. Check every screen at 1280 x 720 and at the real window size, not only 1440 x 900.
+- [2026-11-17] [claude] Export loads the whole `screen.mp4` into the webview before decoding (about 17 MB per minute of 1080p60 screen video, 40 MB/min on a busy screen), so a very long take costs that much memory during an export. Stream the file (range reads) before takes of an hour or more are common.
+- [2026-11-17] [claude] A raw NUL byte in a Rust byte string (`b"RIFF\0..."` typed as real NULs) makes git treat the whole file as binary: no diffs, no line-ending normalization. Write `\0` escapes; `.gitattributes` now forces LF for text and marks images and fonts binary.
+- [2026-11-17] [claude] A page cannot wait for an async save in `beforeunload`, so the window close button lost the last 2 s of edits. Tauri holds the close (`CloseRequested`, `prevent_close`), asks the page to save (`app://flush`), and the page calls `close_main`; a 3 s fallback closes it anyway.

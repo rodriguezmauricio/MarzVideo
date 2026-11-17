@@ -58,6 +58,7 @@ Checked in Edge at 1440 x 900 (`recorder.html?fake&bar`, the mockup's desktop as
 - **Preset tags end in a 12px close icon** (removes the preset), as added to section 6. The mockup has none.
 - **The mic picker opens the system list** (a native select under the 1px line box). Its open list is drawn by Windows, not in the design. Long names cut at 240 px with an ellipsis, so the bar can be wider than 1080 (1189 on this PC with the Intel array mic).
 - **"Starting..." is faint on the rec fill,** as section 6 says; that contrast is low (it is a short disabled state).
+- **Note line "This screen records at 30 fps."** above the bar when the capture area is larger than 2560 x 1440 (not in the mockup; DESIGN-SYSTEM.md section 6 first). Same block as the error line, without the icon.
 - **Bar and overlay transparency:** the parts of the bar window around the bar and chip are transparent but still take clicks (small strip under the bar).
 
 ## Recorder while recording (checked 2026-11-17)
@@ -67,6 +68,7 @@ Checked in Edge at 1440 x 900 (`recorder.html?fake&bar&state=recording`, the moc
 - **Bar is wider than the mockup** (879 px there). In the mockup `.win button { border: 0; padding: 0 }` beats `.pb` and `.fb`, so Pause and Mute lose their 1px line border and Mute and Stop lose their side padding (STOP touches the button edge). The build keeps the border and padding the classes ask for, as on Home. Mute is 150 px (mockup 120), Stop 87 px (mockup 55).
 - **Labels and icons on every button** (fix round 1, CLAUDE.md: every tool has an icon, a label and its hotkey): Pause shows "Pause"/"Resume" next to its icon (mockup: a 44 px icon-only square) and each preset button starts with the zoomadd icon. With two presets the bar is 1048 px (left edge 196 at 1440 x 900); the button tops and the chips stay on the mockup positions. Hotkeys stay in the tooltips, as in the mockup.
 - **Paused, muted, tooltips for every button, Full screen chip text, no-mic Mute, warnings and failures** are not in the mockup; added to DESIGN-SYSTEM.md section 6 first.
+- **Mute has a word label** (final review, 2026-11-17): mic icon + "Mute" ("Unmute" while muted, same width) + meter. The mockup shows icon and meter only; the binding rule (icon, label, hotkey) wins. While muted the meter stays, unlit, instead of the earlier "Muted" text.
 - **`dim-rec` token** (`rgba(5,5,4,.4)`, the mockup's value) added to `tokens.css` for the dimming while recording; setup keeps `dim`.
 - **Tooltip room:** the bar window grows 28 px upward while the pointer is over it, so a tooltip fits; the bar does not move. While the pointer is elsewhere the window is the bar's size, so nothing above the bar takes clicks.
 
