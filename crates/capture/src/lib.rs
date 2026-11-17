@@ -9,6 +9,7 @@ pub mod project;
 pub mod recover;
 pub mod region;
 pub mod slots;
+pub mod writer;
 #[cfg(windows)]
 pub mod win;
 

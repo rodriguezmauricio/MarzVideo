@@ -16,7 +16,8 @@ use marz_capture::win::input::{self, InputShared};
 use marz_capture::win::mic::{self, MicShared};
 use marz_capture::win::monitors::list_monitors;
 use marz_capture::win::qpc::{new_guid, qpc_hns};
-use marz_capture::win::screen::{self, run_writer, ScreenShared, WriterStats};
+use marz_capture::win::screen::{self, ScreenShared};
+use marz_capture::writer::{self, run_writer, WriterStats};
 use marz_capture::win::new_clock;
 
 struct CountSink {
@@ -60,8 +61,8 @@ fn smoke_two_seconds() {
     let mic_sh = MicShared::new(clock.clone(), warn_tx.clone());
     let mic = mic::start(None, &dir.join("mic.wav"), mic_sh.clone()).unwrap();
     let screen_sh = ScreenShared::new(clock.clone(), warn_tx.clone());
-    let (cap_ends, writer_ends) = screen::frame_pipe();
-    let end_idx = screen::new_end_idx();
+    let (cap_ends, writer_ends) = writer::frame_pipe();
+    let end_idx = writer::new_end_idx();
     let wstats = Arc::new(WriterStats::default());
     let writer = {
         let (e, s) = (end_idx.clone(), wstats.clone());

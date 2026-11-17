@@ -1,15 +1,12 @@
-//! Screen capture with Windows Graphics Capture (the spike's proven settings) and the constant
-//! frame rate writer thread.
+//! Screen capture with Windows Graphics Capture (the spike's proven settings). The writer thread
+//! and the channels live in the cross-platform `crate::writer`.
 //!
 //! Flow: WGC frame, then `RecClock::rec_hns`, then `Slotter::slot_for`, then the region is copied
 //! out of the mapped frame into a pooled buffer, then `try_send` to the writer, and `commit` only
-//! when the send worked (a frame dropped on a full channel is retried in its slot). The writer
-//! (`run_writer`) feeds a `CfrWriter` and sends every replaced buffer back to the pool, so steady
-//! state allocates nothing.
+//! when the send worked (a frame dropped on a full channel is retried in its slot).
 
-use std::io;
 use std::sync::atomic::{AtomicBool, AtomicI64, AtomicU64, Ordering};
-use std::sync::mpsc::{self, Receiver, Sender, SyncSender, TrySendError};
+use std::sync::mpsc::TrySendError;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -24,35 +21,11 @@ use windows_capture::settings::{
 use super::monitors::{list_monitors, monitor_at};
 use super::{rec_hns, set_dpi_awareness, SharedClock, Warnings};
 use crate::region::{even_size, normalize_region, PxRect};
-use crate::slots::{CfrWriter, FrameSink, Slotter};
+use crate::slots::Slotter;
+use crate::writer::CaptureEnds;
 use crate::CaptureError;
 
-/// Frames in flight between capture and writer (the spike's queue depth).
-pub const QUEUE_FRAMES: usize = 6;
-
 const BYTES_PER_PIXEL: usize = 4; // BGRA8
-
-/// One output frame: slot index and tightly packed BGRA pixels.
-pub type SlotFrame = (u64, Vec<u8>);
-
-/// What `screen::start` needs: frames out, recycled buffers in.
-pub struct CaptureEnds {
-    frames: SyncSender<SlotFrame>,
-    pool: Receiver<Vec<u8>>,
-}
-
-/// What `run_writer` needs: frames in, recycled buffers out.
-pub struct WriterEnds {
-    frames: Receiver<SlotFrame>,
-    pool: Sender<Vec<u8>>,
-}
-
-/// The frame channel (depth 6) and the buffer pool channel between capture and writer.
-pub fn frame_pipe() -> (CaptureEnds, WriterEnds) {
-    let (frames_tx, frames_rx) = mpsc::sync_channel::<SlotFrame>(QUEUE_FRAMES);
-    let (pool_tx, pool_rx) = mpsc::channel::<Vec<u8>>();
-    (CaptureEnds { frames: frames_tx, pool: pool_rx }, WriterEnds { frames: frames_rx, pool: pool_tx })
-}
 
 /// The area to capture, resolved before anything starts (FFmpeg needs the size first).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -148,7 +121,6 @@ struct Flags {
 struct Handler {
     f: Flags,
     slotter: Slotter,
-    frame_hns: f64,
     /// A buffer that came back from a failed send, used before asking the pool.
     spare: Option<Vec<u8>>,
     size_warned: bool,
@@ -160,7 +132,7 @@ impl GraphicsCaptureApiHandler for Handler {
 
     fn new(ctx: Context<Self::Flags>) -> Result<Self, Self::Error> {
         let fps = ctx.flags.fps;
-        Ok(Self { f: ctx.flags, slotter: Slotter::new(fps), frame_hns: 10_000_000.0 / fps as f64, spare: None, size_warned: false })
+        Ok(Self { f: ctx.flags, slotter: Slotter::new(fps), spare: None, size_warned: false })
     }
 
     fn on_frame_arrived(&mut self, frame: &mut Frame, _c: InternalCaptureControl) -> Result<(), Self::Error> {
@@ -197,9 +169,10 @@ impl GraphicsCaptureApiHandler for Handler {
             Ok(()) => {
                 self.slotter.commit(idx);
                 sh.stats.frames_sent.fetch_add(1, Ordering::Relaxed);
-                if sh.first_rec_hns.load(Ordering::Relaxed) == i64::MIN {
-                    // Time of slot 0, so offsetUs stays exact even if slot 0 itself was dropped.
-                    let slot0 = rec - (idx as f64 * self.frame_hns).round() as i64;
+                if sh.first_rec_hns.load(Ordering::Relaxed) == i64::MIN
+                    && let Some(slot0) = self.slotter.first_rec_hns()
+                {
+                    // Exact time of slot 0, even if the slot 0 frame itself was not sent.
                     sh.first_rec_hns.store(slot0, Ordering::SeqCst);
                 }
             }
@@ -255,81 +228,8 @@ pub fn start(rect: CaptureRect, fps: u32, ends: CaptureEnds, shared: Arc<ScreenS
 }
 
 impl ScreenHandle {
-    /// Stop WGC and join its thread. This drops the frame sender, which ends `run_writer`'s loop.
+    /// Stop WGC and join its thread. This drops the frame sender, which ends `writer::run_writer`'s loop.
     pub fn stop(self) -> Result<(), CaptureError> {
         self.control.stop().map_err(|e| CaptureError::Device(format!("screen capture did not stop cleanly: {e}")))
     }
-}
-
-#[derive(Debug, Default)]
-pub struct WriterStats {
-    /// Frames written to the sink, repeats included.
-    pub written: AtomicU64,
-    /// Repeats of the previous frame (gaps and the pad to the end).
-    pub repeated: AtomicU64,
-    /// Set when a sink write failed (FFmpeg died); the writer stops taking frames.
-    pub failed: AtomicBool,
-}
-
-/// Lets `CfrWriter` borrow the sink, so `run_writer` can hand it back for `ScreenEncoder::finish`.
-struct ByRef<'a, S: FrameSink>(&'a mut S);
-
-impl<S: FrameSink> FrameSink for ByRef<'_, S> {
-    fn write(&mut self, frame: &[u8]) -> io::Result<()> {
-        self.0.write(frame)
-    }
-}
-
-/// `end_idx` value meaning "stop time not known yet".
-pub const END_UNSET: u64 = u64::MAX;
-
-/// The shared last-slot index for `run_writer`, starting unset.
-pub fn new_end_idx() -> Arc<AtomicU64> {
-    Arc::new(AtomicU64::new(END_UNSET))
-}
-
-/// The writer thread body: writes frames at a constant rate until the capture side is stopped,
-/// then pads with the last frame up to and including slot `end_idx`. `end_idx` starts at
-/// `END_UNSET` (`new_end_idx`); the session stores the real value before `ScreenHandle::stop`
-/// (`Slotter::end_index(duration_us - screen offsetUs)`). Frames after it (they arrive while WGC
-/// stops) are discarded, so the video is exactly `end_idx + 1` frames.
-/// Returns the sink (always, so the session can finish or kill FFmpeg) and the first write error.
-pub fn run_writer<S: FrameSink>(ends: WriterEnds, mut sink: S, end_idx: Arc<AtomicU64>, stats: Arc<WriterStats>) -> (S, io::Result<()>) {
-    let result = (|| {
-        let mut w = CfrWriter::new(ByRef(&mut sink));
-        // Write a frame only once the next one arrived (or capture stopped): a frame in the last
-        // half-slot before the stop time rounds to `end + 1` and can arrive before the end is known.
-        let mut pending: Option<SlotFrame> = None;
-        let write = |w: &mut CfrWriter<_>, (idx, px): SlotFrame| -> io::Result<()> {
-            if idx > end_idx.load(Ordering::SeqCst) {
-                let _ = ends.pool.send(px);
-                return Ok(());
-            }
-            let (repeats, old) = w.push_recycle(idx, px)?;
-            stats.written.fetch_add(repeats + 1, Ordering::Relaxed);
-            stats.repeated.fetch_add(repeats, Ordering::Relaxed);
-            if let Some(old) = old {
-                let _ = ends.pool.send(old);
-            }
-            Ok(())
-        };
-        for frame in ends.frames.iter() {
-            if let Some(prev) = pending.replace(frame) {
-                write(&mut w, prev)?;
-            }
-        }
-        if let Some(last) = pending.take() {
-            write(&mut w, last)?;
-        }
-        let end = end_idx.load(Ordering::SeqCst);
-        let repeats = if end == END_UNSET { 0 } else { w.finish(end)? };
-        stats.written.fetch_add(repeats, Ordering::Relaxed);
-        stats.repeated.fetch_add(repeats, Ordering::Relaxed);
-        Ok(())
-    })();
-    if result.is_err() {
-        stats.failed.store(true, Ordering::SeqCst);
-    }
-    // `ends` drops here: the capture side sees Disconnected and stops sending.
-    (sink, result)
 }

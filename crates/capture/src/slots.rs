@@ -26,6 +26,11 @@ impl Slotter {
         Some(idx)
     }
 
+    /// Recording time (hns) of slot 0: the first timestamp given to `slot_for`, sent or not.
+    pub fn first_rec_hns(&self) -> Option<i64> {
+        self.first
+    }
+
     /// Record `idx` as the last slot sent. Call only after the frame was handed to the writer.
     pub fn commit(&mut self, idx: u64) {
         self.last = Some(self.last.map_or(idx, |l| l.max(idx)));
@@ -134,6 +139,17 @@ mod tests {
         assert_eq!(s.slot_for(5_000_000), Some(0));
         s.commit(0);
         assert_eq!(s.slot_for(5_000_000 + 10_000_000 / 60 * 3), Some(3));
+    }
+
+    #[test]
+    fn first_rec_hns_is_slot_zero_even_if_not_committed() {
+        let mut s = Slotter::new(60);
+        assert_eq!(s.first_rec_hns(), None);
+        assert_eq!(s.slot_for(1_234_567), Some(0)); // slot 0 dropped: no commit
+        let later = 1_234_567 + 10_000_000 / 60 + 4_000; // lands in slot 1, 0.4 ms late
+        assert_eq!(s.slot_for(later), Some(1));
+        s.commit(1);
+        assert_eq!(s.first_rec_hns(), Some(1_234_567));
     }
 
     #[test]

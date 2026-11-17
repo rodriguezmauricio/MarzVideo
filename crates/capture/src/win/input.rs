@@ -202,7 +202,8 @@ fn input_thread(sh: Arc<InputShared>, hotkeys_on: bool, ready: mpsc::Sender<Resu
         let _ = ready.send(Ok(GetCurrentThreadId()));
         set_hotkeys(hotkeys_on, &mut registered, &sh);
 
-        while GetMessageW(&mut msg, None, 0, 0).as_bool() {
+        // GetMessageW returns -1 on error: loop only while it is > 0, or an error would busy-loop.
+        while GetMessageW(&mut msg, None, 0, 0).0 > 0 {
             match msg.message {
                 WM_TIMER => {
                     let mut p = POINT::default();
