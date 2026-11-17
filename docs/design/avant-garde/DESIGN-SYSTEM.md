@@ -85,6 +85,11 @@ Never go below 10px. Hotkeys use the same mono, in faint.
 - Borders are 1px (`line`) for ruling, 2px for hero blocks and the timeline top edge (paper), 1px solid paper for floating bars.
 - There is no padding scale. Distances come from the grid and the heights above. Use 8, 12, 16, 20, 24 only.
 - Window sizes below 1440 x 900: keep the layout, scale the preview and timeline width; never reflow into stacked cards.
+- Window sizes, editor (smallest supported: 1280 x 680 inside the window; the app window opens maximized, minimum 1280 x 720):
+  - Width: the ledger (352) and the inspector (348) keep their widths and their 24px margins. The preview and the timeline take the rest. With the lanes expanded the 391px preview narrows so it stops 8px short of the inspector, as the normal preview does.
+  - Height: the timeline keeps 340 (expanded 540) while the main area above it keeps at least 382 (expanded 256). Below that the timeline gives up height from the bottom, so the Later lanes go first; the ruler, Screen, Mic and Zoom lanes always show (timeline floor 232, expanded 300).
+  - The main area shrinks first. Ledger rows stay 34 and the ledger keeps 12 above the timeline edge. The hero timecode, the playline and the preview top move up together with one scale (1 at a 491px main area, the 1440 x 900 value with or without the warning bar): timecode size 250 x scale (about 135 at 1536 x 780, 118 at 1366 x 680), still display 700, line-height 0.8. The playline stays 34 above the ledger. The 16:9 preview fits what is left. At small heights the timecode no longer reaches under the preview; that is accepted.
+  - At 1440 x 900 and above every value is the designed one.
 
 ## 6. Components
 

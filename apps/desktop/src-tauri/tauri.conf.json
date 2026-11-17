@@ -14,10 +14,12 @@
       {
         "label": "main",
         "title": "Marz Recorder",
-        "width": 1440,
-        "height": 900,
+        "width": 1280,
+        "height": 720,
         "minWidth": 1280,
-        "minHeight": 800,
+        "minHeight": 720,
+        "center": true,
+        "maximized": true,
         "decorations": true,
         "resizable": true
       }

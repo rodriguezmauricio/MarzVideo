@@ -31,6 +31,11 @@ Checked 2026-11-16 with 1440 x 900 Edge screenshots of the four M1 editor states
 - **Two tokens added** to `tokens.css`: `--thumb-line` (#3a3935, thumbnail border, volume track) and `--wave` (#A8A69F, mic bars). Both values were already in section 6 of `DESIGN-SYSTEM.md`, now listed in section 3.
 - **Fonts are bundled** in `apps/desktop/src/assets/fonts` (latin and latin-ext woff2 from Google Fonts, SIL Open Font License, licences beside them), declared in `src/styles/fonts.css`. No network needed. Cyrillic and Vietnamese subsets are left out; those characters fall back to the stack in `tokens.css`.
 
-## Not checked
+## Window sizes (checked 2026-11-17)
 
-- Window sizes other than 1440 x 900. The preview scales with the window; the ledger, inspector and timeline heights are fixed.
+- Rule in `DESIGN-SYSTEM.md` section 5, "Window sizes, editor". Checked in Edge at 1440 x 900, 1536 x 780 (1920 x 1080 at 125%, maximized), 1366 x 680 and 1280 x 680, in four states (nothing selected, zoom selected, cut selected, lanes expanded), with and without the warning bar. Nothing clipped or overlapping.
+- 1440 x 900 is unchanged: screenshots before and after differ in at most 2 pixels by 1/255 in the timecode glyph edges, the same noise the old build shows against itself.
+- The hero timecode shrinks with the main area height (135px at 1536 x 780, 118px at 680 tall), so at those sizes it no longer reaches under the preview. Seven 34px ledger rows under a 250px timecode need 491px; there is not that much room.
+- At 680 tall the timeline shows the four working lanes and one Later lane (Camera); the other Later lanes are cut off from the bottom. At heights between the checked ones a Later lane can show partly.
+- At 1280 wide the preview caption "Full frame. Select a zoom or cut..." wraps to two lines (there is room under the preview).
+- The 12-column grid lines keep the 116px pitch from the left margin, so on windows wider than 1440 the last strip of the window has no grid line, and the inspector edge is not on a column line at other widths.

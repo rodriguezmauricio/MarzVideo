@@ -1,6 +1,8 @@
 /* Editor layout and components. Every value comes from docs/design/avant-garde/DESIGN-SYSTEM.md
    and the mockups (Main, Editor-Nothing-Selected, Editor-Cut-Selected, Timeline-Lanes).
-   Positions are designed at 1440 x 900. Colours only through tokens.css variables. */
+   Positions are designed at 1440 x 900. Colours only through tokens.css variables.
+   Smaller windows follow DESIGN-SYSTEM.md section 5 "Window sizes": at 1440 x 900 and above every
+   min()/clamp() below resolves to the designed value. */
 
 input { font: inherit; color: inherit; letter-spacing: inherit; text-transform: inherit; }
 
@@ -35,19 +37,22 @@ input { font: inherit; color: inherit; letter-spacing: inherit; text-transform: 
 .warn { position: relative; z-index: 3; flex: none; height: 24px; background: var(--paper); color: var(--ink); display: flex; align-items: center; gap: 10px; padding: 0 24px; white-space: nowrap; overflow: hidden; }
 .warn b { font-weight: 500; }
 
-/* main area: everything between the strip (and warning bar) and the timeline */
-.main { position: relative; flex: 1; min-height: 0; }
+/* main area: everything between the strip (and warning bar) and the timeline.
+   A size container: below 491 px of height (1440 x 900 gives 516, 492 with the warning bar) the hero timecode, the playline, the ledger
+   and the preview move up together. 285 = ledger 239 + 12 gap + 34 playline step; 206 = the playline
+   top at full size. Ledger rows stay 34 px. */
+.main { position: relative; flex: 1; min-height: 0; container-type: size; }
 .timecode {
-  position: absolute; left: 18px; top: -14px; z-index: 1; pointer-events: none; white-space: nowrap;
+  position: absolute; left: 18px; top: max(-14px, calc((100cqh - 285px) * -14 / 206)); z-index: 1; pointer-events: none; white-space: nowrap;
   font-family: var(--font-display); font-weight: 700; text-transform: none;
-  font-size: 250px; line-height: 0.8; letter-spacing: -0.05em; color: var(--paper);
+  font-size: min(250px, calc((100cqh - 285px) * 250 / 206)); line-height: 0.8; letter-spacing: -0.05em; color: var(--paper);
 }
-.playline { position: absolute; left: 24px; top: 206px; color: var(--faint); }
+.playline { position: absolute; left: 24px; top: min(206px, calc(100cqh - 285px)); color: var(--faint); }
 .expanded .timecode { font-size: 150px; top: 14px; }
 .expanded .playline { top: 150px; }
 
 /* tool ledger: vertical list of 34px rows */
-.ledger { position: absolute; left: 24px; top: 240px; width: 352px; z-index: 2; border-bottom: 1px solid var(--line); }
+.ledger { position: absolute; left: 24px; top: min(240px, calc(100cqh - 251px)); width: 352px; z-index: 2; border-bottom: 1px solid var(--line); }
 .lr2 { width: 100%; height: var(--row-h); display: flex; align-items: center; justify-content: space-between; padding: 0; border-top: 1px solid var(--line); }
 .lr2 .lbl { display: flex; align-items: center; gap: 10px; }
 .lr2 .hk { color: var(--faint); }
@@ -62,8 +67,8 @@ input { font: inherit; color: inherit; letter-spacing: inherit; text-transform: 
 .ledger-h .lr2 .lbl { gap: 8px; }
 
 /* preview frame */
-.pv-wrap { position: absolute; left: 420px; top: 106px; right: 380px; bottom: 0; z-index: 2; container-type: size; --cap: 26px; }
-.expanded .pv-wrap { left: 560px; top: 20px; right: auto; bottom: auto; width: 391px; height: 220px; --cap: 0px; }
+.pv-wrap { position: absolute; left: 420px; top: min(106px, calc((100cqh - 285px) * 106 / 206)); right: 380px; bottom: 0; z-index: 2; container-type: size; --cap: 26px; }
+.expanded .pv-wrap { left: 560px; top: 20px; right: auto; bottom: auto; width: min(391px, calc(100% - 940px)); height: 220px; --cap: 0px; }
 .pv-frame { position: relative; width: min(100cqw, calc((100cqh - var(--cap)) * var(--ar))); aspect-ratio: var(--ar); border: 1px solid var(--paper); overflow: hidden; background: var(--ink); }
 .pv-frame canvas { display: block; width: 100%; height: 100%; }
 .pv-cap { margin-top: 6px; color: var(--faint); }
@@ -134,9 +139,12 @@ input { font: inherit; color: inherit; letter-spacing: inherit; text-transform: 
 .insp .tg:disabled { border-color: var(--faint-on-paper); cursor: default; }
 .insp .tg:disabled i { background: var(--faint-on-paper); }
 
-/* timeline */
-.tl { position: relative; flex: none; height: 340px; border-top: 2px solid var(--paper); background: var(--ink); display: flex; flex-direction: column; user-select: none; }
-.expanded .tl { height: 540px; }
+/* timeline: keeps 340 (expanded 540) while the main area above keeps 382 (expanded 256); below that
+   it gives up the Later lanes from the bottom, never the ruler, Screen, Mic and Zoom lanes. */
+.tl { position: relative; flex: none; height: clamp(232px, calc(100vh - var(--strip-h) - 382px), 340px); border-top: 2px solid var(--paper); background: var(--ink); display: flex; flex-direction: column; user-select: none; }
+.expanded .tl { height: clamp(300px, calc(100vh - var(--strip-h) - 36px - 256px), 540px); }
+.app:has(> .warn) .tl { height: clamp(232px, calc(100vh - var(--strip-h) - 24px - 382px), 340px); }
+.app.expanded:has(> .warn) .tl { height: clamp(300px, calc(100vh - var(--strip-h) - 24px - 36px - 256px), 540px); }
 .tl-head { flex: none; height: var(--row-h); display: flex; align-items: center; justify-content: space-between; padding: 0 24px; border-bottom: 1px solid var(--line); }
 .tl-head b { font-weight: 500; }
 .tl-ctl { display: flex; gap: 6px; align-items: center; }
