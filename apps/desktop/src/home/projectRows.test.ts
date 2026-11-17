@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { bannerText, toRows, type ProjectRow } from "./projectRows";
+import { bannerText, folderName, toRows, type ProjectRow } from "./projectRows";
 
 const NOW = new Date("2026-11-17T12:00:00Z");
 const ago = (ms: number) => NOW.getTime() - ms;
@@ -83,4 +83,9 @@ test("banner text names the recording and the safe length", () => {
     lead: "Interrupted: Pricing page walkthrough.",
     rest: "The video up to 03:12 is safe.",
   });
+});
+
+test("folder name for messages drops the path and .marz", () => {
+  expect(folderName("C:\\Users\\me\\Videos\\Marz Recorder\\Pricing page.marz")).toBe("Pricing page");
+  expect(folderName("D:/clips/Demo.MARZ/")).toBe("Demo");
 });

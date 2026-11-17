@@ -3,7 +3,7 @@ import { Icon } from "../components/Icon";
 import { WarningBar } from "../components/WarningBar";
 import { useAppStore } from "../state/appStore";
 import { pickStorage } from "../storage/pickStorage";
-import { bannerText, toRows, type ProjectRow, type RowView } from "./projectRows";
+import { bannerText, folderName, toRows, type ProjectRow, type RowView } from "./projectRows";
 import { projectsApi } from "./projectsApi";
 
 const NOT_A_PROJECT = "This folder is not a Marz project. Pick a folder that ends in .marz.";
@@ -134,7 +134,7 @@ export function Home() {
       if (picked.kind === "cancelled") return;
       if (picked.kind === "notProject") return setWarning(NOT_A_PROJECT);
       setWarning(null);
-      if (picked.needsRecovery) await recoverAndOpen(picked.dir, picked.dir);
+      if (picked.needsRecovery) await recoverAndOpen(picked.dir, folderName(picked.dir));
       else openProject(picked.dir);
     } catch (err) {
       setWarning(`Could not open the folder. ${message(err)}`);

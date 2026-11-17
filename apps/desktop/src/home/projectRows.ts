@@ -56,3 +56,6 @@ export function toRows(raw: ProjectRow[], now: Date): RowView[] {
 export function bannerText(r: ProjectRow): { lead: string; rest: string } {
   return { lead: `Interrupted: ${r.name}.`, rest: `The video up to ${mmss(r.duration_us)} is safe.` };
 }
+
+/** "C:/.../Pricing page.marz" (either slash) to "Pricing page", for messages. */
+export const folderName = (dir: string) => (dir.split(/[\\/]/).filter(Boolean).pop() ?? dir).replace(/\.marz$/i, "");

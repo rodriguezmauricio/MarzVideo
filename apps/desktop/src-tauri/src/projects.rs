@@ -53,9 +53,14 @@ fn has_marz_suffix(dir: &Path) -> bool {
     dir.file_name().and_then(|n| n.to_str()).is_some_and(|n| n.to_ascii_lowercase().ends_with(".marz"))
 }
 
+/// A real folder: not a file, and not a symlink or junction (those are never followed).
+fn is_real_dir(path: &Path) -> bool {
+    fs::symlink_metadata(path).is_ok_and(|m| m.is_dir())
+}
+
 /// A folder is a project when its name ends in `.marz` or it holds a `project.json`.
 pub fn is_project_folder(dir: &Path) -> bool {
-    dir.is_dir() && (has_marz_suffix(dir) || dir.join(PROJECT_JSON).is_file())
+    is_real_dir(dir) && (has_marz_suffix(dir) || dir.join(PROJECT_JSON).is_file())
 }
 
 fn mtime_ms(path: &Path) -> u64 {
@@ -117,10 +122,10 @@ pub fn scan(root: &Path, ffprobe: Option<&Path>) -> io::Result<Vec<ProjectRow>> 
     let mut rows: Vec<ProjectRow> = fs::read_dir(root)?
         .filter_map(Result::ok)
         .map(|e| e.path())
-        .filter(|p| p.is_dir() && has_marz_suffix(p))
+        .filter(|p| is_real_dir(p) && has_marz_suffix(p))
         .filter_map(|p| project_row(&p, ffprobe))
         .collect();
-    rows.sort_by(|a, b| b.edited_at.cmp(&a.edited_at));
+    rows.sort_by_key(|r| std::cmp::Reverse(r.edited_at));
     Ok(rows)
 }
 
@@ -129,16 +134,28 @@ pub fn readable_path(dir: &Path, path: &str) -> Result<PathBuf, String> {
     if READABLE.contains(&path) { Ok(dir.join(path)) } else { Err(format!("{path} cannot be read here")) }
 }
 
+/// One save at a time: every save goes through the same `project.json.tmp`, so two saves at once
+/// (a debounced autosave and a flush on leaving) would truncate each other's temp file.
+static WRITE_LOCK: Mutex<()> = Mutex::new(());
+
 /// Write `project.json` through `project.json.tmp` and a rename, so a crash or power cut never
 /// leaves a half-written file under the real name. Nothing else in the folder is writable.
+/// Saves are serialized, and a failed save removes its temp file.
 pub fn write_project_json_atomic(dir: &Path, text: &str) -> io::Result<()> {
     serde_json::from_str::<Value>(text).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+    let _guard = WRITE_LOCK.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
     let tmp = dir.join("project.json.tmp");
-    let mut file = fs::File::create(&tmp)?;
-    file.write_all(text.as_bytes())?;
-    file.sync_all()?;
-    drop(file);
-    fs::rename(&tmp, dir.join(PROJECT_JSON))
+    let result = (|| {
+        let mut file = fs::File::create(&tmp)?;
+        file.write_all(text.as_bytes())?;
+        file.sync_all()?;
+        drop(file);
+        fs::rename(&tmp, dir.join(PROJECT_JSON))
+    })();
+    if result.is_err() {
+        let _ = fs::remove_file(&tmp);
+    }
+    result
 }
 
 /// `%USERPROFILE%\Videos\Marz Recorder`, created on first use.
@@ -218,7 +235,7 @@ pub fn recover_project(allowed: State<'_, Allowed>, dir: String) -> Result<i64, 
 #[tauri::command(async)]
 pub fn discard_project(window: WebviewWindow, allowed: State<'_, Allowed>, dir: String) -> Result<(), String> {
     let path = checked(&allowed, &dir)?;
-    if !has_marz_suffix(&path) || !path.is_dir() {
+    if !has_marz_suffix(&path) || !is_real_dir(&path) {
         return Err("Only a .marz folder can be discarded.".into());
     }
     let owner = window.hwnd().map(|h| h.0 as isize).unwrap_or(0);
@@ -364,6 +381,61 @@ mod tests {
         let dir = project(&root, "w.marz", "Kept", 0, 0);
         assert!(write_project_json_atomic(&dir, "{not json").is_err());
         assert!(fs::read_to_string(dir.join(PROJECT_JSON)).unwrap().contains("Kept"));
+        fs::remove_dir_all(&root).unwrap();
+    }
+
+    #[test]
+    fn two_saves_at_once_never_mix() {
+        let root = temp_dir("race");
+        let dir = project(&root, "r.marz", "Start", 0, 0);
+        // Big documents so a write takes long enough to overlap.
+        let doc = |tag: &str| serde_json::json!({ "name": tag, "pad": tag.repeat(400_000) }).to_string();
+        let (a, b) = (doc("a"), doc("b"));
+        let threads: Vec<_> = [a.clone(), b.clone()]
+            .into_iter()
+            .map(|text| {
+                let dir = dir.clone();
+                std::thread::spawn(move || {
+                    for _ in 0..20 {
+                        write_project_json_atomic(&dir, &text).unwrap();
+                    }
+                })
+            })
+            .collect();
+        for t in threads {
+            t.join().unwrap();
+        }
+        let saved = fs::read_to_string(dir.join(PROJECT_JSON)).unwrap();
+        assert!(saved == a || saved == b, "project.json is a mix of two saves ({} bytes)", saved.len());
+        assert!(!dir.join("project.json.tmp").exists());
+        fs::remove_dir_all(&root).unwrap();
+    }
+
+    #[test]
+    fn a_failed_save_leaves_no_temp_file() {
+        let root = temp_dir("failsave");
+        let dir = project(&root, "f.marz", "Kept", 0, 0);
+        // The rename fails when project.json is a non-empty folder.
+        fs::remove_file(dir.join(PROJECT_JSON)).unwrap();
+        fs::create_dir_all(dir.join(PROJECT_JSON).join("x")).unwrap();
+        assert!(write_project_json_atomic(&dir, r#"{"name":"New"}"#).is_err());
+        assert!(!dir.join("project.json.tmp").exists());
+        fs::remove_dir_all(&root).unwrap();
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn a_marz_junction_is_not_followed() {
+        let root = temp_dir("junction");
+        let target = project(&root, "real.marz", "Real", 0, 0);
+        let scan_root = root.join("scan");
+        fs::create_dir_all(&scan_root).unwrap();
+        let link = scan_root.join("link.marz");
+        let ok = std::process::Command::new("cmd").args(["/C", "mklink", "/J"]).arg(&link).arg(&target).output().unwrap().status.success();
+        assert!(ok, "mklink /J failed");
+        assert!(scan(&scan_root, None).unwrap().is_empty());
+        assert!(!is_project_folder(&link));
+        fs::remove_dir(&link).unwrap();
         fs::remove_dir_all(&root).unwrap();
     }
 
