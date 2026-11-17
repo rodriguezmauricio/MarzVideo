@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef } from "react";
 import { drawFrame, frameAt } from "@marz/compositor";
 import { keptSegments } from "@marz/timeline";
 import { useEditorStore } from "../state/editorStore";
-import { nextPlaybackTime, playbackEnded, startTimeForPlay } from "../playback/clock";
+import { mediaTimeUs, nextPlaybackTime, playbackEnded, startTimeForPlay } from "../playback/clock";
 import { mmss } from "./timecode";
 import { ZoomOverlay } from "./ZoomOverlay";
 
@@ -46,7 +46,7 @@ export function Preview() {
   const seekMedia = (srcUs: number) => {
     const video = videoRef.current;
     const audio = audioRef.current;
-    if (video) video.currentTime = Math.max(0, (srcUs - screenOffset) / 1e6);
+    if (video) video.currentTime = Math.max(0, mediaTimeUs(project, srcUs) / 1e6);
     if (audio && mic) audio.currentTime = Math.max(0, (srcUs - mic.offsetUs) / 1e6);
   };
 

@@ -2,7 +2,7 @@ import type { FrameSpec } from "./frame";
 
 /** Draw one frame: the cropped source scaled to `out`, then the cursor sprite. Same code for preview and export. */
 export function drawFrame(
-  ctx: CanvasRenderingContext2D,
+  ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D,
   source: CanvasImageSource,
   spec: FrameSpec,
   out: { width: number; height: number },

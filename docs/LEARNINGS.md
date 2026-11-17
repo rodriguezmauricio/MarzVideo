@@ -42,3 +42,5 @@
 - [2026-11-17] [claude] `ResizeObserver` watches the content box by default, so a padding change (the recording bar's tooltip room) fires nothing; observe `{ box: "border-box" }` when the window must follow padding too.
 - [2026-11-17] [claude] Two threads of one process cannot `RegisterHotKey` the same keys: the recorder's setup hotkeys run on their own input thread and must be stopped (joined) before `Session::start` registers them again, and armed again when a start fails.
 
+- [2026-11-17] [claude] A WebCodecs `VideoDecoder` has a small output frame pool (about 8 in Edge): holding about 7 undrawn VideoFrames while awaiting `flush()` deadlocks it. Export's FrameSource never awaits flush while holding frames and settles each output as it arrives.
+- [2026-11-17] [claude] In Chromium `video.currentTime` is the raw MP4 presentation time (screen.mp4 starts at the B-frame delay, 50 to 67 ms, no edit list), so export decodes by raw cts. But a paused seek to a time just before a keyframe (within that delay) shows the keyframe instead: pick preview-vs-export compare times away from keyframes (Task 16 PSNR step).

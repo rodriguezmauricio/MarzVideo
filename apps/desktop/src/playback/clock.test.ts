@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 import { keptSegments } from "@marz/timeline";
-import { nextPlaybackTime } from "./clock";
+import type { Project } from "@marz/format";
+import { mediaTimeUs, nextPlaybackTime } from "./clock";
 
 const D = 10_000_000;
 const cut = (id: string, startUs: number, endUs: number) => ({ id, startUs, endUs });
@@ -63,5 +64,14 @@ describe("startTimeForPlay", () => {
   });
   test("returns null when nothing is kept", () => {
     expect(startTimeForPlay([], 0)).toBeNull();
+  });
+});
+
+describe("mediaTimeUs", () => {
+  const project = { tracks: { screen: { file: "screen.mp4", offsetUs: 250_000 } } } as unknown as Project;
+
+  test("subtracts the screen track offset", () => {
+    expect(mediaTimeUs(project, 1_000_000)).toBe(750_000);
+    expect(mediaTimeUs(project, 0)).toBe(-250_000);
   });
 });
