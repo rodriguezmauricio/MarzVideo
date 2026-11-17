@@ -22,6 +22,8 @@ pub enum CaptureError {
     Io(std::io::Error),
     Encoder(String),
     Busy,
+    /// A sentence for the person recording, shown as is (e.g. "Region is too small. Drag at least 64 x 64.").
+    User(String),
 }
 
 impl fmt::Display for CaptureError {
@@ -32,6 +34,7 @@ impl fmt::Display for CaptureError {
             CaptureError::Io(err) => write!(f, "io error: {err}"),
             CaptureError::Encoder(msg) => write!(f, "encoder error: {msg}"),
             CaptureError::Busy => write!(f, "a recording is already running"),
+            CaptureError::User(msg) => f.write_str(msg),
         }
     }
 }

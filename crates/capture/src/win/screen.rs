@@ -19,6 +19,7 @@ use windows_capture::settings::{
 };
 
 use super::monitors::{list_monitors, monitor_at};
+use super::qpc::qpc_hns;
 use super::{rec_hns, set_dpi_awareness, SharedClock, Warnings};
 use crate::region::{even_size, normalize_region, PxRect};
 use crate::slots::Slotter;
@@ -73,6 +74,18 @@ pub struct ScreenStats {
     pub dropped_full: AtomicU64,
     /// Frames that could not be copied (GPU map failed, or a frame smaller than the crop).
     pub copy_failed: AtomicU64,
+    /// GPU to CPU copy time, summed over `frames_copied` (hns), and the worst one.
+    pub copy_sum_hns: AtomicU64,
+    pub copy_max_hns: AtomicU64,
+    pub frames_copied: AtomicU64,
+    /// QPC now minus the frame timestamp at arrival (hns): sum over `frames_seen` (0 for frames
+    /// stamped ahead of now), and the worst.
+    pub latency_sum_hns: AtomicU64,
+    pub latency_max_hns: AtomicU64,
+    /// Largest amount a frame timestamp was ahead of QPC now at arrival (hns).
+    pub ahead_max_hns: AtomicU64,
+    /// Longest time between two WGC frames (hns).
+    pub max_gap_hns: AtomicU64,
 }
 
 /// Shared between the session and the WGC thread. See the `win` module docs.
@@ -124,6 +137,7 @@ struct Handler {
     /// A buffer that came back from a failed send, used before asking the pool.
     spare: Option<Vec<u8>>,
     size_warned: bool,
+    last_ts: Option<i64>,
 }
 
 impl GraphicsCaptureApiHandler for Handler {
@@ -132,7 +146,7 @@ impl GraphicsCaptureApiHandler for Handler {
 
     fn new(ctx: Context<Self::Flags>) -> Result<Self, Self::Error> {
         let fps = ctx.flags.fps;
-        Ok(Self { f: ctx.flags, slotter: Slotter::new(fps), spare: None, size_warned: false })
+        Ok(Self { f: ctx.flags, slotter: Slotter::new(fps), spare: None, size_warned: false, last_ts: None })
     }
 
     fn on_frame_arrived(&mut self, frame: &mut Frame, _c: InternalCaptureControl) -> Result<(), Self::Error> {
@@ -143,6 +157,14 @@ impl GraphicsCaptureApiHandler for Handler {
             sh.stats.copy_failed.fetch_add(1, Ordering::Relaxed);
             return Ok(());
         };
+        let late = qpc_hns() - ts;
+        sh.stats.ahead_max_hns.fetch_max((-late).max(0) as u64, Ordering::Relaxed);
+        let latency = late.max(0) as u64;
+        sh.stats.latency_sum_hns.fetch_add(latency, Ordering::Relaxed);
+        sh.stats.latency_max_hns.fetch_max(latency, Ordering::Relaxed);
+        if let Some(prev) = self.last_ts.replace(ts) {
+            sh.stats.max_gap_hns.fetch_max((ts - prev).max(0) as u64, Ordering::Relaxed);
+        }
         let Some(rec) = rec_hns(&sh.clock, ts) else {
             return Ok(()); // warm-up, or paused
         };
@@ -160,11 +182,16 @@ impl GraphicsCaptureApiHandler for Handler {
             return Ok(());
         }
         let mut buf = self.spare.take().or_else(|| self.f.ends.pool.try_recv().ok()).unwrap_or_default();
+        let copy_start = qpc_hns();
         if copy_crop(frame, c, &mut buf).is_err() {
             sh.stats.copy_failed.fetch_add(1, Ordering::Relaxed);
             self.spare = Some(buf);
             return Ok(());
         }
+        let copy = (qpc_hns() - copy_start).max(0) as u64;
+        sh.stats.copy_sum_hns.fetch_add(copy, Ordering::Relaxed);
+        sh.stats.copy_max_hns.fetch_max(copy, Ordering::Relaxed);
+        sh.stats.frames_copied.fetch_add(1, Ordering::Relaxed);
         match self.f.ends.frames.try_send((idx, buf)) {
             Ok(()) => {
                 self.slotter.commit(idx);

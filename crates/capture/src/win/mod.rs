@@ -29,6 +29,7 @@ pub mod mic;
 pub mod monitors;
 pub mod qpc;
 pub mod screen;
+pub mod session;
 
 use std::sync::{mpsc, Arc, Mutex, Once};
 

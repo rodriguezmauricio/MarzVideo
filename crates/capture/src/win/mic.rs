@@ -6,7 +6,7 @@ use std::collections::VecDeque;
 use std::fs::File;
 use std::io::{self, BufWriter, Seek, SeekFrom, Write};
 use std::path::Path;
-use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI64, AtomicU32, Ordering};
 use std::sync::{mpsc, Arc};
 use std::thread::{self, JoinHandle};
 
@@ -70,6 +70,10 @@ pub struct MicShared {
     level: AtomicU32,
     /// Set when the device was lost; the thread has ended.
     pub lost: AtomicBool,
+    /// Recording time (us) of the first sample written; `i64::MIN` until a packet arrives after t0.
+    first_rec_us: AtomicI64,
+    /// Test hook: the thread treats the device as lost at its next wake-up (`--simulate-mic-loss-at`).
+    simulate_loss: AtomicBool,
     pub warn: Warnings,
 }
 
@@ -81,6 +85,8 @@ impl MicShared {
             muted: AtomicBool::new(false),
             level: AtomicU32::new(0f32.to_bits()),
             lost: AtomicBool::new(false),
+            first_rec_us: AtomicI64::new(i64::MIN),
+            simulate_loss: AtomicBool::new(false),
             warn,
         })
     }
@@ -91,6 +97,20 @@ impl MicShared {
 
     pub fn set_muted(&self, muted: bool) {
         self.muted.store(muted, Ordering::SeqCst);
+    }
+
+    /// Recording time of the first sample (`tracks.mic.offsetUs`), once a packet arrived after t0.
+    pub fn first_rec_us(&self) -> Option<i64> {
+        match self.first_rec_us.load(Ordering::SeqCst) {
+            i64::MIN => None,
+            us => Some(us),
+        }
+    }
+
+    /// Make the thread take the device-lost path (warning, clean stop, padding at stop) as if
+    /// the mic was unplugged. For tests: a real unplug cannot be scripted.
+    pub fn simulate_loss(&self) {
+        self.simulate_loss.store(true, Ordering::SeqCst);
     }
 
     /// Peak level 0..1 for the meter, refreshed every 50 ms.
@@ -125,6 +145,10 @@ pub struct MicReport {
     /// Samples in the final file.
     pub frames: u64,
     pub lost: bool,
+    /// Largest gap between the device clock and the samples written, after padding.
+    pub drift_max_us: i64,
+    /// The same gap at the last packet (signed).
+    pub drift_end_us: i64,
 }
 
 /// Write the 44-byte PCM WAV header for 48 kHz mono s16.
@@ -234,6 +258,9 @@ fn mic_thread(
     while !stop.load(Ordering::SeqCst) {
         let _ = ev.wait_for_event(WAIT_MS); // a timeout still polls, so a lost device is noticed
         let drained = (|| -> Result<(), LoopError> {
+            if shared.simulate_loss.load(Ordering::SeqCst) {
+                return Err(LoopError::Device);
+            }
             loop {
                 match cap.get_next_packet_size().map_err(|_| LoopError::Device)? {
                     Some(0) | None => return Ok(()),
@@ -256,6 +283,9 @@ fn mic_thread(
                 }
                 let rec = rec_hns(&shared.clock, info.timestamp as i64);
                 if let MicAction::Write { silence_before } = timeline.packet(rec, frames) {
+                    if let Some(first) = timeline.first_rec_us() {
+                        shared.first_rec_us.store(first, Ordering::SeqCst);
+                    }
                     write_silence(&mut wav, silence_before).map_err(LoopError::Io)?;
                     if muted {
                         write_silence(&mut wav, frames as u64).map_err(LoopError::Io)?;
@@ -321,6 +351,8 @@ impl MicHandle {
             end_padded_us: (u128::from(add) * 1_000_000 / u128::from(RATE)) as i64,
             frames: data_bytes / BYTES_PER_FRAME,
             lost: self.shared.lost.load(Ordering::SeqCst),
+            drift_max_us: timeline.max_drift_us(),
+            drift_end_us: timeline.last_drift_us(),
         })
     }
 }

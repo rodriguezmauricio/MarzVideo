@@ -21,11 +21,15 @@ pub struct MicTimeline {
     reanchor: bool,
     written: u64,
     padded_frames: u64,
+    /// Clock position minus samples written, after padding, at the last packet (frames).
+    last_drift_frames: i64,
+    /// Largest absolute value of `last_drift_frames` seen.
+    max_drift_frames: u64,
 }
 
 impl MicTimeline {
     pub fn new(rate: u32) -> Self {
-        Self { rate, first_rec_us: None, anchor: None, reanchor: false, written: 0, padded_frames: 0 }
+        Self { rate, first_rec_us: None, anchor: None, reanchor: false, written: 0, padded_frames: 0, last_drift_frames: 0, max_drift_frames: 0 }
     }
 
     /// `rec_hns` is the recording clock in 100 ns units with pauses removed, or `None`
@@ -57,6 +61,8 @@ impl MicTimeline {
                     self.padded_frames += silence_before;
                     self.written += silence_before;
                 }
+                self.last_drift_frames = expected as i64 - self.written as i64;
+                self.max_drift_frames = self.max_drift_frames.max(self.last_drift_frames.unsigned_abs());
             }
         }
         self.reanchor = false;
@@ -72,6 +78,20 @@ impl MicTimeline {
     /// Total silence inserted to cover gaps, in microseconds.
     pub fn padded_us(&self) -> i64 {
         (self.padded_frames as u128 * 1_000_000 / self.rate as u128) as i64
+    }
+
+    /// Largest gap between the mic clock and the samples written (after padding), in microseconds.
+    pub fn max_drift_us(&self) -> i64 {
+        self.frames_to_us(self.max_drift_frames as i64)
+    }
+
+    /// The same gap at the last packet, signed (positive: the clock is ahead of the samples).
+    pub fn last_drift_us(&self) -> i64 {
+        self.frames_to_us(self.last_drift_frames)
+    }
+
+    fn frames_to_us(&self, frames: i64) -> i64 {
+        (i128::from(frames) * 1_000_000 / i128::from(self.rate)) as i64
     }
 
     fn target_frames(&self, duration_us: i64) -> u64 {
@@ -132,6 +152,19 @@ mod tests {
         assert_eq!(t.padded_us(), 20_000);
         // and the timeline is back on the clock
         assert_eq!(t.packet(hns_ms(50), PKT), MicAction::Write { silence_before: 0 });
+    }
+
+    #[test]
+    fn drift_is_measured_after_padding() {
+        let mut t = MicTimeline::new(RATE);
+        t.packet(hns_ms(0), PKT);
+        t.packet(hns_ms(13), PKT); // 3 ms late: jitter, not padded
+        assert_eq!(t.last_drift_us(), 3_000);
+        t.packet(hns_ms(40), PKT); // padded back onto the clock
+        assert_eq!(t.last_drift_us(), 0);
+        t.packet(hns_ms(48), PKT); // 2 ms early
+        assert_eq!(t.last_drift_us(), -2_000);
+        assert_eq!(t.max_drift_us(), 3_000);
     }
 
     #[test]

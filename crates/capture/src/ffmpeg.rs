@@ -132,6 +132,11 @@ impl ScreenEncoder {
         Ok(Self { child, stdin, stderr })
     }
 
+    /// The FFmpeg process id (for CPU measurements).
+    pub fn id(&self) -> u32 {
+        self.child.id()
+    }
+
     /// Close stdin, wait for FFmpeg to finish the file, and map a non-zero exit to `Encoder`.
     pub fn finish(mut self) -> Result<(), CaptureError> {
         drop(self.stdin.take());

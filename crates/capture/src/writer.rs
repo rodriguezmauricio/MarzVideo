@@ -3,6 +3,7 @@
 //! `CfrWriter` and sends every replaced buffer back over the pool channel, so steady state
 //! allocates nothing.
 
+use std::collections::VecDeque;
 use std::io;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::mpsc::{self, Receiver, Sender, SyncSender};
@@ -12,6 +13,12 @@ use crate::slots::{CfrWriter, FrameSink};
 
 /// Frames in flight between capture and writer (the spike's queue depth).
 pub const QUEUE_FRAMES: usize = 6;
+
+/// A frame is written only once a frame `HOLD_SLOTS` slots later arrived (or capture stopped).
+/// WGC timestamps can be ahead of QPC now (the frame's present time), so at the moment the stop
+/// time is read, frames one or two slots past the end can already be queued; holding three
+/// slots back keeps them out of the video.
+pub const HOLD_SLOTS: u64 = 3;
 
 /// One output frame: slot index and tightly packed BGRA pixels.
 pub type SlotFrame = (u64, Vec<u8>);
@@ -72,9 +79,9 @@ pub fn new_end_idx() -> Arc<AtomicU64> {
 pub fn run_writer<S: FrameSink>(ends: WriterEnds, mut sink: S, end_idx: Arc<AtomicU64>, stats: Arc<WriterStats>) -> (S, io::Result<()>) {
     let result = (|| {
         let mut w = CfrWriter::new(ByRef(&mut sink));
-        // Write a frame only once the next one arrived (or capture stopped): a frame in the last
-        // half-slot before the stop time rounds to `end + 1` and can arrive before the end is known.
-        let mut pending: Option<SlotFrame> = None;
+        // Write a frame only once a frame `HOLD_SLOTS` later arrived (or capture stopped): frames
+        // just past the stop time can arrive before the end is known (see `HOLD_SLOTS`).
+        let mut pending: VecDeque<SlotFrame> = VecDeque::with_capacity(HOLD_SLOTS as usize + 1);
         let write = |w: &mut CfrWriter<_>, (idx, px): SlotFrame| -> io::Result<()> {
             if idx > end_idx.load(Ordering::SeqCst) {
                 let _ = ends.pool.send(px);
@@ -89,12 +96,15 @@ pub fn run_writer<S: FrameSink>(ends: WriterEnds, mut sink: S, end_idx: Arc<Atom
             Ok(())
         };
         for frame in ends.frames.iter() {
-            if let Some(prev) = pending.replace(frame) {
-                write(&mut w, prev)?;
+            let newest = frame.0;
+            pending.push_back(frame);
+            while pending.front().is_some_and(|f| f.0 + HOLD_SLOTS <= newest) {
+                let Some(f) = pending.pop_front() else { break };
+                write(&mut w, f)?;
             }
         }
-        if let Some(last) = pending.take() {
-            write(&mut w, last)?;
+        while let Some(f) = pending.pop_front() {
+            write(&mut w, f)?;
         }
         let end = end_idx.load(Ordering::SeqCst);
         let repeats = if end == END_UNSET { 0 } else { w.finish(end)? };
@@ -149,10 +159,10 @@ mod tests {
             let (e, s) = (end_idx.clone(), stats.clone());
             thread::spawn(move || run_writer(ends, sink, e, s))
         };
-        for idx in 0..=END + 1 {
+        for idx in 0..=END + HOLD_SLOTS {
             cap.frames.send((idx, vec![idx as u8])).unwrap();
         }
-        // Slot END is written only once END + 1 was received, all while the end is still unset.
+        // Slot END is written only once END + HOLD_SLOTS was received, all while the end is unset.
         while written.recv().unwrap() < (END + 1) as usize {}
         end_idx.store(END, Ordering::SeqCst);
         drop(cap);
