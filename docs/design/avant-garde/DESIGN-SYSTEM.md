@@ -144,15 +144,33 @@ Paper fill, ink text, mono 500, padding 7 x 10, no arrow, no shadow. Text: "Add 
 
 ### Recorder: mode picker (floating, top centre, y 28)
 Ink with 1px paper border. Four segments 40px high, 1px line between: Full screen, Window, Region, Exact size (icons 16px). Selected = accent fill, ink text.
+- In M1 Full screen and Region work. Exact size is Region with a typed width and height. Window is faint (`faint` text, not clickable) with the dashed "Not in this version" tag of the Camera item (1px dashed `later`, 10px, padding 3 x 7) after its label.
+- A fifth segment closes the recorder: close icon, "Close", hotkey "Esc" in faint. Same 40px segment, 1px line before it. Close and Esc show the main window again.
 
 ### Recorder: capture region
 2px dashed paper rectangle, 14px square handles at corners and 28 x 8 / 8 x 28 bars at edge midpoints (paper fill, ink border). Outside dimmed at 62% ink. Size chip above top-left: paper fill, ink text, lock icon, "1920 x 1080, 16:9 locked".
+- Sizes in the chip are the physical pixels that will be recorded.
+- Drag on the dimmed area to draw a new region (any direction). Drag a handle to resize, drag the dashed border to move.
+- The lock icon in the chip is a button. Locked (default) keeps 16:9 while drawing and resizing; unlocked the chip reads "1000 x 562, free".
+- Exact size: the width and height in the chip are two 1px line boxes (ink border on paper, 64px wide, 24px high, mono 500) the person types into; Enter or leaving the box applies it. The region keeps its top-left. Handles are hidden; the region moves by dragging its border.
+- Full screen: no dashed rectangle, no handles, no dimming. The chip reads "Full screen, 2880 x 1800" at the monitor's top-left (left 24, top 100).
 
 ### Recorder: zoom presets
 2px dashed accent rectangles with 7% accent wash, label tag above top-left: accent fill, ink text, number + name + hotkey ("1 Cart total Ctrl+1").
+- Drag inside the region (anywhere in Full screen) to draw a preset. Its aspect is locked to the 16:9 output. Up to 9; numbers fill the lowest free slot. Default names "Zoom 1" to "Zoom 9".
+- A preset is stored relative to the region (or the monitor in Full screen), so it moves and scales with the region.
+- Drag a preset to move it. The selected preset shows the four 12px corner handles of the editor zoom area (paper fill, 2px ink border) and resizes from them.
+- Click the name in the tag to rename it: the name becomes a text field inside the tag (ink 1px underline, same font); Enter keeps, Esc cancels. A close icon (12px) at the end of the tag removes the preset. Del removes the selected preset.
 
 ### Recorder: bar BEFORE recording (floating, bottom centre, y 704)
 Ink, 1px paper border, padding 10 x 12 x 10 x 16. In order: mic icon, mic picker (1px line box "Studio mic (USB)" with chevron), level meter (14 bars, 5px wide, accent when lit), divider, Camera (faint, dashed tag "Not in this version", disabled toggle), divider, Hide cursor toggle, Record button (rec fill, white text, dot icon, "Record", hotkey "Ctrl+Shift+R", 48px high). Under it a chip: eye-off icon + "Both bars are never captured in the recording".
+- Meter bar heights repeat 8, 11, 14, 17 px; unlit bars are `thumb-line`. Lit bars follow the mic peak on a -60 to 0 dB scale, refreshed every 50 ms.
+- The mic picker opens the system list of microphones. With no microphone it reads "No microphone" and the meter stays unlit.
+- Starting state: after Record, the Record button reads "Starting..." in faint on the same rec fill with the dot icon, disabled, until the engine reports Recording. No countdown.
+- Error line: a paper block attached to the top of the bar, the bar's full width, 24px high, ink text, mono 500, alert icon 13px (the Warning bar treatment). Sentences: "No microphone found. Recording without sound.", "Region is too small. Drag at least 64 x 64.", "FFmpeg is missing. Install it or set MARZ_FFMPEG.". Not red. It goes away when the cause is gone.
+
+### Recorder: hotkeys (registered only while the recorder is open)
+Record / stop Ctrl+Shift+R, Pause / resume Ctrl+Shift+P, Mute mic Ctrl+Shift+M, zoom presets Ctrl+1 to Ctrl+9, Zoom out Ctrl+0. Esc closes the recorder before recording. Each control that has a hotkey shows it next to its label in faint (on accent or rec: in the control's text colour).
 
 ### Recorder: bar WHILE recording (floating, bottom centre, y 716)
 Rec square (14px) + timer (display 30px), Pause, Mute mic with meter, divider, one button per zoom preset ("1 Cart total", active = accent fill), Zoom out, divider, Stop (rec fill, white). Top-left chip: "Recording this region. Autosaving every few seconds" with red 1px border and square rec indicator. Region border 3px solid rec. Same "never captured" chip below.
