@@ -5,6 +5,7 @@ import { mediaTimeUs } from "../playback/clock";
 import type { ProjectStorage } from "../storage/types";
 import { createFrameSource } from "./frameSource";
 import { outputFrameCount, outputFrameTimes, outputFrameUs, refuseEmpty } from "./outputFrames";
+import { pickEncoderConfig } from "./encoderConfig";
 import type { ExportPreset } from "./presets";
 import { buildExportJob, type ExportReport, type ExportSink } from "./sink";
 
@@ -21,20 +22,6 @@ export interface ExportOptions {
   outPath: string;
   signal: AbortSignal;
   onProgress(p: number): void;
-}
-
-/** H.264 High 4.0, annexb so FFmpeg can read it as a raw `-f h264` stream. */
-export function encoderConfig(preset: ExportPreset, fps: number): VideoEncoderConfig {
-  return {
-    codec: "avc1.640028",
-    avc: { format: "annexb" },
-    width: preset.width,
-    height: preset.height,
-    framerate: fps,
-    bitrate: preset.bitrate(fps),
-    bitrateMode: "variable",
-    hardwareAcceleration: "prefer-hardware",
-  };
 }
 
 /** Ink behind the vertical letterbox, read from tokens.css so the colour lives in one place. */
@@ -59,9 +46,8 @@ export async function exportProject(opts: ExportOptions): Promise<ExportReport> 
 
   const fps = preset.fps(project.source.fps);
   const total = outputFrameCount(segs, fps);
-  const config = encoderConfig(preset, fps);
-  const support = await VideoEncoder.isConfigSupported(config);
-  if (!support.supported) throw new Error("This computer cannot encode H.264 video");
+  const config = await pickEncoderConfig(preset, fps, async (c) => (await VideoEncoder.isConfigSupported(c)).supported === true);
+  if (!config) throw new Error("This computer cannot encode H.264 video");
 
   // The editor frame (project.output), then the preset's picture with that frame placed at frameRect.
   const out = project.output;

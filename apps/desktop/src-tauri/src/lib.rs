@@ -1,8 +1,11 @@
 //! Marz Recorder desktop shell: a Tauri 2 window around the editor.
 
+mod export;
 mod projects;
 mod recorder;
 mod recording;
+
+use tauri::Manager;
 
 pub fn run() {
     tauri::Builder::default()
@@ -10,6 +13,7 @@ pub fn run() {
         .manage(projects::Allowed::default())
         .manage(recorder::Recorder::default())
         .manage(recording::Recording::default())
+        .manage(export::Exports::default())
         .invoke_handler(tauri::generate_handler![
             projects::projects_dir,
             projects::list_projects,
@@ -33,7 +37,19 @@ pub fn run() {
             recording::trigger_zoom,
             recording::stop_recording,
             recording::recording_state,
+            export::pick_export_path,
+            export::export_begin,
+            export::export_chunk,
+            export::export_finish,
+            export::export_cancel,
+            export::show_in_folder,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running Marz Recorder");
+        .build(tauri::generate_context!())
+        .expect("error while running Marz Recorder")
+        .run(|app, event| {
+            // A running export must not leave FFmpeg or a `.part` file behind.
+            if let tauri::RunEvent::Exit = event {
+                app.state::<export::Exports>().cancel_all();
+            }
+        });
 }

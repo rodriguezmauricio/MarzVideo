@@ -22,7 +22,7 @@ const READABLE: [&str; 2] = [PROJECT_JSON, "events.jsonl"];
 
 /// Folders the page may touch: listed from the projects folder or picked in the dialog.
 #[derive(Default)]
-pub struct Allowed(Mutex<HashSet<PathBuf>>);
+pub struct Allowed(pub(crate) Mutex<HashSet<PathBuf>>);
 
 /// One `.marz` folder for Home. `edited_at` is ms since the epoch.
 #[derive(Serialize, Debug, Clone, PartialEq)]
@@ -71,7 +71,7 @@ fn mtime_ms(path: &Path) -> u64 {
         .map_or(0, |d| d.as_millis() as u64)
 }
 
-fn folder_name(dir: &Path) -> String {
+pub(crate) fn folder_name(dir: &Path) -> String {
     let n = dir.file_name().and_then(|n| n.to_str()).unwrap_or("Untitled");
     n.strip_suffix(".marz").unwrap_or(n).to_string()
 }
@@ -177,7 +177,7 @@ pub(crate) fn allow_recording(app: &AppHandle, dir: &Path) -> Result<(), String>
     allow_dir(app, &app.state::<Allowed>(), dir)
 }
 
-fn checked(allowed: &Allowed, dir: &str) -> Result<PathBuf, String> {
+pub(crate) fn checked(allowed: &Allowed, dir: &str) -> Result<PathBuf, String> {
     let dir = PathBuf::from(dir);
     if allowed.0.lock().map_err(err)?.contains(&dir) { Ok(dir) } else { Err("This folder was not opened from Home.".into()) }
 }

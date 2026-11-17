@@ -229,3 +229,15 @@ parked, not built in M1. The 4K cap follows the plan's "1440p or 4K fails" rule.
 
 Not checked: 4K or 1440p through the real engine (this machine's screen is 1080p), libx264 at these sizes
 (the machine has NVENC; a CPU encoder would be much slower), a second monitor.
+
+## Export sizes (Task 16, 2026-11-17)
+
+A fresh 60.8 s region recording (1280 x 720 at 60 fps, two live zooms, two 2 s cuts, 56.8 s out), exported from the dev app through FFmpeg:
+
+| Preset | Video | Audio | Size | Per minute | Limit | Export time |
+|---|---|---|---|---|---|---|
+| YouTube | H.264 High 1920 x 1080, 60 fps, 3,408 frames | AAC LC 48 kHz mono | 14.2 MB | 15.0 MB | 90 MB | 26.7 s |
+| Instagram and TikTok | H.264 High 1080 x 1920, 30 fps, 1,704 frames | AAC LC 48 kHz mono | 5.0 MB | 5.3 MB | 45 MB | 23.5 s |
+
+Both have `moov` before `mdat` (faststart). Durations 56.801 and 56.799 s against `outputDurationUs` 56.787 s: inside one frame. The content was a mostly still screen; busy screens use more of the 12 / 6 Mbit/s budget (engine-3min in Task 15: 40 MB per minute at 60 fps).
+

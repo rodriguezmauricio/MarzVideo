@@ -1872,6 +1872,7 @@ name = "marz-desktop"
 version = "0.1.0"
 dependencies = [
  "marz-capture",
+ "marz-export",
  "serde",
  "serde_json",
  "tauri",

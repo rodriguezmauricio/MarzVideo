@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef } from "react";
 import { drawFrame, frameAt } from "@marz/compositor";
-import { keptSegments } from "@marz/timeline";
+import { keptSegments, outputToSource } from "@marz/timeline";
 import { useEditorStore } from "../state/editorStore";
 import { mediaTimeUs, nextPlaybackTime, playbackEnded, startTimeForPlay } from "../playback/clock";
 import { mmss } from "./timecode";
@@ -66,6 +66,30 @@ export function Preview() {
     };
   }, []);
   useEffect(draw, [project, editingZoom?.id]);
+
+  // Dev only: `window.__marzGrab(outUs)` pauses, seeks to output time `outUs`, draws and returns the
+  // preview canvas as a PNG data URL (export checks compare it with the exported frame).
+  useEffect(() => {
+    if (!import.meta.env.DEV) return;
+    const w = window as unknown as { __marzGrab?: (outUs: number) => Promise<string> };
+    w.__marzGrab = async (outUs) => {
+      const video = videoRef.current;
+      const canvas = canvasRef.current;
+      if (!video || !canvas) throw new Error("preview not ready");
+      const store = useEditorStore.getState();
+      store.pause();
+      store.select(null);
+      const seeked = new Promise<void>((r) => video.addEventListener("seeked", () => r(), { once: true }));
+      store.seek(outputToSource(live.current.segs, outUs));
+      await seeked;
+      await new Promise((r) => requestAnimationFrame(r));
+      draw();
+      return canvas.toDataURL("image/png");
+    };
+    return () => {
+      delete w.__marzGrab;
+    };
+  }, []);
 
   // Play / pause and the frame loop.
   useEffect(() => {

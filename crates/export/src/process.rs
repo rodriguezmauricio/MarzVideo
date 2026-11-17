@@ -14,7 +14,9 @@ use std::time::Duration;
 
 const STDERR_LINES: usize = 20;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// What a finished export wrote. Sent to the page as JSON with camelCase names.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ExportReport {
     pub out_path: PathBuf,
     pub duration_us: i64,

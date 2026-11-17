@@ -21,7 +21,10 @@ pub struct Segment {
     pub out_start_us: i64,
 }
 
-/// The mic track of a project. `offset_us` is how long after the screen track started the mic started.
+/// The mic track of a project. `offset_us` is where mic sample 0 sits on the project's source clock
+/// (the clock of `segments`, the same clock as the screen track's own `offsetUs`): mic time = source
+/// time - `offset_us`. It is not relative to the screen track's first frame; the editor's preview
+/// plays the mic the same way (`audio.currentTime = (srcUs - mic.offsetUs) / 1e6`).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MicJob {

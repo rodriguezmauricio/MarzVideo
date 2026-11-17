@@ -9,7 +9,6 @@ Checked 2026-11-16 with 1440 x 900 Edge screenshots of the four M1 editor states
 - **Origin row shows "Live, Ctrl+1" as "Live".** A zoom in `project.marz` stores only its origin, not the preset it came from. Showing the hotkey needs a format change.
 - **"Click highlight" toggle is read-only.** It shows the stored `edits.clicks.effect` (off in the sample, so it shows off, the mockup shows on). Switching click effects is not built and the compositor does not draw them yet.
 - **Click ring on the preview.** The 34px accent ring under the cursor is preview content from click effects, which do not exist yet.
-- **Export MP4 button and the "Projects" back link are inert.** Export is build step 6 and Home is a later milestone. Both are drawn as in the mockup; the button has the tooltip "Export comes in a later step".
 - **Mic volume in the expanded lanes is display only** (bar + "100%"). Changing the volume is not built.
 
 ## Adjusted
@@ -70,4 +69,14 @@ Checked in Edge at 1440 x 900 (`recorder.html?fake&bar&state=recording`, the moc
 - **Paused, muted, tooltips for every button, Full screen chip text, no-mic Mute, warnings and failures** are not in the mockup; added to DESIGN-SYSTEM.md section 6 first.
 - **`dim-rec` token** (`rgba(5,5,4,.4)`, the mockup's value) added to `tokens.css` for the dimming while recording; setup keeps `dim`.
 - **Tooltip room:** the bar window grows 28 px upward while the pointer is over it, so a tooltip fits; the bar does not move. While the pointer is elsewhere the window is the bar's size, so nothing above the bar takes clicks.
+
+## Export (checked 2026-11-17)
+
+Checked in Edge at 1440 x 900 on the demo sample (the export runs for real into the memory sink in the browser build; failed and empty set through the dev store) and in the real app (PrintWindow, preview blurred). No mockup exists for these states; they follow DESIGN-SYSTEM.md "Export".
+
+- **Preset panel is 414 px wide, not 348.** "Instagram and TikTok" plus "1080 x 1920, 30 fps" in 11px mono caps do not fit in 348 without wrapping; the rule in section 6 now says at least 348, wider when a row needs it.
+- **Panel outer border is paper, not ink** (section 6 updated): with an ink border the highlighted (ink) row has no edge on the ink page.
+- **Cancel has no hotkey** (section 6 says why). Every other control keeps icon, label and hotkey.
+- **The strip sits above the main area** (z-index 6) so the panel and tooltips cover the inspector.
+- **Show in folder in the browser does nothing** (no Explorer); in the app it opens Explorer with the file selected (not clicked in the checks: it would open a window on the owner's desktop).
 
