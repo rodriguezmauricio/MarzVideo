@@ -23,6 +23,7 @@
 //! Warnings are user-facing sentences sent on a [`Warnings`] channel; the session forwards them as
 //! `SessionEvent::Warning`. A warning never stops the recording.
 
+pub mod camera;
 pub mod exclude;
 pub mod input;
 pub mod mic;

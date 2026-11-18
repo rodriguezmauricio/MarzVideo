@@ -2,10 +2,11 @@
 //!
 //! ```text
 //! marz-capture record <out.marz> [--secs N] [--fps N] [--encoder E] [--monitor N] [--region x,y,w,h]
-//!                     [--no-mic] [--mic-id ID] [--system-audio] [--hide-cursor] [--report]
+//!                     [--no-mic] [--mic-id ID] [--system-audio] [--camera-id ID] [--hide-cursor] [--report]
 //!                     [--pause-at a,b,...] [--resume-at a,b,...] [--zoom-at a,b,...]
 //!                     [--simulate-mic-loss-at SECS] [--simulate-static-screen] [--sync-probe]
 //! marz-capture recover <dir>
+//! marz-capture --list-cameras
 //! ```
 //!
 //! Times in the `--*-at` flags are wall-clock seconds after recording started. `--zoom-at`
@@ -19,10 +20,11 @@
 
 const USAGE: &str = "usage:
   marz-capture record <out.marz> [--secs N] [--fps N] [--encoder E] [--monitor N] [--region x,y,w,h]
-                      [--no-mic] [--mic-id ID] [--system-audio] [--hide-cursor] [--report]
+                      [--no-mic] [--mic-id ID] [--system-audio] [--camera-id ID] [--hide-cursor] [--report]
                       [--pause-at a,b,...] [--resume-at a,b,...] [--zoom-at a,b,...]
                       [--simulate-mic-loss-at SECS] [--simulate-static-screen] [--sync-probe]
-  marz-capture recover <dir>";
+  marz-capture recover <dir>
+  marz-capture --list-cameras";
 
 #[cfg(not(windows))]
 fn main() {
@@ -60,6 +62,7 @@ mod cli {
     use marz_capture::project::{NormRect, ZoomPreset};
     use marz_capture::recover::{needs_recovery, recover};
     use marz_capture::region::PxRect;
+    use marz_capture::win::camera::{camera_modes, list_cameras};
     use marz_capture::win::input::Hotkey;
     use marz_capture::win::mic::list_mics;
     use marz_capture::win::monitors::list_monitors;
@@ -91,6 +94,23 @@ mod cli {
     pub fn run(args: &[String]) -> Result<(), CliError> {
         match args.first().map(String::as_str) {
             Some("record") => record(parse_record(&args[1..])?),
+            Some("--list-cameras") => {
+                for c in list_cameras() {
+                    println!("camera: {}\n  id: {}", c.name, c.id);
+                    match camera_modes(&c.id) {
+                        Ok((modes, pick)) => {
+                            for m in modes {
+                                println!("  {:>2} {} {}x{} {:.2} fps", m.index, if m.nv12 { "NV12" } else { "other" }, m.width, m.height, m.fps);
+                            }
+                            if let Some(m) = pick {
+                                println!("  records: {}x{} (mode {})", m.width, m.height, m.index);
+                            }
+                        }
+                        Err(e) => println!("  could not open: {e}"),
+                    }
+                }
+                Ok(())
+            }
             Some("recover") => {
                 let dir = args.get(1).ok_or_else(|| CliError::Usage("recover needs a folder".into()))?;
                 recover_cmd(Path::new(dir))
@@ -111,6 +131,7 @@ mod cli {
         mic_id: Option<String>,
         cursor_hidden: bool,
         system_audio: bool,
+        camera_id: Option<String>,
         report: bool,
         pause_at: Vec<f64>,
         resume_at: Vec<f64>,
@@ -135,6 +156,7 @@ mod cli {
             mic_id: None,
             cursor_hidden: false,
             system_audio: false,
+            camera_id: None,
             report: false,
             pause_at: Vec::new(),
             resume_at: Vec::new(),
@@ -168,6 +190,7 @@ mod cli {
                 "--mic-id" => a.mic_id = Some(it.next().ok_or_else(|| usage("--mic-id needs an id".into()))?.clone()),
                 "--hide-cursor" => a.cursor_hidden = true,
                 "--system-audio" => a.system_audio = true,
+                "--camera-id" => a.camera_id = Some(it.next().ok_or_else(|| usage("--camera-id needs an id (see --list-cameras)".into()))?.clone()),
                 "--report" => a.report = true,
                 "--pause-at" => a.pause_at = list(flag, it.next())?,
                 "--resume-at" => a.resume_at = list(flag, it.next())?,
@@ -225,6 +248,7 @@ mod cli {
             mic_id,
             cursor_hidden: a.cursor_hidden,
             system_audio: a.system_audio,
+            camera_id: a.camera_id.clone(),
             presets: vec![ZoomPreset { id: PRESET_ID.into(), name: "Zoom 1".into(), rect: NormRect { x: 0.25, y: 0.25, w: 0.5, h: 0.5 } }],
             encoder: a.encoder.clone(),
         };
@@ -461,6 +485,27 @@ mod cli {
                 m.end_padded_us
             ));
             line(format!("mic drift (device QPC position vs sample count) after padding: max {} us, at end {} us", m.drift_max_us, m.drift_end_us));
+        }
+        match &r.camera {
+            Some(c) => {
+                line(format!(
+                    "camera: {}x{}  offsetUs {}  frames seen {}  real fps {:.2}{}",
+                    c.width,
+                    c.height,
+                    c.offset_us,
+                    c.frames_seen,
+                    c.real_fps,
+                    if c.lost { "  (stopped during the recording)" } else { "" }
+                ));
+                line(format!(
+                    "camera written frames: {} (expected {}), of which repeats: {}  camera.mp4 {:.2} MB",
+                    c.frames_written,
+                    c.expected_frames,
+                    c.frames_repeated,
+                    size("camera.mp4") / 1e6
+                ));
+            }
+            None => line(format!("camera: {}", if a.camera_id.is_some() { "asked for, not recorded" } else { "none" })),
         }
         line(format!("events written: {events}  live zooms: {}", r.zooms));
         line(format!("cpu capture process: {:.1}% of one core ({:.2}% of {} cores)", cpu.capture, cpu.capture / cpu.cores, cpu.cores));

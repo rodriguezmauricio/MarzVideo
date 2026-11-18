@@ -39,6 +39,16 @@ pub struct MicMeta {
     pub offset_us: i64,
 }
 
+/// The camera track (`camera.mp4`): when its first frame was taken on the recording clock, and the
+/// picture size and rate of the file.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct CameraMeta {
+    pub offset_us: i64,
+    pub width: u32,
+    pub height: u32,
+    pub fps: u32,
+}
+
 /// Everything `project.json` needs. The crash marker stores this as JSON, with duration, offsets
 /// and zooms left at their start-of-recording values.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -56,6 +66,9 @@ pub struct ProjectMeta {
     /// markers written before it existed.
     #[serde(default)]
     pub system_audio: bool,
+    /// `camera.mp4` was recorded. Missing in markers written before it existed.
+    #[serde(default)]
+    pub camera: Option<CameraMeta>,
     pub cursor_hidden: bool,
     pub presets: Vec<ZoomPreset>,
     pub zooms: Vec<Value>,
@@ -99,6 +112,9 @@ pub fn project_json(meta: &ProjectMeta) -> Value {
     }
     if meta.system_audio {
         tracks["system"] = json!({ "file": "system.wav", "offsetUs": 0, "volume": 1, "muted": false });
+    }
+    if let Some(c) = &meta.camera {
+        tracks["camera"] = json!({ "file": "camera.mp4", "offsetUs": c.offset_us, "width": c.width, "height": c.height, "fps": c.fps });
     }
     json!({
         "version": 1,
@@ -198,6 +214,7 @@ mod tests {
             screen_offset_us: 0,
             mic: Some(MicMeta { offset_us: 12_400 }),
             system_audio: false,
+            camera: None,
             cursor_hidden: false,
             presets,
             zooms,
@@ -252,6 +269,25 @@ mod tests {
         let v = project_json(&meta);
         assert!(v["tracks"].as_object().unwrap().get("mic").is_none());
         assert!(v["tracks"]["screen"].is_object());
+    }
+
+    #[test]
+    fn camera_track_is_written_only_when_recorded() {
+        let mut meta = sample_meta();
+        assert!(project_json(&meta)["tracks"].get("camera").is_none());
+        meta.camera = Some(CameraMeta { offset_us: 41_000, width: 1280, height: 720, fps: 30 });
+        assert_eq!(
+            project_json(&meta)["tracks"]["camera"],
+            serde_json::json!({"file": "camera.mp4", "offsetUs": 41000, "width": 1280, "height": 720, "fps": 30})
+        );
+    }
+
+    #[test]
+    fn marker_without_camera_field_reads_as_no_camera() {
+        let mut v = serde_json::to_value(sample_meta()).unwrap();
+        v.as_object_mut().unwrap().remove("camera");
+        let back: ProjectMeta = serde_json::from_value(v).unwrap();
+        assert_eq!(back.camera, None);
     }
 
     #[test]
