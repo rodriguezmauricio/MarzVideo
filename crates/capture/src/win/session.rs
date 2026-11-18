@@ -26,7 +26,7 @@ use super::{new_clock, set_dpi_awareness, SharedClock};
 use crate::clock::RecClock;
 use crate::events::{EventLog, EventsHeader, ZoomAction};
 use crate::ffmpeg::{self, ScreenEncoder};
-use crate::project::{self, LiveZoomMark, MicMeta, ProjectMeta, ZoomPreset, CRASH_MARKER};
+use crate::project::{self, LiveZoomMark, MicMeta, NormRect, ProjectMeta, ZoomPreset, CRASH_MARKER};
 use crate::region::{capture_fps, normalize_region, PxRect};
 use crate::slots::Slotter;
 use crate::writer::{self, SlotFrame, WriterStats};
@@ -130,6 +130,14 @@ pub struct StopReport {
 struct ZoomState {
     active: Option<String>,
     marks: Vec<LiveZoomMark>,
+    /// Preset frames moved or resized live (`set_preset_rect`), by preset id.
+    edited: Vec<(String, NormRect)>,
+}
+
+impl ZoomState {
+    fn edited_rect(&self, id: &str) -> Option<NormRect> {
+        self.edited.iter().find(|(p, _)| p == id).map(|(_, r)| r.clone())
+    }
 }
 
 type WriterThread = JoinHandle<(ScreenEncoder, io::Result<()>)>;
@@ -544,13 +552,34 @@ impl Session {
                 }
                 self.log(|l| l.zoom(t, id, ZoomAction::In));
                 z.active = Some(id.to_string());
-                z.marks.push(LiveZoomMark { t_us: t, preset_id: Some(id.to_string()) });
+                let rect = z.edited_rect(id);
+                z.marks.push(LiveZoomMark { t_us: t, preset_id: Some(id.to_string()), rect });
             }
             None => {
                 let Some(active) = z.active.take() else { return };
                 self.log(|l| l.zoom(t, &active, ZoomAction::Out));
-                z.marks.push(LiveZoomMark { t_us: t, preset_id: None });
+                z.marks.push(LiveZoomMark { t_us: t, preset_id: None, rect: None });
             }
+        }
+    }
+
+    /// Move or resize preset `preset_id` live. The zoom running on it now takes the new frame, and
+    /// so does every later zoom to it; zooms that already ended keep theirs. The project's preset
+    /// list gets the last frame. Unknown presets are ignored.
+    pub fn set_preset_rect(&self, preset_id: &str, rect: NormRect) {
+        if !self.meta.presets.iter().any(|p| p.id == preset_id) {
+            return;
+        }
+        let Ok(mut z) = self.zoom.lock() else { return };
+        match z.edited.iter_mut().find(|(p, _)| p == preset_id) {
+            Some(e) => e.1 = rect.clone(),
+            None => z.edited.push((preset_id.to_string(), rect.clone())),
+        }
+        if z.active.as_deref() == Some(preset_id)
+            && let Some(last) = z.marks.last_mut()
+            && last.preset_id.as_deref() == Some(preset_id)
+        {
+            last.rect = Some(rect);
         }
     }
 
@@ -647,11 +676,17 @@ impl Session {
             return Err(e);
         }
 
-        let marks = zoom.into_inner().map(|z| z.marks).unwrap_or_default();
+        let (marks, edited) = zoom.into_inner().map(|z| (z.marks, z.edited)).unwrap_or_default();
         meta.duration_us = duration_us;
         meta.screen_offset_us = screen_offset_us;
         meta.mic = mic_report.as_ref().map(|r| MicMeta { offset_us: r.first_rec_us.unwrap_or(0) });
+        // Zooms from before an edit keep the preset's original frame (their marks carry no rect).
         meta.zooms = project::live_zooms(&marks, &meta.presets, duration_us);
+        for (id, rect) in edited {
+            if let Some(p) = meta.presets.iter_mut().find(|p| p.id == id) {
+                p.rect = rect;
+            }
+        }
         project::write_project_json(&dir, &meta)?;
         // project.json is written, so the recording is safe: a marker that will not go away is
         // only noise (`needs_recovery` is false while project.json exists). Never fail the stop on it.

@@ -59,7 +59,8 @@ Checked in Edge at 1440 x 900 (`recorder.html?fake&bar`, the mockup's desktop as
 - **The mic picker opens the system list** (a native select under the 1px line box). Its open list is drawn by Windows, not in the design. Long names cut at 240 px with an ellipsis, so the bar can be wider than 1080 (1189 on this PC with the Intel array mic).
 - **"Starting..." is faint on the rec fill,** as section 6 says; that contrast is low (it is a short disabled state).
 - **Note line "This screen records at 30 fps."** above the bar when the capture area is larger than 2560 x 1440 (not in the mockup; DESIGN-SYSTEM.md section 6 first). Same block as the error line, without the icon.
-- **Bar and overlay transparency:** the parts of the bar window around the bar and chip are transparent but still take clicks (small strip under the bar).
+- **Bar and overlay transparency:** the parts of the bar window around the bar and chip are transparent but still take clicks (small strip under the bar). The overlay no longer takes clicks outside its controls (2026-11-18, section 6).
+- **Mode picker has a sixth segment, "Add zoom / Z"** (2026-11-18), so it is wider again (930 px at 1440 x 900, centred, top 28; region, chip and bar unchanged). Drawing a preset used to be a drag anywhere in the region, which kept the whole screen from taking clicks. Its Z hotkey works while the overlay has focus only (a global Z would eat typing in other apps).
 
 ## Recorder while recording (checked 2026-11-17)
 
@@ -70,6 +71,7 @@ Checked in Edge at 1440 x 900 (`recorder.html?fake&bar&state=recording`, the moc
 - **Paused, muted, tooltips for every button, Full screen chip text, no-mic Mute, warnings and failures** are not in the mockup; added to DESIGN-SYSTEM.md section 6 first.
 - **Mute has a word label** (final review, 2026-11-17): mic icon + "Mute" ("Unmute" while muted, same width) + meter. The mockup shows icon and meter only; the binding rule (icon, label, hotkey) wins. While muted the meter stays, unlit, instead of the earlier "Muted" text.
 - **`dim-rec` token** (`rgba(5,5,4,.4)`, the mockup's value) added to `tokens.css` for the dimming while recording; setup keeps `dim`.
+- **Live preset handles** (2026-11-18): the live preset shows the four corner handles of a selected preset so it can be resized while recording (the mockup shows the plain 2px rectangle).
 - **Tooltip room:** the bar window grows 28 px upward while the pointer is over it, so a tooltip fits; the bar does not move. While the pointer is elsewhere the window is the bar's size, so nothing above the bar takes clicks.
 
 ## Export (checked 2026-11-17)

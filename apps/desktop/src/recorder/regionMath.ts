@@ -140,3 +140,15 @@ export function fpsCapped(w: number, h: number): boolean {
 export function captureSize(mode: "full" | "region" | "exact", region: PxRect, monitor: Size): Size {
   return mode === "full" ? { width: monitor.width, height: monitor.height } : { width: region.w, height: region.h };
 }
+
+/** The band just inside each edge of `r` (`width` CSS pixels): where a dashed rectangle is grabbed
+ * to move it. The inside stays click-through on the overlay. */
+export function edgeBands(r: PxRect, width = 8): PxRect[] {
+  const b = Math.min(width, r.w / 2, r.h / 2);
+  return [
+    { x: r.x, y: r.y, w: r.w, h: b },
+    { x: r.x, y: r.y + r.h - b, w: r.w, h: b },
+    { x: r.x, y: r.y, w: b, h: r.h },
+    { x: r.x + r.w - b, y: r.y, w: b, h: r.h },
+  ];
+}

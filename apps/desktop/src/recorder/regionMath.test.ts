@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { captureSize, dragRect, fpsCapped, fromNorm, meterLit, moveRect, presetFromDrag, presetPx, resizeRect, toCss, toNorm, toPhysical } from "./regionMath";
+import { captureSize, dragRect, edgeBands, fpsCapped, fromNorm, meterLit, moveRect, presetFromDrag, presetPx, resizeRect, toCss, toNorm, toPhysical } from "./regionMath";
 
 const MON = { width: 1440, height: 900 };
 const ratio = (r: { w: number; h: number }) => r.w / r.h;
@@ -134,5 +134,17 @@ describe("fpsCapped", () => {
     const mon = { width: 3840, height: 2160 };
     expect(captureSize("full", { x: 0, y: 0, w: 1280, h: 720 }, mon)).toEqual({ width: 3840, height: 2160 });
     expect(captureSize("region", { x: 0, y: 0, w: 1280, h: 720 }, mon)).toEqual({ width: 1280, height: 720 });
+  });
+});
+
+describe("edgeBands", () => {
+  it("is four bands inside the edges, never wider than half the rect", () => {
+    expect(edgeBands({ x: 10, y: 20, w: 100, h: 50 })).toEqual([
+      { x: 10, y: 20, w: 100, h: 8 },
+      { x: 10, y: 62, w: 100, h: 8 },
+      { x: 10, y: 20, w: 8, h: 50 },
+      { x: 102, y: 20, w: 8, h: 50 },
+    ]);
+    expect(edgeBands({ x: 0, y: 0, w: 10, h: 6 })[0]).toEqual({ x: 0, y: 0, w: 10, h: 3 });
   });
 });
