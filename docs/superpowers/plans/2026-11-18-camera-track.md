@@ -27,6 +27,11 @@ sidecar, React/TS, WebCodecs, `mp4box`, Vitest, Edge via Playwright and CDP on t
 - [ ] Busy: open the camera while Edge (Meet tab) holds it; record the HRESULT and the behavior.
 - [ ] Write `docs/spikes/2026-11-19-camera-spike.md`. Stop and tell Mauricio if a check fails.
 
+Task 0 done 2026-11-18: `docs/spikes/2026-11-19-camera-spike.md`. Design holds. Changes: NV12 720p30
+comes straight from Media Foundation (no MJPEG decode); stamp frames with the device timestamp; try to
+turn exposure priority off (dim rooms gave 18 to 19 fps); map `0xC00D3704` to "camera used by another
+app"; the camera's own delay is measured by the owner clap check, not the spike.
+
 ## Task 1: Engine, camera capture (`crates/capture`)
 
 - [ ] `src/win/camera.rs`: `list_cameras()` (id, name, best mode), `start(id, slot_sender, shared)`
