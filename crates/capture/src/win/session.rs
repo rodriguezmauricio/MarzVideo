@@ -1,9 +1,13 @@
 //! One recording: wires screen, mic, input, the CFR writer and FFmpeg into a `.marz` folder.
 //!
 //! Start order (the spike's): folder and crash marker, FFmpeg lookup and encoder probe, encoder
-//! process, input thread, mic, screen and writer, wait until screen and mic deliver (max 3 s), t0,
-//! events header, `Recording`. Stop order: stop time and the writer's end index, WGC, writer, mic
-//! (pad or cut to the duration), input, FFmpeg, `project.json` with live zooms, marker removed.
+//! process, input thread, mic, computer sound, camera with its own FFmpeg and writer, screen and
+//! writer, wait until screen, mic and camera deliver (max 3 s), t0, events header, `Recording`.
+//! Stop order: stop time and the writers' end indexes, WGC, writer, camera and its writer, mic (pad
+//! or cut to the duration), input, FFmpeg, `project.json` with live zooms, marker removed.
+//!
+//! The camera never fails the take: if it does not start or deliver, the recording goes on without
+//! it and says so; if it stops mid-take, `camera.mp4` holds its last picture to the end.
 //!
 //! Every module started before an error is stopped again (the handles have no `Drop`), so no
 //! thread, hook or hotkey outlives a failed start.
@@ -17,6 +21,7 @@ use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
+use super::camera::{self, CameraHandle, CameraShared, CAMERA_BUSY, CAMERA_DID_NOT_START, CAMERA_FPS};
 use super::input::{self, Hotkey, InputHandle, InputShared};
 use super::mic::{self, MicHandle, MicReport, MicShared};
 use super::monitors::list_monitors;
@@ -26,7 +31,7 @@ use super::{new_clock, set_dpi_awareness, SharedClock};
 use crate::clock::RecClock;
 use crate::events::{EventLog, EventsHeader, ZoomAction};
 use crate::ffmpeg::{self, ScreenEncoder};
-use crate::project::{self, LiveZoomMark, MicMeta, NormRect, ProjectMeta, ZoomPreset, CRASH_MARKER};
+use crate::project::{self, CameraMeta, LiveZoomMark, MicMeta, NormRect, ProjectMeta, ZoomPreset, CRASH_MARKER};
 use crate::region::{capture_fps, normalize_region, PxRect};
 use crate::slots::Slotter;
 use crate::writer::{self, SlotFrame, WriterStats};
@@ -38,6 +43,8 @@ pub const SCREEN_NOT_FOUND: &str = "This screen was not found. Pick another one.
 pub const NAME_TAKEN: &str = "A recording with this name already exists. Pick another name.";
 pub const ENCODER_STOPPED: &str = "The video encoder stopped. Stop the recording to keep what was saved.";
 pub const SYSTEM_DID_NOT_START: &str = "Computer sound could not be recorded. Recording continues without it.";
+pub const CAMERA_BUSY_NOW: &str = "The camera is used by another app. Recording without it.";
+pub const CAMERA_FILE_FAILED: &str = "The camera video could not be saved. The recording is kept without it.";
 pub const MIC_SILENT: &str = "The microphone sent no sound. The mic track is silent.";
 
 /// How long screen and mic get to deliver their first data before t0.
@@ -61,6 +68,8 @@ pub struct RecordOptions {
     pub mic_id: Option<String>,
     /// Also record the computer's sound (loopback on the default output device) into `system.wav`.
     pub system_audio: bool,
+    /// Media Foundation camera id (`camera::list_cameras`); None records without a camera.
+    pub camera_id: Option<String>,
     pub cursor_hidden: bool,
     pub presets: Vec<ZoomPreset>,
     /// FFmpeg encoder name; None probes (nvenc, amf, qsv, then libx264).
@@ -127,6 +136,23 @@ pub struct StopReport {
     pub mic: Option<MicReport>,
     pub screen: ScreenNumbers,
     pub zooms: usize,
+    /// None when no camera was asked for, or it did not start or could not be saved.
+    pub camera: Option<CameraReport>,
+}
+
+/// Camera numbers for the report.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct CameraReport {
+    pub width: u32,
+    pub height: u32,
+    pub offset_us: i64,
+    pub frames_seen: u64,
+    pub frames_written: u64,
+    pub frames_repeated: u64,
+    pub expected_frames: u64,
+    /// Frames per second the camera really delivered (it drops in dim light; the file stays 30).
+    pub real_fps: f64,
+    pub lost: bool,
 }
 
 #[derive(Default)]
@@ -145,6 +171,32 @@ impl ZoomState {
 
 type WriterThread = JoinHandle<(ScreenEncoder, io::Result<()>)>;
 
+/// The running camera: capture thread, its writer thread (which owns its FFmpeg) and counters.
+struct CameraRun {
+    handle: CameraHandle,
+    shared: Arc<CameraShared>,
+    writer: WriterThread,
+    end_idx: Arc<AtomicU64>,
+    wstats: Arc<WriterStats>,
+}
+
+impl CameraRun {
+    /// Stop everything and pad to slot `end` (None: no padding). True when `camera.mp4` was
+    /// written with at least one frame and FFmpeg finished it.
+    fn finish(self, end: Option<u64>) -> bool {
+        let CameraRun { handle, shared, writer, end_idx, wstats } = self;
+        if let Some(e) = end {
+            end_idx.store(e, Ordering::SeqCst);
+        }
+        handle.stop(); // drops the frame sender: the writer pads and ends
+        let ok_writer = match writer.join() {
+            Ok((enc, res)) => res.is_ok() & enc.finish().is_ok(),
+            Err(_) => false,
+        };
+        ok_writer && shared.first_rec_us().is_some() && wstats.written.load(Ordering::SeqCst) > 0
+    }
+}
+
 /// What `start` has running so far, so a failure can stop it in reverse order.
 struct Partial {
     dir: PathBuf,
@@ -154,6 +206,7 @@ struct Partial {
     mic: Option<MicHandle>,
     system: Option<MicHandle>,
     screen: Option<ScreenHandle>,
+    camera: Option<CameraRun>,
     /// The session's own frame sender (for the static-screen slot 0). Dropped before the writer is joined.
     frames_tx: Option<SyncSender<SlotFrame>>,
     writer: Option<WriterThread>,
@@ -172,6 +225,9 @@ impl Partial {
         }
         if let Some(enc) = self.encoder.take() {
             let _ = enc.finish();
+        }
+        if let Some(c) = self.camera.take() {
+            c.finish(None);
         }
         if let Some(m) = self.mic.take() {
             let _ = m.stop(0);
@@ -198,6 +254,7 @@ struct Forwarder {
     hk_rx: mpsc::Receiver<Hotkey>,
     screen_sh: Arc<ScreenShared>,
     mic_sh: Option<Arc<MicShared>>,
+    camera_sh: Option<Arc<CameraShared>>,
     wstats: Arc<WriterStats>,
     dir: PathBuf,
     meta: ProjectMeta,
@@ -246,7 +303,18 @@ impl Forwarder {
                 None => return false,
             },
         };
+        let camera_us = match &self.camera_sh {
+            None => None,
+            Some(c) => match c.first_rec_us() {
+                Some(us) => Some(us),
+                None if c.lost.load(Ordering::SeqCst) || c.has_failed() => Some(0),
+                None => return false,
+            },
+        };
         self.meta.screen_offset_us = screen_us;
+        if let (Some(meta_cam), Some(us)) = (self.meta.camera.as_mut(), camera_us) {
+            meta_cam.offset_us = us;
+        }
         if let (Some(meta_mic), Some(us)) = (self.meta.mic.as_mut(), mic_us) {
             meta_mic.offset_us = us;
         }
@@ -271,6 +339,7 @@ pub struct Session {
     mic: Option<MicHandle>,
     /// The computer's sound, when it was asked for and started.
     system: Option<MicHandle>,
+    camera: Option<CameraRun>,
     input: InputHandle,
     /// A second frame sender so the writer keeps running after WGC stops, until `stop` has
     /// written the static-screen slot 0 if no frame arrived after t0.
@@ -324,7 +393,7 @@ impl Session {
             return Err(CaptureError::User(NAME_TAKEN.into()));
         }
         fs::create_dir_all(&dir)?;
-        let mut p = Partial { dir: dir.clone(), created_dir: !existed, encoder: None, input: None, mic: None, system: None, screen: None, frames_tx: None, writer: None };
+        let mut p = Partial { dir: dir.clone(), created_dir: !existed, encoder: None, input: None, mic: None, system: None, screen: None, camera: None, frames_tx: None, writer: None };
         let created_at = project::iso_utc_now();
         let meta = ProjectMeta {
             id: new_guid(),
@@ -337,6 +406,7 @@ impl Session {
             screen_offset_us: 0,
             mic: opts.mic_id.as_ref().map(|_| MicMeta { offset_us: 0 }),
             system_audio: false,
+            camera: None,
             cursor_hidden: opts.cursor_hidden,
             presets: opts.presets.clone(),
             zooms: Vec::new(),
@@ -384,7 +454,55 @@ impl Session {
                 }
             }
         }
-        let screen_sh = ScreenShared::new(clock.clone(), warn_tx);
+        // The camera is optional too: it gets its own FFmpeg and writer, and a failure to open it
+        // records without it.
+        let mut camera_sh: Option<Arc<CameraShared>> = None;
+        if let Some(id) = opts.camera_id.as_deref() {
+            let sh = CameraShared::new(clock.clone(), warn_tx.clone());
+            let (cam_ends, cam_writer_ends) = writer::frame_pipe();
+            match camera::start(id, cam_ends, sh.clone()) {
+                Ok(handle) => {
+                    let (cw, ch) = (handle.width, handle.height);
+                    let args = ffmpeg::camera_args(&encoder_name, cw, ch, CAMERA_FPS, &dir.join("camera.mp4"));
+                    match ScreenEncoder::spawn(&ffmpeg_path, &args) {
+                        Ok(enc) => {
+                            let end_idx = writer::new_end_idx();
+                            let wstats = Arc::new(WriterStats::default());
+                            let (e, s) = (end_idx.clone(), wstats.clone());
+                            let spawned = thread::Builder::new()
+                                .name("marz-camera-writer".into())
+                                .spawn(move || writer::run_writer(cam_writer_ends, enc, CAMERA_FPS, e, s));
+                            match spawned {
+                                Ok(writer) => {
+                                    p.camera = Some(CameraRun { handle, shared: sh.clone(), writer, end_idx, wstats });
+                                    meta.camera = Some(CameraMeta { offset_us: 0, width: cw, height: ch, fps: CAMERA_FPS });
+                                    let _ = project::write_crash_marker(&dir, &meta);
+                                    camera_sh = Some(sh);
+                                }
+                                Err(_) => {
+                                    handle.stop();
+                                    let _ = warn_tx.send(CAMERA_DID_NOT_START.to_string());
+                                }
+                            }
+                        }
+                        Err(_) => {
+                            handle.stop();
+                            let _ = warn_tx.send(CAMERA_DID_NOT_START.to_string());
+                        }
+                    }
+                }
+                Err(CaptureError::User(msg)) => {
+                    let _ = warn_tx.send(format!("{msg} Recording without a camera."));
+                }
+                Err(_) => {
+                    let _ = warn_tx.send(CAMERA_DID_NOT_START.to_string());
+                }
+            }
+            if camera_sh.is_none() {
+                let _ = fs::remove_file(dir.join("camera.mp4"));
+            }
+        }
+        let screen_sh = ScreenShared::new(clock.clone(), warn_tx.clone());
         let (cap_ends, writer_ends) = writer::frame_pipe();
         p.frames_tx = Some(cap_ends.frames.clone());
         let warm_start = Instant::now();
@@ -409,6 +527,25 @@ impl Session {
             on_event(SessionEvent::Failed(msg.into()));
             return Err(CaptureError::User(msg.into()));
         }
+        // The camera's first frame takes about 0.8 s (spike finding 4); it shares the wait, and one
+        // that is busy, fails or stays dark past the timeout is dropped, never the take.
+        if let Some(sh) = camera_sh.clone() {
+            while !(sh.is_warm() || sh.has_failed()) && warm_start.elapsed() < WARM_TIMEOUT {
+                thread::sleep(Duration::from_millis(5));
+            }
+            if !sh.is_warm() {
+                if let Some(c) = p.camera.take() {
+                    c.finish(None);
+                }
+                let _ = fs::remove_file(dir.join("camera.mp4"));
+                let busy = sh.error() == CAMERA_BUSY;
+                let _ = warn_tx.send(if busy { CAMERA_BUSY_NOW } else { CAMERA_DID_NOT_START }.to_string());
+                meta.camera = None;
+                let _ = project::write_crash_marker(&dir, &meta);
+                camera_sh = None;
+            }
+        }
+        drop(warn_tx);
         let warm_up_ms = warm_start.elapsed().as_secs_f64() * 1000.0;
 
         // t0, then the events header.
@@ -432,13 +569,14 @@ impl Session {
             hk_rx,
             screen_sh: screen_sh.clone(),
             mic_sh: mic_sh.clone(),
+            camera_sh,
             wstats: wstats.clone(),
             dir: dir.clone(),
             meta: meta.clone(),
         };
         let fwd = or_abort!(p, thread::Builder::new().name("marz-session".into()).spawn(move || fwd.run()));
 
-        let Partial { input, mic, system, screen, frames_tx, writer, .. } = p;
+        let Partial { input, mic, system, screen, camera, frames_tx, writer, .. } = p;
         let session = Session {
             dir,
             meta,
@@ -451,6 +589,7 @@ impl Session {
             screen: screen.expect("started"),
             mic,
             system,
+            camera,
             input: input.expect("started"),
             frames_tx: frames_tx.expect("created"),
             writer: writer.expect("started"),
@@ -638,8 +777,13 @@ impl Session {
         let end_for = |offset_us: i64| slotter.end_index(duration_us - offset_us);
         // Before WGC stops, so the writer pads to the end and drops frames past it.
         self.end_idx.store(end_for(self.screen_sh.first_rec_us().unwrap_or(0)), Ordering::SeqCst);
+        let cam_slotter = Slotter::new(CAMERA_FPS);
+        let cam_end_for = |offset_us: i64| cam_slotter.end_index(duration_us - offset_us);
+        if let Some(c) = &self.camera {
+            c.end_idx.store(cam_end_for(c.shared.first_rec_us().unwrap_or(0)), Ordering::SeqCst);
+        }
 
-        let Session { dir, mut meta, screen_sh, input, screen, mic, system, frames_tx, writer, end_idx, wstats, zoom, fwd_stop, fwd, on_event, .. } = self;
+        let Session { dir, mut meta, screen_sh, input, screen, mic, system, camera, frames_tx, writer, end_idx, wstats, zoom, fwd_stop, fwd, on_event, .. } = self;
         fwd_stop.store(true, Ordering::SeqCst);
         let warn_rx = fwd.join().ok();
 
@@ -673,6 +817,31 @@ impl Session {
                 None
             }
         };
+        // The camera: stopped after the screen, before the mic. A failure drops the track, never the take.
+        let camera_report = camera.and_then(|c| {
+            let sh = c.shared.clone();
+            let ws = c.wstats.clone();
+            let (w, h) = (c.handle.width, c.handle.height);
+            let offset_us = sh.first_rec_us().unwrap_or(0);
+            let end = cam_end_for(offset_us);
+            if c.finish(Some(end)) {
+                Some(CameraReport {
+                    width: w,
+                    height: h,
+                    offset_us,
+                    frames_seen: sh.stats.frames_seen.load(Ordering::Relaxed),
+                    frames_written: ws.written.load(Ordering::Relaxed),
+                    frames_repeated: ws.repeated.load(Ordering::Relaxed),
+                    expected_frames: end + 1,
+                    real_fps: sh.real_fps(),
+                    lost: sh.lost.load(Ordering::SeqCst),
+                })
+            } else {
+                let _ = fs::remove_file(dir.join("camera.mp4"));
+                on_event(SessionEvent::Warning(CAMERA_FILE_FAILED.into()));
+                None
+            }
+        });
         // The computer's sound is optional: a failure to finish it drops the track, never the take.
         let system_ok = match system.map(|m| m.stop(duration_us)) {
             Some(Ok(_)) => true,
@@ -718,6 +887,7 @@ impl Session {
         meta.screen_offset_us = screen_offset_us;
         meta.mic = mic_report.as_ref().map(|r| MicMeta { offset_us: r.first_rec_us.unwrap_or(0) });
         meta.system_audio = system_ok;
+        meta.camera = camera_report.map(|c| CameraMeta { offset_us: c.offset_us, width: c.width, height: c.height, fps: CAMERA_FPS });
         // Zooms from before an edit keep the preset's original frame (their marks carry no rect).
         meta.zooms = project::live_zooms(&marks, &meta.presets, duration_us);
         for (id, rect) in edited {
@@ -761,6 +931,7 @@ impl Session {
             mic: mic_report,
             screen: screen_numbers,
             zooms: meta.zooms.len(),
+            camera: camera_report,
         })
     }
 }

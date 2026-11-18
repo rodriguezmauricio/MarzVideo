@@ -9,10 +9,13 @@ export type Mic = { id: string; name: string; default: boolean };
 /** `recorder://state` from Rust (recording.rs `RecState`). `activePreset` is a session id ("p1"). */
 export type RecState = { recording: boolean; paused: boolean; muted: boolean; mic: boolean; activePreset: string | null; recUs: number };
 export const IDLE: RecState = { recording: false, paused: false, muted: false, mic: false, activePreset: null, recUs: 0 };
-export type BarInfo = { mics: Mic[]; ffmpeg: boolean };
+export type Camera = { id: string; name: string };
+export type BarInfo = { mics: Mic[]; cameras: Camera[]; ffmpeg: boolean };
 
 export const NO_MIC = "No microphone found. Recording without sound.";
 export const NO_FFMPEG = "FFmpeg is missing. Install it or set MARZ_FFMPEG.";
+export const CAMERA_BUSY = "This camera is used by another app. Close it or pick another camera.";
+export const CAMERA_FAILED = "The camera did not start. Pick another camera or turn it off.";
 export const REGION_TOO_SMALL = "Region is too small. Drag at least 64 x 64.";
 
 export interface RecorderApi {
@@ -52,7 +55,18 @@ export interface RecorderApi {
   dragBar(): void;
   /** Stop: Rust closes the recorder and opens the project in the main window. */
   stop(): Promise<void>;
+  /** Bar to overlay: show (true) or release (false) the setup camera preview. Resolves once the
+   *  overlay let the camera go (or after a second), so the engine can open it. */
+  cameraPreview(on: boolean): Promise<void>;
+  /** Overlay side of `cameraPreview`; call `released` once the camera is closed. */
+  onCameraPreview(cb: (on: boolean, released: () => void) => void): () => void;
+  /** Overlay to bar: the preview's error sentence, or null when it shows. */
+  cameraError(text: string | null): void;
+  onCameraError(cb: (text: string | null) => void): () => void;
 }
+
+/** How long the bar waits for the overlay to release the camera before recording anyway. */
+const RELEASE_WAIT_MS = 1000;
 
 const params = () => new URLSearchParams(window.location.search);
 export const isFake = () => params().has("fake");
@@ -98,6 +112,30 @@ function tauriApi(): RecorderApi {
       void invoke("overlay_hits", { rects: rects.map((r) => ({ x: px(r.x), y: px(r.y), w: px(r.w), h: px(r.h) })), grab }).catch(() => undefined),
     dragBar: () => void invoke("drag_bar").catch(() => undefined),
     stop: () => invoke<string>("stop_recording").then(() => undefined),
+    cameraPreview: (on) =>
+      new Promise<void>((resolve) => {
+        if (on) {
+          void emitTo("overlay", "recorder://camera-preview", true).catch(() => undefined);
+          return resolve();
+        }
+        const done = listen("recorder://camera-released", () => finish());
+        const timer = window.setTimeout(() => finish(), RELEASE_WAIT_MS);
+        let over = false;
+        function finish() {
+          if (over) return;
+          over = true;
+          window.clearTimeout(timer);
+          void done.then((u) => u());
+          resolve();
+        }
+        void done.then(() => emitTo("overlay", "recorder://camera-preview", false)).catch(() => finish());
+      }),
+    onCameraPreview: (cb) =>
+      unlistenLater(
+        listen<boolean>("recorder://camera-preview", (e) => cb(e.payload, () => void emitTo("bar", "recorder://camera-released").catch(() => undefined))),
+      ),
+    cameraError: (text) => void emitTo("bar", "recorder://camera-error", text).catch(() => undefined),
+    onCameraError: (cb) => unlistenLater(listen<string | null>("recorder://camera-error", (e) => cb(e.payload))),
   };
 }
 
@@ -122,6 +160,7 @@ function fakeApi(): RecorderApi {
     monitor: FAKE_MONITOR,
     info: async () => ({
       mics: error === "mic" ? [] : [{ id: "usb", name: "Studio mic (USB)", default: true }, { id: "array", name: "Microphone array", default: false }],
+      cameras: error === "nocamera" ? [] : [{ id: "cam", name: "Integrated Webcam" }],
       ffmpeg: error !== "ffmpeg",
     }),
     checkRegion: async (r) => (r.w < 64 || r.h < 64 ? REGION_TOO_SMALL : null),
@@ -158,6 +197,13 @@ function fakeApi(): RecorderApi {
     hits: () => undefined,
     dragBar: () => undefined,
     stop: async () => undefined,
+    cameraPreview: async () => undefined,
+    onCameraPreview: () => () => undefined,
+    cameraError: () => undefined,
+    onCameraError: (cb) => {
+      if (error === "camerabusy") cb(CAMERA_BUSY);
+      return () => undefined;
+    },
   };
 }
 

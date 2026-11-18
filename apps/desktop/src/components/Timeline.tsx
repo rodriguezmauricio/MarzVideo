@@ -169,6 +169,9 @@ export function Timeline({ expanded, onToggleLanes }: { expanded: boolean; onTog
   const labels = zoomLabels(project.edits.zooms);
   const mic = project.tracks.mic;
   const sys = project.tracks.system;
+  const cam = project.tracks.camera;
+  /** A Later lane that this recording fills: computer sound, or the camera. */
+  const real = (name: string) => (name === "System audio" && !!sys) || (name === "Camera" && !!cam);
   const nAuto = project.edits.zooms.filter((z) => z.origin === "auto").length;
   const nOwn = project.edits.zooms.length - nAuto;
 
@@ -205,7 +208,7 @@ export function Timeline({ expanded, onToggleLanes }: { expanded: boolean; onTog
           </div>
           <div className="lb" style={{ height: rows.zoom }}>Zoom</div>
           {LATER_LANES.map((name) =>
-            name === "System audio" && sys ? (
+            real(name) ? (
               <div key={name} className="lb" style={{ height: rows.later }}>{name}</div>
             ) : (
               <div key={name} className="lb later" style={{ height: rows.later }}>{name}</div>
@@ -263,6 +266,11 @@ export function Timeline({ expanded, onToggleLanes }: { expanded: boolean; onTog
                 // The computer's sound keeps the System audio lane's place and height.
                 <div key={name} className="tk" style={{ height: rows.later }}>
                   <MicWave url={storage.fileUrl(sys.file)} offsetUs={sys.offsetUs} widthPx={x(D)} pps={pps} rowH={rows.later} />
+                </div>
+              ) : name === "Camera" && cam ? (
+                // The camera keeps the Camera lane's place and height, with the Screen lane's thumbnails.
+                <div key={name} className="tk" style={{ height: rows.later }}>
+                  <ScreenThumbs url={storage.fileUrl(cam.file)} durationUs={D} widthPx={x(D)} pps={pps} rowH={rows.later} />
                 </div>
               ) : (
                 <div key={name} className="tk tk-later" style={{ height: rows.later }} aria-hidden="true">

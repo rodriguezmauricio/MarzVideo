@@ -1,4 +1,4 @@
-import type { Cut, Project, Zoom } from "@marz/format";
+import { cameraEdits, type CameraEdits, type Cut, type Pip, type Project, type Zoom } from "@marz/format";
 
 export type Command = (p: Project) => Project;
 
@@ -57,3 +57,20 @@ export const setCursorHidden =
   (hidden: boolean): Command =>
   (p) =>
     withEdits(p, { cursor: { ...p.edits.cursor, hidden } });
+
+/** Change the camera picture-in-picture (show, mirror, corner, size). Writes the whole
+ *  `edits.camera` (defaults filled in), keeping fields this build does not know. Returns `p`
+ *  itself when nothing changes, so History skips the entry. */
+export const updateCamera =
+  (patch: Partial<Omit<CameraEdits, "pip">> & { pip?: Partial<Pip> }): Command =>
+  (p) => {
+    const cur = cameraEdits(p);
+    const next: CameraEdits = { ...cur, ...patch, pip: { ...cur.pip, ...patch.pip } };
+    const same =
+      next.visible === cur.visible &&
+      next.mirror === cur.mirror &&
+      next.pip.corner === cur.pip.corner &&
+      next.pip.widthFrac === cur.pip.widthFrac &&
+      next.pip.marginFrac === cur.pip.marginFrac;
+    return same ? p : withEdits(p, { camera: next });
+  };

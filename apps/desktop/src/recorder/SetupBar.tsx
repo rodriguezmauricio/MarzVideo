@@ -1,4 +1,4 @@
-// The bar before recording: mic picker and meter, Camera (later), Hide cursor, Record, and the
+// The bar before recording: mic picker and meter, camera picker and toggle, Computer sound, Hide cursor, Record, and the
 // "never captured" chip. DESIGN-SYSTEM.md section 6 "Recorder: bar BEFORE recording".
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Icon } from "../components/Icon";
@@ -20,6 +20,7 @@ export function SetupBar({ placed = false }: { placed?: boolean }) {
   const [phase, setPhase] = useState<Phase>(() => (new URLSearchParams(window.location.search).get("state") === "starting" ? "starting" : "setup"));
   const [regionError, setRegionError] = useState<string | null>(null);
   const [startError, setStartError] = useState<string | null>(null);
+  const [cameraError, setCameraError] = useState<string | null>(null);
   const failed = useRecLive((l) => l.failed);
   const warning = useRecLive((l) => l.warning);
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -27,13 +28,21 @@ export function SetupBar({ placed = false }: { placed?: boolean }) {
   const [top, setTop] = useState(0);
 
   useEffect(() => {
-    api.info().then(setInfo, () => setInfo({ mics: [], ffmpeg: true }));
-    return api.onLevel(setLevel);
+    api.info().then(setInfo, () => setInfo({ mics: [], cameras: [], ffmpeg: true }));
+    const offLevel = api.onLevel(setLevel);
+    const offCam = api.onCameraError(setCameraError);
+    return () => {
+      offLevel();
+      offCam();
+    };
   }, [api]);
 
   const mics = info?.mics ?? [];
   const mic = mics.find((m) => m.id === s.micId) ?? mics.find((m) => m.default) ?? mics[0] ?? null;
   const micId = mic?.id ?? null;
+  const cameras = info?.cameras ?? [];
+  const camera = cameras.find((c) => c.id === s.cameraId) ?? cameras[0] ?? null;
+  const cameraOn = s.cameraOn && camera !== null;
 
   // The meter follows the picked mic during setup. Each start replaces the running meter in Rust
   // (serialized there), so the cleanup only drops a stale result; it does not send a stop that
@@ -59,7 +68,9 @@ export function SetupBar({ placed = false }: { placed?: boolean }) {
   }, [api, regionKey]);
 
   const error =
-    info && !info.ffmpeg ? NO_FFMPEG : (regionError ?? startError ?? failed ?? (info && mics.length === 0 ? NO_MIC : null) ?? warning);
+    info && !info.ffmpeg
+      ? NO_FFMPEG
+      : (regionError ?? startError ?? failed ?? (info && mics.length === 0 ? NO_MIC : null) ?? (cameraOn ? cameraError : null) ?? warning);
   const blocked = !info || !info.ffmpeg || regionError !== null;
   // A fact, not an error: above 2560 x 1440 the engine records at 30 fps. An error takes its place.
   const size = captureSize(s.mode, s.region, api.monitor);
@@ -70,12 +81,16 @@ export function SetupBar({ placed = false }: { placed?: boolean }) {
     setPhase("starting");
     setStartError(null);
     useRecLive.getState().clearMessages();
+    const setup = { ...currentSetup(), micId, cameraId: camera?.id ?? null, cameraOn };
     try {
+      // The overlay's preview holds the camera: let it go so the engine can open it.
+      if (cameraOn) await api.cameraPreview(false);
       // Resolves after Rust reported Recording; the bar window then shows the recording bar.
-      await api.record(recordOptions({ ...currentSetup(), micId }, api.monitor));
+      await api.record(recordOptions(setup, api.monitor));
     } catch (err) {
       setStartError(typeof err === "string" ? err : String(err));
       setPhase("setup");
+      if (cameraOn) void api.cameraPreview(true);
     }
   };
   const recordRef = useRef(record);
@@ -154,11 +169,35 @@ export function SetupBar({ placed = false }: { placed?: boolean }) {
             </span>
           </div>
           <i className="rb-sep" />
-          <div className="rb-cam" aria-disabled="true">
+          <div className="rb-mic rb-cam">
             <Icon name="camera" size={16} />
-            Camera
-            <span className="rb-later">Not in this version</span>
-            <i className="rtg off" />
+            <label className="rb-pick">
+              <span className="rb-name">{camera ? camera.name : "No camera"}</span>
+              <Icon name="down" size={12} />
+              <select
+                aria-label="Camera"
+                value={camera?.id ?? ""}
+                disabled={!cameras.length || phase !== "setup"}
+                onChange={(e) => s.update({ cameraId: e.target.value })}
+              >
+                {cameras.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button
+              type="button"
+              className="rb-toggle"
+              role="switch"
+              aria-label="Record the camera"
+              aria-checked={cameraOn}
+              disabled={!camera || phase !== "setup"}
+              onClick={() => s.update({ cameraOn: !s.cameraOn, cameraId: camera?.id ?? null })}
+            >
+              <i className={`rtg${!camera ? " off" : cameraOn ? " on" : ""}`}>{camera && <i />}</i>
+            </button>
           </div>
           <i className="rb-sep" />
           <button

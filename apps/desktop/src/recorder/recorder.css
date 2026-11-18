@@ -38,6 +38,10 @@ html.rec-page, html.rec-page body, html.rec-page #root { background: transparent
 .ro-preset.draft { pointer-events: none; }
 .ro-tag { position: absolute; left: -2px; top: -26px; height: 24px; display: flex; align-items: center; gap: 8px; padding: 0 8px; background: var(--accent); color: var(--accent-ink); font-weight: 500; white-space: nowrap; cursor: default; }
 .ro-tag b { font-weight: 500; }
+/* Camera preview (setup only): live camera where the picture-in-picture goes, mirrored, clicks pass through. */
+.ro-cam { position: absolute; z-index: 6; border: 1px solid var(--paper); background: var(--ink); pointer-events: none; }
+.ro-cam video { display: block; width: 100%; height: 100%; object-fit: contain; transform: scaleX(-1); }
+.ro-cam-tag { position: absolute; left: -1px; top: -25px; height: 24px; display: flex; align-items: center; gap: 8px; padding: 0 8px; background: var(--paper); color: var(--ink); font-weight: 500; white-space: nowrap; }
 .ro-name { cursor: text; }
 .ro-rename { font: inherit; letter-spacing: inherit; text-transform: none; color: var(--accent-ink); background: transparent; border: 0; border-bottom: 1px solid var(--accent-ink); padding: 0; outline: 0; }
 .ro-x { display: flex; align-items: center; }
@@ -71,7 +75,8 @@ html.rec-page, html.rec-page body, html.rec-page #root { background: transparent
 .rb-meter i { width: 5px; background: var(--thumb-line); }
 .rb-meter i.lit { background: var(--accent); }
 .rb-sep { width: 1px; height: 28px; background: var(--line); flex: none; }
-.rb-cam { display: flex; align-items: center; gap: 10px; color: var(--faint); }
+.rb-toggle { display: flex; align-items: center; }
+.rb-toggle:disabled { cursor: default; }
 .rb-cursor { display: flex; align-items: center; gap: 10px; }
 .rtg { position: relative; width: 34px; height: 18px; border: 1px solid var(--paper); flex: none; }
 .rtg > i, .rtg.off::after { position: absolute; top: 2px; left: 2px; width: 12px; height: 12px; background: var(--paper); }

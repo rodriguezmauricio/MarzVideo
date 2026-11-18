@@ -90,3 +90,12 @@ Checked in Edge at 1440 x 900 on the demo sample (the export runs for real into 
 - **Setup bar has a "Computer sound" toggle** between Camera and Hide cursor (not in `Recorder-Setup.dc.html`; DESIGN-SYSTEM.md section 6 first). The bar is about 200 px wider.
 - **The System audio lane shows a waveform** when the recording has computer sound, in the Later lane's 22 px slot (44 expanded), so the timeline keeps its height. No volume or mute control for it yet.
 - **New `speaker` icon** (icons.md), same 2px square-cap stroke as the others.
+
+## Camera (2026-11-18)
+
+Checked in Edge at 1440 x 900 on the `?fake` recorder pages and on `samples/demo-camera.marz`, and in the real app (CDP screenshots). No mockup exists for these states; they follow DESIGN-SYSTEM.md (updated first).
+
+- **The setup bar's Camera item is live**: picker plus toggle, replacing the dashed "Not in this version" Camera of `Recorder-Setup.dc.html`. The toggle carries no text label next to it (the picker names the camera); it has the accessible name "Record the camera".
+- **Camera preview on the overlay** while setting up: not in `Recorder-Setup.dc.html`. Its tag is paper (not accent) so it never reads as a zoom preset.
+- **The Camera lane is a real lane** with thumbnails when the recording has a camera, in the Later lane's 22 px slot (44 expanded), like System audio.
+- **Inspector Camera block** under the Project toggles: not in `Editor-Avant-Garde.dc.html`. The four corner squares have no visible text (their names are accessible labels and tooltips), the one exception to "icon, label, hotkey", because four 22 px squares are the corner picker itself. No hotkeys for camera settings.

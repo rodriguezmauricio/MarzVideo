@@ -32,6 +32,12 @@ comes straight from Media Foundation (no MJPEG decode); stamp frames with the de
 turn exposure priority off (dim rooms gave 18 to 19 fps); map `0xC00D3704` to "camera used by another
 app"; the camera's own delay is measured by the owner clap check, not the spike.
 
+Tasks 1 to 5 done 2026-11-18 on branch `claude/nifty-goldstine-15476f`. Changes against the plan: exposure
+priority is left alone (off gave a black picture, see the spike note); the inspector Camera block, the
+camera command and the PiP math landed with Task 3/4 code; the owner clap check is section 8 of
+`docs/spikes/2026-11-17-owner-checks.md`. Checked on Windows: CLI and app takes with the camera, busy camera
+both ways, real exports of both presets with the camera box.
+
 ## Task 1: Engine, camera capture (`crates/capture`)
 
 - [ ] `src/win/camera.rs`: `list_cameras()` (id, name, best mode), `start(id, slot_sender, shared)`

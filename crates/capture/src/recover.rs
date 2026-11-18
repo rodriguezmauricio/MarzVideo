@@ -48,6 +48,11 @@ pub fn recover(dir: &Path, ffprobe: &Path) -> Result<RecoverReport, CaptureError
     let system_path = dir.join("system.wav");
     let system_us = if meta.system_audio && system_path.exists() { patch_wav(&system_path, SYSTEM_BLOCK_BYTES)? } else { None };
     meta.system_audio = system_us.is_some_and(|us| us > 0);
+    // The camera is fragmented like the screen: it counts when it holds readable packets.
+    let camera_path = dir.join("camera.mp4");
+    if meta.camera.is_some() && !(camera_path.exists() && screen_duration_us(ffprobe, &camera_path, 30).is_ok()) {
+        meta.camera = None;
+    }
 
     // The screen sets the length (on the recording clock, from t0). A shorter mic is padded with
     // silence by the editor and the export, as after a device loss.
@@ -144,6 +149,7 @@ mod tests {
             screen_offset_us: 0,
             mic: with_mic.then_some(MicMeta { offset_us: 0 }),
             system_audio: false,
+            camera: None,
             cursor_hidden: false,
             presets: vec![ZoomPreset { id: "p1".into(), name: "Editor".into(), rect: NormRect { x: 0.1, y: 0.1, w: 0.5, h: 0.5 } }],
             zooms: vec![],
@@ -280,6 +286,29 @@ mod tests {
             assert_eq!(v["durationUs"], report.duration_us);
             std::fs::remove_dir_all(&dir).ok();
         }
+    }
+
+    #[test]
+    fn keeps_a_camera_with_packets_and_drops_one_without() {
+        let Some((dir, ffprobe)) = killed_folder("recover-camera", None) else { return };
+        let mut meta = start_meta(false);
+        meta.camera = Some(crate::project::CameraMeta { offset_us: 33_000, width: 320, height: 180, fps: 30 });
+        // A killed camera file: the same kind of cut fragmented MP4 as the screen.
+        std::fs::copy(dir.join("screen.mp4"), dir.join("camera.mp4")).unwrap();
+        write_crash_marker(&dir, &meta).unwrap();
+        recover(&dir, &ffprobe).unwrap();
+        let v: Value = serde_json::from_str(&std::fs::read_to_string(dir.join("project.json")).unwrap()).unwrap();
+        assert_eq!(v["tracks"]["camera"], serde_json::json!({"file": "camera.mp4", "offsetUs": 33000, "width": 320, "height": 180, "fps": 30}));
+        std::fs::remove_dir_all(&dir).ok();
+
+        // Killed before the first camera fragment: the file has no packets, so the track goes.
+        let Some((dir, ffprobe)) = killed_folder("recover-camera-empty", None) else { return };
+        std::fs::write(dir.join("camera.mp4"), b"   ftypisom").unwrap();
+        write_crash_marker(&dir, &meta).unwrap();
+        recover(&dir, &ffprobe).unwrap();
+        let v: Value = serde_json::from_str(&std::fs::read_to_string(dir.join("project.json")).unwrap()).unwrap();
+        assert!(v["tracks"].get("camera").is_none(), "{v}");
+        std::fs::remove_dir_all(&dir).ok();
     }
 
     #[test]

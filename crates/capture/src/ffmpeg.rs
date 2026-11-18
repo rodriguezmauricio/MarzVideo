@@ -79,6 +79,16 @@ pub fn screen_args(encoder: &str, w: u32, h: u32, fps: u32, out: &Path) -> Vec<S
     args
 }
 
+/// FFmpeg arguments for the camera track: raw NV12 frames on `pipe:0` (the camera's own format, no
+/// conversion), otherwise as `screen_args`: constant frame rate, no B-frames, fragmented MP4.
+pub fn camera_args(encoder: &str, w: u32, h: u32, fps: u32, out: &Path) -> Vec<String> {
+    let mut args = screen_args(encoder, w, h, fps, out);
+    if let Some(i) = args.iter().position(|a| a == "bgra") {
+        args[i] = "nv12".into();
+    }
+    args
+}
+
 /// A running FFmpeg process fed raw frames through its stdin.
 pub struct ScreenEncoder {
     child: Child,
@@ -155,6 +165,19 @@ mod tests {
         assert!(joined.contains("-f rawvideo -pix_fmt bgra -s 1920x1080 -r 30 -i pipe:0"), "{joined}");
         assert_eq!(args.last().unwrap(), "out.mp4");
         assert!(!joined.contains("yuv420p"), "hardware encoders take BGRA: {joined}");
+    }
+
+    #[test]
+    fn camera_args_take_nv12() {
+        let args = camera_args("h264_nvenc", 1280, 720, 30, Path::new("camera.mp4"));
+        let joined = args.join(" ");
+        assert!(joined.contains("-f rawvideo -pix_fmt nv12 -s 1280x720 -r 30 -i pipe:0"), "{joined}");
+        assert!(joined.contains("-bf 0"), "{joined}");
+        assert!(joined.contains("-movflags frag_keyframe+empty_moov+default_base_moof"), "{joined}");
+        assert!(!joined.contains("bgra"), "{joined}");
+        assert_eq!(args.last().unwrap(), "camera.mp4");
+        let x264 = camera_args("libx264", 64, 64, 30, Path::new("c.mp4")).join(" ");
+        assert!(x264.contains("-pix_fmt nv12") && x264.contains("-pix_fmt yuv420p"), "{x264}");
     }
 
     #[test]

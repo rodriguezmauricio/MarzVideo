@@ -43,11 +43,19 @@ pub struct Mic {
     pub default: bool,
 }
 
+/// A camera for the setup bar picker. `name` also finds it in the page (`getUserMedia` labels).
+#[derive(Serialize, Clone, Debug)]
+pub struct Camera {
+    pub id: String,
+    pub name: String,
+}
+
 /// What the bar needs when it opens.
 #[derive(Serialize, Clone, Debug)]
 pub struct Setup {
     pub monitor: RecMonitor,
     pub mics: Vec<Mic>,
+    pub cameras: Vec<Camera>,
     pub ffmpeg: bool,
 }
 
@@ -327,7 +335,7 @@ pub fn close_recorder(app: AppHandle) {
 /// Monitor, microphones and whether FFmpeg was found.
 #[tauri::command(async)]
 pub fn recorder_setup(state: State<'_, Recorder>) -> Result<Setup, String> {
-    Ok(Setup { monitor: monitor(&state)?, mics: list_mics(), ffmpeg: marz_capture::ffmpeg::find_ffmpeg().is_ok() })
+    Ok(Setup { monitor: monitor(&state)?, mics: list_mics(), cameras: platform::cameras(), ffmpeg: marz_capture::ffmpeg::find_ffmpeg().is_ok() })
 }
 
 /// Active microphones.
@@ -486,6 +494,10 @@ mod platform {
     pub fn mics() -> Vec<Mic> {
         list_mics().into_iter().map(|m| Mic { id: m.id, name: m.name, default: m.default }).collect()
     }
+
+    pub fn cameras() -> Vec<super::Camera> {
+        marz_capture::win::camera::list_cameras().into_iter().map(|c| super::Camera { id: c.id, name: c.name }).collect()
+    }
 }
 
 #[cfg(not(windows))]
@@ -502,6 +514,10 @@ mod platform {
     }
 
     pub fn mics() -> Vec<Mic> {
+        Vec::new()
+    }
+
+    pub fn cameras() -> Vec<super::Camera> {
         Vec::new()
     }
 }

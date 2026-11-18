@@ -1,4 +1,4 @@
-import { drawFrame, frameAt } from "@marz/compositor";
+import { cameraLayout, cameraMediaUs, drawFrame, frameAt } from "@marz/compositor";
 import type { MarzEvent, Project } from "@marz/format";
 import { keptSegments } from "@marz/timeline";
 import { mediaTimeUs } from "../playback/clock";
@@ -64,6 +64,9 @@ export async function exportProject(opts: ExportOptions): Promise<ExportReport> 
   encCtx.imageSmoothingQuality = "high";
 
   let source: Awaited<ReturnType<typeof createFrameSource>> | null = null;
+  // The camera picture-in-picture, drawn by the same compositor as the preview (null: none or hidden).
+  const camLayout = cameraLayout(project, out);
+  let camSource: Awaited<ReturnType<typeof createFrameSource>> | null = null;
   let encoder: VideoEncoder | null = null;
   let failure: Error | null = null;
   let wake: (() => void) | null = null;
@@ -83,6 +86,7 @@ export async function exportProject(opts: ExportOptions): Promise<ExportReport> 
 
   try {
     source = await createFrameSource(storage.fileUrl(project.tracks.screen.file));
+    if (camLayout && project.tracks.camera) camSource = await createFrameSource(storage.fileUrl(project.tracks.camera.file));
     await sink.begin(buildExportJob({ project, preset, projectDir: opts.projectDir, outPath: opts.outPath }));
 
     encoder = new VideoEncoder({
@@ -108,10 +112,12 @@ export async function exportProject(opts: ExportOptions): Promise<ExportReport> 
       if (failure) throw failure;
 
       const frame = await source.frameAt(mediaTimeUs(project, srcUs, source.firstFrameUs));
+      const camFrame = camSource ? await camSource.frameAt(cameraMediaUs(project, srcUs) + camSource.firstFrameUs) : null;
       try {
-        drawFrame(compCtx, frame, frameAt(project, events, srcUs), out);
+        drawFrame(compCtx, frame, frameAt(project, events, srcUs), out, camFrame && camLayout ? { source: camFrame, ...camLayout } : null);
       } finally {
         frame.close();
+        camFrame?.close();
       }
       if (!direct) {
         encCtx.fillStyle = ink;
@@ -140,10 +146,13 @@ export async function exportProject(opts: ExportOptions): Promise<ExportReport> 
     if (failure) throw failure;
     source.close();
     source = null;
+    camSource?.close();
+    camSource = null;
     return await sink.finish();
   } catch (e) {
     if (encoder && encoder.state !== "closed") encoder.close();
     source?.close();
+    camSource?.close();
     await writes.drain();
     await sink.cancel().catch(() => {});
     throw e;

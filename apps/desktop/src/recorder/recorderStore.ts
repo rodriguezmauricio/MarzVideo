@@ -23,6 +23,10 @@ export type Setup = {
   cursorHidden: boolean;
   /** Also record the computer's sound (`system.wav`). */
   systemAudio: boolean;
+  /** The picked camera (Media Foundation id); null: the first one. */
+  cameraId: string | null;
+  /** Record the camera into `camera.mp4`. Off by default. */
+  cameraOn: boolean;
 };
 
 export const MAX_PRESETS = 9;
@@ -41,6 +45,8 @@ export function defaultSetup(m: Monitor): Setup {
     micId: null,
     cursorHidden: false,
     systemAudio: false,
+    cameraId: null,
+    cameraOn: false,
   };
 }
 
@@ -79,6 +85,8 @@ export function loadSetup(storage: Storage, m: Monitor): Setup {
       cursorHidden: o.cursorHidden,
       // Missing in setups saved before the option existed: off.
       systemAudio: o.systemAudio === true,
+      cameraId: typeof o.cameraId === "string" ? o.cameraId : null,
+      cameraOn: o.cameraOn === true,
     };
   } catch {
     return fallback;
@@ -130,6 +138,8 @@ const pick = (s: Setup): Setup => ({
   micId: s.micId,
   cursorHidden: s.cursorHidden,
   systemAudio: s.systemAudio,
+  cameraId: s.cameraId,
+  cameraOn: s.cameraOn,
 });
 
 export const useRecorder = create<State>((set, get) => ({
@@ -156,7 +166,16 @@ export const useRecorder = create<State>((set, get) => ({
 export const currentSetup = (): Setup => pick(useRecorder.getState());
 
 /** What Record sends to Rust (recording.rs `RecordOptionsDto`). */
-export type RecordOptions = { mode: Mode; region: PxRect; micId: string | null; systemAudio: boolean; cursorHidden: boolean; presets: Preset[] };
+export type RecordOptions = {
+  mode: Mode;
+  region: PxRect;
+  micId: string | null;
+  systemAudio: boolean;
+  /** Null records without a camera. */
+  cameraId: string | null;
+  cursorHidden: boolean;
+  presets: Preset[];
+};
 
 /** The session preset id for a setup preset ("1" -> "p1"); Ctrl+n zooms into "pn". */
 export const sessionPresetId = (id: string) => `p${id}`;
@@ -171,6 +190,7 @@ export function recordOptions(s: Setup, m: Monitor): RecordOptions {
     region: { x: Math.round(s.region.x), y: Math.round(s.region.y), w: Math.round(s.region.w), h: Math.round(s.region.h) },
     micId: s.micId,
     systemAudio: s.systemAudio,
+    cameraId: s.cameraOn ? s.cameraId : null,
     cursorHidden: s.cursorHidden,
     presets: [...s.presets]
       .sort((a, b) => a.id.localeCompare(b.id))

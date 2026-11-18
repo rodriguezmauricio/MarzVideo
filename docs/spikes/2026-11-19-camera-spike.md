@@ -31,7 +31,9 @@ per second, and its own delay has to come from an owner check, not from this spi
    The constant 30 fps writer repeats frames to fill, as the screen writer does, so the file is
    still 30 fps and in sync. Plan change: Task 1 also tries to turn exposure priority off
    (`IAMCameraControl` / `KSPROPERTY_CAMERACONTROL_AUTO_EXPOSURE_PRIORITY`) when the driver allows,
-   and the report prints the real camera fps.
+   and the report prints the real camera fps. **Dropped in Task 1:** with exposure priority off the
+   Integrated Webcam kept 27 fps but the picture was almost black, and the setting stayed in the camera
+   for every app (it was set back to 1). The engine leaves it alone.
 6. **Load.** 15 s full-screen 1080p60 recordings, alone and with the camera encoding 720p NV12 to
    `h264_nvenc` at the same time: the screen wrote every expected frame both times (898 and 899),
    no queue drops, GPU copy 3.0 vs 3.7 ms average, FFmpeg CPU 22.6% vs 31.2% of one core (that
