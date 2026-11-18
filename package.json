@@ -6,6 +6,7 @@
     "test": "vitest run",
     "typecheck": "pnpm -r --if-present typecheck",
     "sample": "pnpm --filter @marz/make-sample make-sample",
+    "sync-check": "pnpm --filter @marz/sync-check sync-check",
     "design:check": "node tools/design-check/check.mjs"
   },
   "devDependencies": {

@@ -9,7 +9,6 @@ Checked 2026-11-16 with 1440 x 900 Edge screenshots of the four M1 editor states
 - **Origin row shows "Live, Ctrl+1" as "Live".** A zoom in `project.marz` stores only its origin, not the preset it came from. Showing the hotkey needs a format change.
 - **"Click highlight" toggle is read-only.** It shows the stored `edits.clicks.effect` (off in the sample, so it shows off, the mockup shows on). Switching click effects is not built and the compositor does not draw them yet.
 - **Click ring on the preview.** The 34px accent ring under the cursor is preview content from click effects, which do not exist yet.
-- **Export MP4 button and the "Projects" back link are inert.** Export is build step 6 and Home is a later milestone. Both are drawn as in the mockup; the button has the tooltip "Export comes in a later step".
 - **Mic volume in the expanded lanes is display only** (bar + "100%"). Changing the volume is not built.
 
 ## Adjusted
@@ -31,6 +30,55 @@ Checked 2026-11-16 with 1440 x 900 Edge screenshots of the four M1 editor states
 - **Two tokens added** to `tokens.css`: `--thumb-line` (#3a3935, thumbnail border, volume track) and `--wave` (#A8A69F, mic bars). Both values were already in section 6 of `DESIGN-SYSTEM.md`, now listed in section 3.
 - **Fonts are bundled** in `apps/desktop/src/assets/fonts` (latin and latin-ext woff2 from Google Fonts, SIL Open Font License, licences beside them), declared in `src/styles/fonts.css`. No network needed. Cyrillic and Vietnamese subsets are left out; those characters fall back to the stack in `tokens.css`.
 
-## Not checked
+## Window sizes (checked 2026-11-17)
 
-- Window sizes other than 1440 x 900. The preview scales with the window; the ledger, inspector and timeline heights are fixed.
+- Rule in `DESIGN-SYSTEM.md` section 5, "Window sizes, editor". Checked in Edge at 1440 x 900, 1536 x 780 (1920 x 1080 at 125%, maximized), 1366 x 680 and 1280 x 680, in four states (nothing selected, zoom selected, cut selected, lanes expanded), with and without the warning bar. Nothing clipped or overlapping.
+- 1440 x 900 is unchanged: screenshots before and after differ in at most 2 pixels by 1/255 in the timecode glyph edges, the same noise the old build shows against itself.
+- The hero timecode shrinks with the main area height (135px at 1536 x 780, 118px at 680 tall), so at those sizes it no longer reaches under the preview. Seven 34px ledger rows under a 250px timecode need 491px; there is not that much room.
+- At 680 tall the timeline shows the four working lanes and one Later lane (Camera); the other Later lanes are cut off from the bottom. At heights between the checked ones a Later lane can show partly.
+- At 1280 wide the preview caption "Full frame. Select a zoom or cut..." wraps to two lines (there is room under the preview).
+- The 12-column grid lines keep the 116px pitch from the left margin, so on windows wider than 1440 the last strip of the window has no grid line, and the inspector edge is not on a column line at other widths.
+
+## Home (checked 2026-11-17)
+
+- Checked in Edge at 1440 x 900 against `Home.dc.html` and `Home-Empty.dc.html` (fake rows behind `?home=fake` and `?home=empty`), plus 1536 x 780 and 1280 x 680. Hero, banner, header, rows and the empty state sit on the mockup positions (hero buttons at x 916, y 246; rows from y 410; empty buttons at 24, 540; tracks at 760, 520).
+- **Buttons have side padding.** In the mockups `.win button { padding: 0 }` beats `.fb { padding: 0 16px }`, so the dot icon, the hotkey and the Recover and Discard labels touch the button edges. The build keeps the 16px padding the `.fb` class asks for.
+- **Thumbnails are a real frame** of `screen.mp4` (0.5 s in), not the drawn app placeholders of the mockup. In the browser fake rows show the demo sample.
+- **Settings is inert** (no settings in M1), drawn as in the mockup with the tooltip "Settings come in a later version", like Export was before it was built.
+- **New recording does nothing yet.** The recorder is Task 12; the button and Ctrl+Shift+R call a stub command.
+- **Discard asks in the banner** (bold question, Discard and Keep) instead of a dialog, so no new component was needed. Added to section 6.
+- **A recording that needs recovery is only a banner**, not also a row, as in the mockup (the interrupted recording is not in the list).
+- At 1280 x 680 the empty state's tracks preview runs past the bottom; the screen scrolls.
+
+## Recorder setup (checked 2026-11-17)
+
+Checked in Edge at 1440 x 900 (`recorder.html?fake&bar`, the mockup's desktop as backdrop) against `Recorder-Setup.dc.html`. Region, handles, size chip, presets, bar (180, 704, 1080 x 70) and the "never captured" chip land on the mockup's pixels. 0.72% of pixels differ; besides the items below that is glyph anti-aliasing (bundled fonts against the mockup's web fonts).
+
+- **Mode picker is wider** (793 px, mockup 499): Window carries the dashed "Not in this version" tag and a fifth "Close / Esc" segment was added. Both are in DESIGN-SYSTEM.md section 6.
+- **Preset tags end in a 12px close icon** (removes the preset), as added to section 6. The mockup has none.
+- **The mic picker opens the system list** (a native select under the 1px line box). Its open list is drawn by Windows, not in the design. Long names cut at 240 px with an ellipsis, so the bar can be wider than 1080 (1189 on this PC with the Intel array mic).
+- **"Starting..." is faint on the rec fill,** as section 6 says; that contrast is low (it is a short disabled state).
+- **Note line "This screen records at 30 fps."** above the bar when the capture area is larger than 2560 x 1440 (not in the mockup; DESIGN-SYSTEM.md section 6 first). Same block as the error line, without the icon.
+- **Bar and overlay transparency:** the parts of the bar window around the bar and chip are transparent but still take clicks (small strip under the bar).
+
+## Recorder while recording (checked 2026-11-17)
+
+Checked in Edge at 1440 x 900 (`recorder.html?fake&bar&state=recording`, the mockup's desktop as backdrop, Terminal output hovered) against `Recorder-Recording.dc.html`. Region border, dimming, live preset, top-left chip (240, 96, 457 x 28), bar top (716), button tops (727) and the "never captured" chip (513, 786) land on the mockup's pixels; the tooltip sits 37 px above its button, as in the mockup (690). 1.56% of pixels differ (0.86% before the labels and icons of fix round 1), from the items below and glyph anti-aliasing.
+
+- **Bar is wider than the mockup** (879 px there). In the mockup `.win button { border: 0; padding: 0 }` beats `.pb` and `.fb`, so Pause and Mute lose their 1px line border and Mute and Stop lose their side padding (STOP touches the button edge). The build keeps the border and padding the classes ask for, as on Home. Mute is 150 px (mockup 120), Stop 87 px (mockup 55).
+- **Labels and icons on every button** (fix round 1, CLAUDE.md: every tool has an icon, a label and its hotkey): Pause shows "Pause"/"Resume" next to its icon (mockup: a 44 px icon-only square) and each preset button starts with the zoomadd icon. With two presets the bar is 1048 px (left edge 196 at 1440 x 900); the button tops and the chips stay on the mockup positions. Hotkeys stay in the tooltips, as in the mockup.
+- **Paused, muted, tooltips for every button, Full screen chip text, no-mic Mute, warnings and failures** are not in the mockup; added to DESIGN-SYSTEM.md section 6 first.
+- **Mute has a word label** (final review, 2026-11-17): mic icon + "Mute" ("Unmute" while muted, same width) + meter. The mockup shows icon and meter only; the binding rule (icon, label, hotkey) wins. While muted the meter stays, unlit, instead of the earlier "Muted" text.
+- **`dim-rec` token** (`rgba(5,5,4,.4)`, the mockup's value) added to `tokens.css` for the dimming while recording; setup keeps `dim`.
+- **Tooltip room:** the bar window grows 28 px upward while the pointer is over it, so a tooltip fits; the bar does not move. While the pointer is elsewhere the window is the bar's size, so nothing above the bar takes clicks.
+
+## Export (checked 2026-11-17)
+
+Checked in Edge at 1440 x 900 on the demo sample (the export runs for real into the memory sink in the browser build; failed and empty set through the dev store) and in the real app (PrintWindow, preview blurred). No mockup exists for these states; they follow DESIGN-SYSTEM.md "Export".
+
+- **Preset panel is 414 px wide, not 348.** "Instagram and TikTok" plus "1080 x 1920, 30 fps" in 11px mono caps do not fit in 348 without wrapping; the rule in section 6 now says at least 348, wider when a row needs it.
+- **Panel outer border is paper, not ink** (section 6 updated): with an ink border the highlighted (ink) row has no edge on the ink page.
+- **Cancel has no hotkey** (section 6 says why). Every other control keeps icon, label and hotkey.
+- **The strip sits above the main area** (z-index 6) so the panel and tooltips cover the inspector.
+- **Show in folder in the browser does nothing** (no Explorer); in the app it opens Explorer with the file selected (not clicked in the checks: it would open a window on the owner's desktop).
+

@@ -6,4 +6,16 @@ import { projectsPlugin } from "./vite-plugin-projects";
 
 export default defineConfig({
   plugins: [react(), tailwindcss(), projectsPlugin(resolve(__dirname, "../../samples"))],
+  // Tauri prints Rust errors in the same terminal; do not wipe them.
+  clearScreen: false,
+  server: { port: 5173, strictPort: true },
+  build: {
+    rollupOptions: {
+      input: {
+        index: resolve(__dirname, "index.html"),
+        recorder: resolve(__dirname, "recorder.html"),
+        bar: resolve(__dirname, "bar.html"),
+      },
+    },
+  },
 });

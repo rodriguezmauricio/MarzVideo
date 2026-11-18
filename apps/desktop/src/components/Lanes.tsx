@@ -11,6 +11,9 @@ function useFrames(url: string, durationUs: number): string[] {
     let cancelled = false;
     const video = document.createElement("video");
     video.muted = true;
+    // In the app the file comes from the asset protocol (another origin); without CORS the canvas is
+    // tainted and toDataURL throws, leaving the strip empty.
+    video.crossOrigin = "anonymous";
     video.preload = "auto";
     video.src = url;
     const canvas = document.createElement("canvas");

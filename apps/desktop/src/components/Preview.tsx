@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef } from "react";
 import { drawFrame, frameAt } from "@marz/compositor";
-import { keptSegments } from "@marz/timeline";
+import { keptSegments, outputToSource } from "@marz/timeline";
 import { useEditorStore } from "../state/editorStore";
-import { nextPlaybackTime, playbackEnded, startTimeForPlay } from "../playback/clock";
+import { mediaTimeUs, nextPlaybackTime, playbackEnded, sourceTimeUs, startTimeForPlay } from "../playback/clock";
+import { readFirstFrameUs } from "../playback/firstFrame";
 import { mmss } from "./timecode";
 import { ZoomOverlay } from "./ZoomOverlay";
 
@@ -23,7 +24,8 @@ export function Preview() {
   const audioRef = useRef<HTMLAudioElement>(null);
 
   const segs = useMemo(() => keptSegments(project.durationUs, project.edits.cuts), [project.durationUs, project.edits.cuts]);
-  const screenOffset = project.tracks.screen.offsetUs;
+  // Presentation time of frame 0 in screen.mp4 (0 without B-frames). 0 until the file's start is read.
+  const firstFrame = useRef(0);
   const mic = project.tracks.mic;
 
   // Latest values for the animation loop without restarting it.
@@ -37,7 +39,7 @@ export function Preview() {
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
     const { project: p, editing } = live.current;
-    const srcUs = Math.round(video.currentTime * 1e6) + screenOffset;
+    const srcUs = sourceTimeUs(p, Math.round(video.currentTime * 1e6), firstFrame.current);
     const { events } = useEditorStore.getState();
     const shown = editing ? { ...p, edits: { ...p.edits, zooms: [] } } : p;
     drawFrame(ctx, video, frameAt(shown, events, srcUs), p.output);
@@ -46,9 +48,23 @@ export function Preview() {
   const seekMedia = (srcUs: number) => {
     const video = videoRef.current;
     const audio = audioRef.current;
-    if (video) video.currentTime = Math.max(0, (srcUs - screenOffset) / 1e6);
+    if (video) video.currentTime = Math.max(0, mediaTimeUs(project, srcUs, firstFrame.current) / 1e6);
     if (audio && mic) audio.currentTime = Math.max(0, (srcUs - mic.offsetUs) / 1e6);
   };
+
+  // Read where frame 0 sits in screen.mp4 (a Range request on the file's start), then show the playhead again.
+  const screenUrl = storage.fileUrl(project.tracks.screen.file);
+  useEffect(() => {
+    let active = true;
+    void readFirstFrameUs(screenUrl).then((us) => {
+      if (!active || us === firstFrame.current) return;
+      firstFrame.current = us;
+      seekMedia(useEditorStore.getState().playheadUs);
+    });
+    return () => {
+      active = false;
+    };
+  }, [screenUrl]);
 
   // User seeks.
   useEffect(() => {
@@ -66,6 +82,30 @@ export function Preview() {
     };
   }, []);
   useEffect(draw, [project, editingZoom?.id]);
+
+  // Dev only: `window.__marzGrab(outUs)` pauses, seeks to output time `outUs`, draws and returns the
+  // preview canvas as a PNG data URL (export checks compare it with the exported frame).
+  useEffect(() => {
+    if (!import.meta.env.DEV) return;
+    const w = window as unknown as { __marzGrab?: (outUs: number) => Promise<string> };
+    w.__marzGrab = async (outUs) => {
+      const video = videoRef.current;
+      const canvas = canvasRef.current;
+      if (!video || !canvas) throw new Error("preview not ready");
+      const store = useEditorStore.getState();
+      store.pause();
+      store.select(null);
+      const seeked = new Promise<void>((r) => video.addEventListener("seeked", () => r(), { once: true }));
+      store.seek(outputToSource(live.current.segs, outUs));
+      await seeked;
+      await new Promise((r) => requestAnimationFrame(r));
+      draw();
+      return canvas.toDataURL("image/png");
+    };
+    return () => {
+      delete w.__marzGrab;
+    };
+  }, []);
 
   // Play / pause and the frame loop.
   useEffect(() => {
@@ -89,7 +129,7 @@ export function Preview() {
 
     let raf = 0;
     const loop = () => {
-      const srcUs = Math.round(video.currentTime * 1e6) + screenOffset;
+      const srcUs = sourceTimeUs(live.current.project, Math.round(video.currentTime * 1e6), firstFrame.current);
       if (playbackEnded(live.current.segs, srcUs, video.ended)) {
         useEditorStore.getState().pause();
         useEditorStore.getState().seek(live.current.project.durationUs);

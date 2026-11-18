@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, test } from "vitest";
 import { FormatError, parseProject, serializeProject } from "./project";
 
@@ -78,5 +79,19 @@ describe("parseProject", () => {
     const s = serializeProject(parseProject(example()));
     expect(s.endsWith("}\n")).toBe(true);
     expect(s).toContain('\n  "version": 1');
+  });
+});
+
+describe("parseProject with the Rust writer fixture", () => {
+  test("parses the Rust project fixture", () => {
+    const url = new URL("../../../crates/capture/tests/fixtures/project-sample.json", import.meta.url);
+    const p = parseProject(JSON.parse(readFileSync(url, "utf8")));
+    expect(p.source).toEqual({ width: 2560, height: 1440, fps: 60 });
+    expect(p.output).toEqual({ width: 1920, height: 1080, fps: 60 });
+    expect(p.tracks.mic).toEqual({ file: "mic.wav", offsetUs: 12400, volume: 1, muted: false });
+    expect(p.zoomPresets).toEqual([{ id: "p1", name: "Preset p1", rect: { x: 0.1, y: 0.1, w: 0.5, h: 0.5 } }]);
+    expect(p.edits.zooms).toHaveLength(1);
+    expect(p.edits.zooms[0]).toMatchObject({ id: "live-1", startUs: 4100000, endUs: 8200000, origin: "live", easing: "easeInOutCubic" });
+    expect(p.edits.cuts).toEqual([]);
   });
 });

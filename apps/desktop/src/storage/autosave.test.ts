@@ -72,3 +72,59 @@ test("status goes saving, saved, and error on failure", async () => {
   await vi.advanceTimersByTimeAsync(100);
   expect(seen).toEqual(["unsaved", "saving", "error", "saving", "saved"]);
 });
+
+function deferred() {
+  let resolve!: () => void;
+  const promise = new Promise<void>((r) => (resolve = r));
+  return { promise, resolve };
+}
+
+test("flush waits for a save already running and never starts a second one alongside it", async () => {
+  const first = deferred();
+  let running = 0;
+  let maxRunning = 0;
+  const save = vi.fn(async () => {
+    running++;
+    maxRunning = Math.max(maxRunning, running);
+    if (save.mock.calls.length === 1) await first.promise;
+    running--;
+  });
+  const a = createAutosave(save, 100);
+  a.schedule();
+  await vi.advanceTimersByTimeAsync(100);
+  expect(save).toHaveBeenCalledTimes(1); // first save is in flight
+  a.schedule(); // an edit while it runs
+  let flushed = false;
+  const f = a.flush().then(() => (flushed = true));
+  await vi.advanceTimersByTimeAsync(0);
+  expect(save).toHaveBeenCalledTimes(1);
+  expect(flushed).toBe(false);
+  first.resolve();
+  await f;
+  expect(save).toHaveBeenCalledTimes(2);
+  expect(maxRunning).toBe(1);
+});
+
+test("flush with no new edit still waits for the save in flight", async () => {
+  const first = deferred();
+  const save = vi.fn(() => first.promise);
+  const a = createAutosave(save, 100);
+  a.schedule();
+  await vi.advanceTimersByTimeAsync(100);
+  let flushed = false;
+  const f = a.flush().then(() => (flushed = true));
+  await vi.advanceTimersByTimeAsync(0);
+  expect(flushed).toBe(false);
+  first.resolve();
+  await f;
+  expect(save).toHaveBeenCalledTimes(1);
+});
+
+test("flush tells whether everything is saved", async () => {
+  const save = vi.fn().mockRejectedValueOnce(new Error("disk")).mockResolvedValue(undefined);
+  const a = createAutosave(save, 2000);
+  expect(await a.flush()).toBe(true); // nothing pending
+  a.schedule();
+  expect(await a.flush()).toBe(false); // the save failed; it stays pending
+  expect(await a.flush()).toBe(true);
+});

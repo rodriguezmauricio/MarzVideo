@@ -2,7 +2,6 @@ import { create } from "zustand";
 import { parseProject, serializeProject, type MarzEvent, type Project } from "@marz/format";
 import { History, type Command } from "@marz/timeline";
 import { createAutosave, type SaveStatus } from "../storage/autosave";
-import { createHttpStorage } from "../storage/httpStorage";
 import type { ProjectStorage } from "../storage/types";
 import { loadEventsOrEmpty } from "./loadEvents";
 
@@ -11,8 +10,9 @@ export type Selection = { kind: "zoom" | "cut"; id: string } | null;
 const AUTOSAVE_DELAY_MS = 2000;
 let autosave: ReturnType<typeof createAutosave> | null = null;
 
-/** Save any pending edit right now (used before the page closes). */
-export const flushAutosave = (): Promise<void> => autosave?.flush() ?? Promise.resolve();
+/** Save any pending edit right now (before leaving the project or closing the window). True when
+ *  everything is saved. */
+export const flushAutosave = (): Promise<boolean> => autosave?.flush() ?? Promise.resolve(true);
 
 type EditorState = {
   status: "idle" | "loading" | "ready" | "error";
@@ -31,7 +31,7 @@ type EditorState = {
   select: (sel: Selection) => void;
   /** Bumped by seek so the player knows a jump was requested, as opposed to a normal playback tick. */
   seekRequest: { us: number; n: number };
-  load: (name: string) => Promise<void>;
+  load: (storage: ProjectStorage) => Promise<void>;
   play: () => void;
   pause: () => void;
   togglePlay: () => void;
@@ -58,10 +58,9 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   select: (selection) => set({ selection }),
   seekRequest: { us: 0, n: 0 },
 
-  async load(name) {
+  async load(storage) {
     set({ status: "loading", error: null });
     try {
-      const storage = createHttpStorage(name);
       const project = parseProject(JSON.parse(await storage.readText("project.json")));
       const { events, warning } = await loadEventsOrEmpty(() => storage.readText("events.jsonl"));
       const history = new History(project);

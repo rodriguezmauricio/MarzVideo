@@ -1,0 +1,80 @@
+/* Home: DESIGN-SYSTEM.md section 6 "Home", mockups Home.dc.html and Home-Empty.dc.html (1440 x 900).
+   Colours only through tokens.css variables. Wider or narrower windows keep the layout: the hero
+   buttons and the empty-state tracks stay 24px from the right edge, the rows scroll. */
+
+.home { position: relative; width: 100%; height: 100vh; overflow: hidden; display: flex; flex-direction: column; background: var(--ink); }
+
+/* strip: brand left, Settings right */
+.h-brand { display: flex; align-items: center; gap: 10px; font-weight: 500; }
+.h-brand i { width: 14px; height: 14px; background: var(--accent); }
+.h-settings { height: 30px; padding: 0 14px; border: 1px solid var(--paper); display: flex; align-items: center; gap: 8px; cursor: default; }
+
+/* hero: paper block, 276px, giant "Record once." */
+.h-hero { position: relative; z-index: 4; flex: none; height: 276px; background: var(--paper); color: var(--ink); }
+.grid-on-paper {
+  /* design-check-ignore: the 12-column grid lines are one of the two allowed gradients */
+  background-image: repeating-linear-gradient(90deg, var(--grid-on-paper) 0 1px, transparent 1px var(--col-pitch));
+  height: 100%;
+}
+.h-title {
+  position: absolute; left: 18px; top: 16px; margin: 0; white-space: nowrap;
+  font-family: var(--font-display); font-weight: 700; text-transform: none;
+  font-size: 210px; line-height: 0.8; letter-spacing: -0.05em;
+}
+.h-lede { position: absolute; left: 24px; top: 200px; width: 560px; margin: 0; line-height: 1.6; }
+
+/* the two attached hero buttons (13px labels as in the mockup) */
+.h-cta { position: absolute; right: 24px; top: 202px; display: flex; }
+.h-cta button { height: 60px; display: flex; align-items: center; gap: 8px; padding: 0 16px; font-weight: 500; font-size: 13px; }
+.h-new { width: 300px; justify-content: space-between; background: var(--accent); color: var(--accent-ink); border: 2px solid var(--ink); }
+.h-hk { font-size: 10px; }
+.h-openp { width: 200px; justify-content: center; border: 2px solid var(--ink); border-left: 0; }
+
+/* recover banner: ink row, 56px, 2px paper top */
+.h-banner {
+  position: relative; z-index: 2; flex: none; height: 56px; background: var(--ink);
+  border-top: 2px solid var(--paper); border-bottom: 1px solid var(--paper);
+  display: flex; align-items: center; gap: 16px; padding: 0 24px;
+}
+.h-hatch {
+  width: 24px; height: 24px; flex: none;
+  /* design-check-ignore: red hatching, the same family as the cut hatching (recording red, interrupted recording) */
+  background: repeating-linear-gradient(135deg, var(--rec) 0 4px, color-mix(in srgb, var(--rec) 50%, var(--ink)) 4px 8px);
+}
+.h-banner-text { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.h-banner-text b { font-weight: 500; }
+.h-btn { height: 34px; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 0 16px; font-weight: 500; flex: none; }
+.h-btn-accent { background: var(--accent); color: var(--accent-ink); }
+.h-btn-line { border: 1px solid var(--paper); }
+
+/* recent projects: 34px header, 68px ruled rows */
+.h-head { position: relative; z-index: 2; flex: none; height: 34px; display: flex; align-items: center; justify-content: space-between; padding: 0 24px; color: var(--faint); }
+.h-rows { position: relative; z-index: 2; flex: 1; min-height: 0; overflow-y: auto; }
+.h-row { width: 100%; height: 68px; display: flex; align-items: center; padding: 0 24px; border-top: 1px solid var(--line); background: var(--ink); }
+.h-idx { width: 60px; flex: none; color: var(--faint); }
+.h-thumb { position: relative; width: 96px; height: 54px; flex: none; margin-right: 24px; overflow: hidden; border: 1px solid var(--line); background: var(--ink); }
+.h-thumb video { display: block; width: 100%; height: 100%; object-fit: cover; pointer-events: none; }
+.h-name {
+  width: 560px; flex: 0 1 560px; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  font-family: var(--font-display); font-weight: 700; text-transform: none; font-size: 26px; letter-spacing: -0.02em;
+}
+.h-len { width: 100px; flex: none; font-weight: 500; }
+.h-meta { flex: 1; min-width: 0; color: var(--faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.h-open { display: flex; align-items: center; gap: 8px; flex: none; }
+
+/* empty: "Nothing yet." Positions are the mockup's minus the 44px strip. */
+.h-empty { position: relative; flex: 1; min-height: 0; overflow-y: auto; }
+.h-empty-title {
+  position: absolute; left: 18px; top: 26px; margin: 0; white-space: nowrap;
+  font-family: var(--font-display); font-weight: 700; text-transform: none;
+  font-size: 230px; line-height: 0.8; letter-spacing: -0.05em;
+}
+.h-empty-text { position: absolute; left: 24px; top: 426px; width: 600px; margin: 0; line-height: 1.6; }
+.h-empty .h-cta { left: 24px; right: auto; top: 496px; }
+.h-empty .h-new { border: 0; }
+.h-empty .h-openp { border: 1px solid var(--paper); border-left: 0; }
+.h-tracks { position: absolute; right: 24px; top: 476px; width: 656px; z-index: 2; background: var(--ink); border-bottom: 1px solid var(--line); }
+.h-tracks-head { height: 28px; color: var(--faint); }
+.h-track { display: flex; align-items: center; height: 56px; border-top: 1px solid var(--line); }
+.h-track span { width: 120px; flex: none; color: var(--faint); }
+.h-track div { flex: 1; height: 36px; border: 1px dashed var(--later); display: flex; align-items: center; padding-left: 12px; color: var(--faint); }

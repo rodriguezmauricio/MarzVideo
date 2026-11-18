@@ -1,12 +1,20 @@
 import { useEffect, useState } from "react";
+import { ExportControl, ExportProgressLine, useExportDoneLine } from "./export/ExportStatus";
+import { useExportStore } from "./export/exportStore";
+import { Home } from "./home/Home";
 import { Icon } from "./components/Icon";
 import { Inspector } from "./components/Inspector";
 import { Preview } from "./components/Preview";
 import { mmss, mmsst } from "./components/timecode";
 import { Timeline } from "./components/Timeline";
 import { Toolbar } from "./components/Toolbar";
+import { WarningBar } from "./components/WarningBar";
+import { keptSegments } from "@marz/timeline";
+import { refuseEmpty } from "./export/outputFrames";
 import { addCutAtPlayhead, addZoomAtPlayhead, deleteSelection, runAutoZoom } from "./state/actions";
+import { useAppStore } from "./state/appStore";
 import { flushAutosave, useEditorStore } from "./state/editorStore";
+import { pickStorage } from "./storage/pickStorage";
 import type { SaveStatus } from "./storage/autosave";
 
 /** Save status: three states (DESIGN-SYSTEM.md "Save status"). A pending debounced save counts as saving. */
@@ -27,21 +35,35 @@ function SaveState({ status }: { status: SaveStatus }) {
   );
 }
 
-/** Paper bar under the strip. The first sentence of the warning is bold. */
-function WarningBar({ text }: { text: string }) {
-  const cut = text.indexOf(". ");
-  const lead = cut === -1 ? text : text.slice(0, cut + 1);
-  const rest = cut === -1 ? "" : text.slice(cut + 1);
+/** Home or the editor (appStore). */
+export function App() {
+  const screen = useAppStore((s) => s.screen);
+  const dir = useAppStore((s) => s.dir);
+  return screen === "editor" && dir ? <Editor key={dir} dir={dir} /> : <Home />;
+}
+
+/** "Projects": saves any pending edit, then goes back to Home. Faint while an export runs. */
+function BackLink() {
+  const goHome = useAppStore((s) => s.goHome);
+  const busy = useExportStore((s) => s.phase === "picking" || s.phase === "exporting");
   return (
-    <div className="warn" role="status">
-      <Icon name="alert" size={13} />
-      <b>{lead}</b>
-      {rest}
-    </div>
+    <a
+      className={busy ? "back off" : "back"}
+      href="#"
+      aria-disabled={busy || undefined}
+      data-tip={busy ? "Cancel or wait for the export first" : undefined}
+      onClick={(e) => {
+        e.preventDefault();
+        if (!busy) void goHome();
+      }}
+    >
+      <Icon name="back" size={14} />
+      Projects
+    </a>
   );
 }
 
-export function App() {
+function Editor({ dir }: { dir: string }) {
   const status = useEditorStore((s) => s.status);
   const error = useEditorStore((s) => s.error);
   const project = useEditorStore((s) => s.project);
@@ -49,11 +71,15 @@ export function App() {
   const load = useEditorStore((s) => s.load);
   const warning = useEditorStore((s) => s.warning);
   const saveStatus = useEditorStore((s) => s.saveStatus);
+  const exportFailure = useExportStore((s) => (s.phase === "failed" ? s.failure : null));
+  const exportDone = useExportDoneLine();
   const [lanesExpanded, setLanesExpanded] = useState(false);
 
   useEffect(() => {
-    void load(new URLSearchParams(location.search).get("project") ?? "demo");
-  }, [load]);
+    void load(pickStorage(dir));
+    // Leaving the editor cancels a running export (nothing is written).
+    return () => useExportStore.getState().reset();
+  }, [load, dir]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -61,6 +87,18 @@ export function App() {
       if (["INPUT", "TEXTAREA", "SELECT"].includes(el.tagName)) return;
       const s = useEditorStore.getState();
       const mod = e.ctrlKey || e.metaKey;
+      const ex = useExportStore.getState();
+      // The open preset panel takes Enter, Esc and the arrows (DESIGN-SYSTEM.md "Export").
+      if (!mod && !e.altKey && ex.key(e.code)) {
+        e.preventDefault();
+        return;
+      }
+      if (mod && e.code === "KeyE") {
+        e.preventDefault();
+        const p = s.project;
+        if (p && !refuseEmpty(keptSegments(p.durationUs, p.edits.cuts))) ex.togglePanel();
+        return;
+      }
       if (mod && e.code === "KeyZ") {
         e.preventDefault();
         if (e.shiftKey) s.redo();
@@ -90,9 +128,12 @@ export function App() {
 
   if (status === "error")
     return (
-      <div className="msg-error" role="alert">
-        <Icon name="alert" size={13} />
-        Could not open the project: {error}
+      <div className="msg">
+        <BackLink />
+        <div className="msg-error" role="alert">
+          <Icon name="alert" size={13} />
+          Could not open the project: {error}
+        </div>
       </div>
     );
   if (status !== "ready" || !project) return <div className="msg">Opening project...</div>;
@@ -102,27 +143,20 @@ export function App() {
       <div className="grid-lines" aria-hidden="true" />
       <header className="strip">
         <div className="strip-l">
-          {/* Home (the projects list) is a later milestone, so this link has nowhere to go yet. */}
-          <a className="back" aria-disabled="true">
-            <Icon name="back" size={14} />
-            Projects
-          </a>
+          <BackLink />
           <span className="faint">/</span>
           <b className="proj">{project.name}</b>
-          <SaveState status={saveStatus} />
+          {exportDone ?? <SaveState status={saveStatus} />}
         </div>
         <div className="strip-r">
           <span className="faint">
             {project.output.width} x {project.output.height} / {project.output.fps} fps
           </span>
-          {/* Export is build step 6; the button is shown but does nothing yet. */}
-          <button type="button" className="export tip-left" aria-disabled="true" data-tip="Export comes in a later step">
-            Export MP4
-            <Icon name="down" size={14} />
-          </button>
+          <ExportControl />
         </div>
+        <ExportProgressLine />
       </header>
-      {warning && <WarningBar text={warning} />}
+      {(exportFailure ?? warning) && <WarningBar text={(exportFailure ?? warning)!} />}
       {lanesExpanded && <Toolbar horizontal />}
       <main className="main">
         <div className="timecode" aria-hidden="true">
