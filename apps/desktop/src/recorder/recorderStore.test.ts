@@ -75,6 +75,7 @@ describe("recordOptions", () => {
     ],
     micId: "usb",
     cursorHidden: true,
+    systemAudio: true,
   });
 
   it("sends presets as p1..p9 in order, locked to 16:9 in the region", () => {
@@ -85,7 +86,18 @@ describe("recordOptions", () => {
     ]);
     // the region is 16:9, so a 16:9 preset has h == w in normalized units
     for (const p of o.presets) expect(p.rect.h).toBeCloseTo(p.rect.w, 9);
-    expect(o).toMatchObject({ mode: "region", region: { x: 100, y: 50, w: 1280, h: 720 }, micId: "usb", cursorHidden: true });
+    expect(o).toMatchObject({ mode: "region", region: { x: 100, y: 50, w: 1280, h: 720 }, micId: "usb", systemAudio: true, cursorHidden: true });
+  });
+
+  it("keeps the computer sound choice, and reads older saved setups as off", () => {
+    const st = new Map<string, string>();
+    const storage = { getItem: (k: string) => st.get(k) ?? null, setItem: (k: string, v: string) => void st.set(k, v) } as unknown as Storage;
+    saveSetup(storage, MON, setup("region"));
+    expect(loadSetup(storage, MON).systemAudio).toBe(true);
+    const { systemAudio: _drop, ...older } = setup("region");
+    st.set(setupKey(MON), JSON.stringify(older));
+    expect(loadSetup(storage, MON).systemAudio).toBe(false);
+    expect(loadSetup(storage, MON).micId).toBe("usb");
   });
 
   it("locks presets to the monitor in Full screen", () => {

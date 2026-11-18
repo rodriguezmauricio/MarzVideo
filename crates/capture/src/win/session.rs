@@ -37,6 +37,7 @@ pub const SCREEN_DID_NOT_START: &str = "The screen capture did not start. Try ag
 pub const SCREEN_NOT_FOUND: &str = "This screen was not found. Pick another one.";
 pub const NAME_TAKEN: &str = "A recording with this name already exists. Pick another name.";
 pub const ENCODER_STOPPED: &str = "The video encoder stopped. Stop the recording to keep what was saved.";
+pub const SYSTEM_DID_NOT_START: &str = "Computer sound could not be recorded. Recording continues without it.";
 pub const MIC_SILENT: &str = "The microphone sent no sound. The mic track is silent.";
 
 /// How long screen and mic get to deliver their first data before t0.
@@ -58,6 +59,8 @@ pub struct RecordOptions {
     pub fps: u32,
     /// WASAPI endpoint id; None records without a mic (no `mic.wav`, no mic track).
     pub mic_id: Option<String>,
+    /// Also record the computer's sound (loopback on the default output device) into `system.wav`.
+    pub system_audio: bool,
     pub cursor_hidden: bool,
     pub presets: Vec<ZoomPreset>,
     /// FFmpeg encoder name; None probes (nvenc, amf, qsv, then libx264).
@@ -149,6 +152,7 @@ struct Partial {
     encoder: Option<ScreenEncoder>,
     input: Option<InputHandle>,
     mic: Option<MicHandle>,
+    system: Option<MicHandle>,
     screen: Option<ScreenHandle>,
     /// The session's own frame sender (for the static-screen slot 0). Dropped before the writer is joined.
     frames_tx: Option<SyncSender<SlotFrame>>,
@@ -170,6 +174,9 @@ impl Partial {
             let _ = enc.finish();
         }
         if let Some(m) = self.mic.take() {
+            let _ = m.stop(0);
+        }
+        if let Some(m) = self.system.take() {
             let _ = m.stop(0);
         }
         if let Some(i) = self.input.take() {
@@ -262,6 +269,8 @@ pub struct Session {
     input_sh: Arc<InputShared>,
     screen: ScreenHandle,
     mic: Option<MicHandle>,
+    /// The computer's sound, when it was asked for and started.
+    system: Option<MicHandle>,
     input: InputHandle,
     /// A second frame sender so the writer keeps running after WGC stops, until `stop` has
     /// written the static-screen slot 0 if no frame arrived after t0.
@@ -315,7 +324,7 @@ impl Session {
             return Err(CaptureError::User(NAME_TAKEN.into()));
         }
         fs::create_dir_all(&dir)?;
-        let mut p = Partial { dir: dir.clone(), created_dir: !existed, encoder: None, input: None, mic: None, screen: None, frames_tx: None, writer: None };
+        let mut p = Partial { dir: dir.clone(), created_dir: !existed, encoder: None, input: None, mic: None, system: None, screen: None, frames_tx: None, writer: None };
         let created_at = project::iso_utc_now();
         let meta = ProjectMeta {
             id: new_guid(),
@@ -327,6 +336,7 @@ impl Session {
             fps,
             screen_offset_us: 0,
             mic: opts.mic_id.as_ref().map(|_| MicMeta { offset_us: 0 }),
+            system_audio: false,
             cursor_hidden: opts.cursor_hidden,
             presets: opts.presets.clone(),
             zooms: Vec::new(),
@@ -355,6 +365,22 @@ impl Session {
                     p.abort();
                     on_event(SessionEvent::Failed(MIC_DID_NOT_START.into()));
                     return Err(CaptureError::User(MIC_DID_NOT_START.into()));
+                }
+            }
+        }
+        // The computer's sound is optional: if loopback cannot start, record without it and say so.
+        // It is not part of the warm-up (loopback sends nothing while nothing plays).
+        let mut meta = meta;
+        if opts.system_audio {
+            match mic::start_system(&dir.join("system.wav"), MicShared::new(clock.clone(), warn_tx.clone())) {
+                Ok(m) => {
+                    p.system = Some(m);
+                    meta.system_audio = true;
+                    let _ = project::write_crash_marker(&dir, &meta);
+                }
+                Err(_) => {
+                    let _ = fs::remove_file(dir.join("system.wav"));
+                    let _ = warn_tx.send(SYSTEM_DID_NOT_START.to_string());
                 }
             }
         }
@@ -412,7 +438,7 @@ impl Session {
         };
         let fwd = or_abort!(p, thread::Builder::new().name("marz-session".into()).spawn(move || fwd.run()));
 
-        let Partial { input, mic, screen, frames_tx, writer, .. } = p;
+        let Partial { input, mic, system, screen, frames_tx, writer, .. } = p;
         let session = Session {
             dir,
             meta,
@@ -424,6 +450,7 @@ impl Session {
             input_sh,
             screen: screen.expect("started"),
             mic,
+            system,
             input: input.expect("started"),
             frames_tx: frames_tx.expect("created"),
             writer: writer.expect("started"),
@@ -612,7 +639,7 @@ impl Session {
         // Before WGC stops, so the writer pads to the end and drops frames past it.
         self.end_idx.store(end_for(self.screen_sh.first_rec_us().unwrap_or(0)), Ordering::SeqCst);
 
-        let Session { dir, mut meta, screen_sh, input, screen, mic, frames_tx, writer, end_idx, wstats, zoom, fwd_stop, fwd, on_event, .. } = self;
+        let Session { dir, mut meta, screen_sh, input, screen, mic, system, frames_tx, writer, end_idx, wstats, zoom, fwd_stop, fwd, on_event, .. } = self;
         fwd_stop.store(true, Ordering::SeqCst);
         let warn_rx = fwd.join().ok();
 
@@ -645,6 +672,16 @@ impl Session {
                 keep(Err(CaptureError::Encoder("the frame writer thread panicked".into())));
                 None
             }
+        };
+        // The computer's sound is optional: a failure to finish it drops the track, never the take.
+        let system_ok = match system.map(|m| m.stop(duration_us)) {
+            Some(Ok(_)) => true,
+            Some(Err(e)) => {
+                eprintln!("marz-capture: the computer sound track could not be finished: {e}");
+                let _ = fs::remove_file(dir.join("system.wav"));
+                false
+            }
+            None => false,
         };
         let mic_report = match mic.map(|m| m.stop(duration_us)) {
             Some(Ok(r)) => Some(r),
@@ -680,6 +717,7 @@ impl Session {
         meta.duration_us = duration_us;
         meta.screen_offset_us = screen_offset_us;
         meta.mic = mic_report.as_ref().map(|r| MicMeta { offset_us: r.first_rec_us.unwrap_or(0) });
+        meta.system_audio = system_ok;
         // Zooms from before an edit keep the preset's original frame (their marks carry no rect).
         meta.zooms = project::live_zooms(&marks, &meta.presets, duration_us);
         for (id, rect) in edited {

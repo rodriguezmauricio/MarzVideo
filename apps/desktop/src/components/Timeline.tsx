@@ -168,6 +168,7 @@ export function Timeline({ expanded, onToggleLanes }: { expanded: boolean; onTog
   const rows = expanded ? ROWS.expanded : ROWS.fit;
   const labels = zoomLabels(project.edits.zooms);
   const mic = project.tracks.mic;
+  const sys = project.tracks.system;
   const nAuto = project.edits.zooms.filter((z) => z.origin === "auto").length;
   const nOwn = project.edits.zooms.length - nAuto;
 
@@ -203,9 +204,13 @@ export function Timeline({ expanded, onToggleLanes }: { expanded: boolean; onTog
             )}
           </div>
           <div className="lb" style={{ height: rows.zoom }}>Zoom</div>
-          {LATER_LANES.map((name) => (
-            <div key={name} className="lb later" style={{ height: rows.later }}>{name}</div>
-          ))}
+          {LATER_LANES.map((name) =>
+            name === "System audio" && sys ? (
+              <div key={name} className="lb" style={{ height: rows.later }}>{name}</div>
+            ) : (
+              <div key={name} className="lb later" style={{ height: rows.later }}>{name}</div>
+            ),
+          )}
         </div>
         <div ref={viewportRef} className="tl-scroll">
           <div
@@ -253,11 +258,18 @@ export function Timeline({ expanded, onToggleLanes }: { expanded: boolean; onTog
                 );
               })}
             </div>
-            {LATER_LANES.map((name) => (
-              <div key={name} className="tk tk-later" style={{ height: rows.later }} aria-hidden="true">
-                <div className="later-box">Later</div>
-              </div>
-            ))}
+            {LATER_LANES.map((name) =>
+              name === "System audio" && sys ? (
+                // The computer's sound keeps the System audio lane's place and height.
+                <div key={name} className="tk" style={{ height: rows.later }}>
+                  <MicWave url={storage.fileUrl(sys.file)} offsetUs={sys.offsetUs} widthPx={x(D)} pps={pps} rowH={rows.later} />
+                </div>
+              ) : (
+                <div key={name} className="tk tk-later" style={{ height: rows.later }} aria-hidden="true">
+                  <div className="later-box">Later</div>
+                </div>
+              ),
+            )}
 
             {project.edits.cuts.map((c) => {
               const r = rangeOf("cut", c.id, c);

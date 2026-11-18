@@ -11,6 +11,8 @@ export interface ExportJobDto {
   fps: number;
   segments: { srcStartUs: number; srcEndUs: number; outStartUs: number }[];
   mic: { file: string; offsetUs: number; volume: number; muted: boolean } | null;
+  /** The computer's sound, mixed with the mic. */
+  system: { file: string; offsetUs: number; volume: number; muted: boolean } | null;
   outputDurationUs: number;
 }
 
@@ -34,6 +36,7 @@ export function buildExportJob(opts: { project: Project; preset: ExportPreset; p
   const { project, preset } = opts;
   const segs = keptSegments(project.durationUs, project.edits.cuts);
   const mic = project.tracks.mic;
+  const sys = project.tracks.system;
   return {
     projectDir: opts.projectDir,
     outPath: opts.outPath,
@@ -46,6 +49,7 @@ export function buildExportJob(opts: { project: Project; preset: ExportPreset; p
       outStartUs: Math.round(s.outStartUs),
     })),
     mic: mic ? { file: mic.file, offsetUs: Math.round(mic.offsetUs), volume: mic.volume, muted: mic.muted } : null,
+    system: sys ? { file: sys.file, offsetUs: Math.round(sys.offsetUs), volume: sys.volume, muted: sys.muted } : null,
     outputDurationUs: Math.round(outputDurationUs(segs)),
   };
 }

@@ -1,6 +1,6 @@
 //! FFmpeg argument and audio filter builders.
 
-use crate::ExportJob;
+use crate::{ExportJob, MicJob};
 use std::path::{Path, PathBuf};
 
 /// Microseconds as seconds with 6 decimals (negative values clamp to 0).
@@ -15,96 +15,125 @@ fn millis(us: i64) -> String {
     format!("{}.{:03}", us / 1_000, us % 1_000)
 }
 
-/// The mic file path when the mic is used (present and not muted).
-fn mic_path(job: &ExportJob) -> Option<PathBuf> {
-    job.mic.as_ref().filter(|m| !m.muted).map(|m| job.project_dir.join(&m.file))
+/// The audio tracks that are used (present and not muted), mic first: (track, file path).
+fn used_tracks(job: &ExportJob) -> Vec<(&MicJob, PathBuf)> {
+    [job.mic.as_ref(), job.system.as_ref()]
+        .into_iter()
+        .flatten()
+        .filter(|t| !t.muted)
+        .map(|t| (t, job.project_dir.join(&t.file)))
+        .collect()
 }
 
 /// Overlap with the mic shorter than this (1 ms, 48 samples) counts as no overlap: `atrim` of such a
 /// sliver can come out empty, and `apad` on an empty stream never ends.
 const MIN_OVERLAP_US: i64 = 1_000;
 
-/// `audio_filter` with the mic file's length read from its WAV header (project_dir/mic.file). If the
-/// header cannot be read the length is unknown and the mic is assumed long enough.
+/// `audio_filter` with each used track's length read from its WAV header. If a header cannot be
+/// read that length is unknown and the track is assumed long enough.
 pub fn audio_filter(job: &ExportJob) -> Option<String> {
-    let len = mic_path(job).and_then(|p| crate::wav::wav_duration_us(&p));
-    audio_filter_with(job, len)
+    let lens: Vec<Option<i64>> = used_tracks(job).iter().map(|(_, p)| crate::wav::wav_duration_us(p)).collect();
+    audio_graph(job, &lens)
 }
 
-/// The `-filter_complex` graph that cuts the mic to the kept segments, ending in the `[aout]` pad.
-/// The mic is input 1 and is `mic_len_us` long (None: unknown). None when there is no usable mic
-/// (no mic, muted, or no segments): the caller then writes a silent track.
-///
-/// Each segment is mapped to the mic timeline by subtracting `offset_us`.
-/// - It overlaps the mic: `atrim` of the overlap, `adelay` for the part before the mic starts, and
-///   `apad` to the exact segment length for the part after the mic ends. The input of `apad` is never
-///   empty, so it ends.
-/// - It lies wholly before the mic starts or wholly after it ends: a generated silence of exactly
-///   the segment length. (An `atrim` that returns nothing would hang `apad` or break timestamps.)
+/// `audio_filter` with the mic's length given (tests); a used system track's length is read from
+/// its header.
 pub fn audio_filter_with(job: &ExportJob, mic_len_us: Option<i64>) -> Option<String> {
-    let mic = job.mic.as_ref().filter(|m| !m.muted)?;
+    let lens: Vec<Option<i64>> = used_tracks(job)
+        .iter()
+        .map(|(t, p)| if job.mic.as_ref().is_some_and(|m| std::ptr::eq(m, *t)) { mic_len_us } else { crate::wav::wav_duration_us(p) })
+        .collect();
+    audio_graph(job, &lens)
+}
+
+/// The `-filter_complex` graph that cuts each used audio track to the kept segments and mixes them,
+/// ending in the `[aout]` pad. Used tracks are inputs 1, 2 (mic first) with lengths `lens` (None:
+/// unknown). None when no track is used or there are no segments: the caller writes a silent track.
+fn audio_graph(job: &ExportJob, lens: &[Option<i64>]) -> Option<String> {
+    let tracks = used_tracks(job);
     let segs: Vec<_> = job.segments.iter().filter(|s| s.src_end_us > s.src_start_us).collect();
-    if segs.is_empty() {
+    if tracks.is_empty() || segs.is_empty() {
         return None;
     }
-    let offset = mic.offset_us;
-    let mic_len = mic_len_us.unwrap_or(i64::MAX);
-    // Overlap of a segment with the mic, on the mic timeline.
-    let overlap = |s: &crate::Segment| (s.src_end_us - offset).min(mic_len) - (s.src_start_us - offset).max(0);
-    let readers = segs.iter().filter(|s| overlap(s) >= MIN_OVERLAP_US).count();
-
     let mut parts: Vec<String> = Vec::new();
+    for (k, (t, _)) in tracks.iter().enumerate() {
+        track_chain(&mut parts, &segs, t, k, lens.get(k).copied().flatten());
+    }
+    let end = secs(job.output_duration_us);
+    if tracks.len() == 1 {
+        parts.push(format!("[t0]apad,atrim=end={end}[aout]"));
+    } else {
+        // Plain sum (no level drop): each track keeps the level it had alone.
+        let ins: String = (0..tracks.len()).map(|k| format!("[t{k}]")).collect();
+        parts.push(format!("{ins}amix=inputs={}:duration=longest:normalize=0,apad,atrim=end={end}[aout]", tracks.len()));
+    }
+    Some(parts.join(";"))
+}
+
+/// The chain for one track (input `k + 1`) ending in `[t{k}]`.
+///
+/// Each segment is mapped to the track's timeline by subtracting its `offset_us`.
+/// - It overlaps the track: `atrim` of the overlap, `adelay` for the part before the track starts, and
+///   `apad` to the exact segment length for the part after the track ends. The input of `apad` is
+///   never empty, so it ends.
+/// - It lies wholly before the track starts or wholly after it ends: a generated silence of exactly
+///   the segment length. (An `atrim` that returns nothing would hang `apad` or break timestamps.)
+fn track_chain(parts: &mut Vec<String>, segs: &[&crate::Segment], t: &MicJob, k: usize, len_us: Option<i64>) {
+    let input = k + 1;
+    // Labels: the first track keeps the plain names (s0, a0), later ones get a track prefix.
+    let pre = if k == 0 { String::new() } else { format!("k{k}") };
+    let offset = t.offset_us;
+    let track_len = len_us.unwrap_or(i64::MAX);
+    let overlap = |s: &crate::Segment| (s.src_end_us - offset).min(track_len) - (s.src_start_us - offset).max(0);
+    let readers = segs.iter().filter(|s| overlap(s) >= MIN_OVERLAP_US).count();
     // One format for every branch so `concat` accepts them: 48 kHz mono float.
     let norm = "aresample=48000,aformat=sample_fmts=fltp:channel_layouts=mono";
     match readers {
         0 => {}
-        1 => parts.push(format!("[1:a]{norm}[s0]")),
+        1 => parts.push(format!("[{input}:a]{norm}[{pre}s0]")),
         n => {
-            let outs: String = (0..n).map(|i| format!("[s{i}]")).collect();
-            parts.push(format!("[1:a]{norm},asplit={n}{outs}"));
+            let outs: String = (0..n).map(|i| format!("[{pre}s{i}]")).collect();
+            parts.push(format!("[{input}:a]{norm},asplit={n}{outs}"));
         }
     }
     let mut reader = 0;
     let mut labels = String::new();
     for (i, s) in segs.iter().enumerate() {
         let len = s.src_end_us - s.src_start_us;
-        let mic_start = s.src_start_us - offset;
-        let mic_end = s.src_end_us - offset;
+        let t_start = s.src_start_us - offset;
+        let t_end = s.src_end_us - offset;
         if overlap(s) < MIN_OVERLAP_US {
-            parts.push(format!("anullsrc=r=48000:cl=mono:d={0},aformat=sample_fmts=fltp,atrim=end={0}[a{i}]", secs(len)));
+            parts.push(format!("anullsrc=r=48000:cl=mono:d={0},aformat=sample_fmts=fltp,atrim=end={0}[{pre}a{i}]", secs(len)));
         } else {
-            let mut chain = format!("[s{reader}]atrim=start={}:end={},asetpts=PTS-STARTPTS", secs(mic_start), secs(mic_end));
-            if mic_start < 0 {
-                chain.push_str(&format!(",adelay={}:all=1", millis(-mic_start)));
+            let mut chain = format!("[{pre}s{reader}]atrim=start={}:end={},asetpts=PTS-STARTPTS", secs(t_start), secs(t_end));
+            if t_start < 0 {
+                chain.push_str(&format!(",adelay={}:all=1", millis(-t_start)));
             }
-            chain.push_str(&format!(",apad=whole_dur={}[a{i}]", secs(len)));
+            chain.push_str(&format!(",apad=whole_dur={}[{pre}a{i}]", secs(len)));
             parts.push(chain);
             reader += 1;
         }
-        labels.push_str(&format!("[a{i}]"));
+        labels.push_str(&format!("[{pre}a{i}]"));
     }
-    parts.push(format!(
-        "{labels}concat=n={}:v=0:a=1,volume={},apad,atrim=end={}[aout]",
-        segs.len(),
-        mic.volume,
-        secs(job.output_duration_us)
-    ));
-    Some(parts.join(";"))
+    parts.push(format!("{labels}concat=n={}:v=0:a=1,volume={}[t{k}]", segs.len(), t.volume));
 }
 
 /// The full FFmpeg command line (without the program). Video comes as H.264 annexb on stdin and is
-/// copied; audio is the filtered mic or a silent track. Output is `<out_path>.part` as MP4.
+/// copied; audio is the filtered mic and computer sound, or a silent track. Output is
+/// `<out_path>.part` as MP4.
 pub fn ffmpeg_args(job: &ExportJob) -> Vec<String> {
     let mut a: Vec<String> = Vec::new();
     let mut push = |items: &[&str]| a.extend(items.iter().map(|s| s.to_string()));
     push(&["-hide_banner", "-loglevel", "warning", "-y"]);
     push(&["-f", "h264", "-framerate", &job.fps.to_string(), "-i", "pipe:0"]);
-    match (audio_filter(job), mic_path(job)) {
-        (Some(graph), Some(path)) => {
-            push(&["-i", &path.to_string_lossy()]);
+    match audio_filter(job) {
+        Some(graph) => {
+            for (_, path) in used_tracks(job) {
+                push(&["-i", &path.to_string_lossy()]);
+            }
             push(&["-filter_complex", &graph, "-map", "0:v:0", "-map", "[aout]"]);
         }
-        _ => {
+        None => {
             push(&["-f", "lavfi", "-i", "anullsrc=r=48000:cl=mono"]);
             push(&["-map", "0:v:0", "-map", "1:a:0"]);
         }
@@ -138,6 +167,7 @@ mod tests {
             fps: 30,
             segments,
             mic,
+            system: None,
             output_duration_us: dur_us,
         }
     }
@@ -285,6 +315,36 @@ mod tests {
         assert_eq!(args[n - 3], "-f");
         assert_eq!(args[n - 2], "mp4");
         assert_eq!(args[n - 1], PathBuf::from("out").join("video.mp4.part").to_string_lossy());
+    }
+
+    #[test]
+    fn mic_and_computer_sound_are_mixed_at_full_level() {
+        let mut j = job(vec![seg(1_000_000, 3_000_000, 0), seg(4_000_000, 5_000_000, 2_000_000)], Some(mic(12_400)), 3_000_000);
+        j.system = Some(MicJob { file: "system.wav".into(), offset_us: 0, volume: 1.0, muted: false });
+        let f = audio_filter_with(&j, Some(10_000_000)).unwrap();
+        assert!(f.contains("[1:a]aresample"), "{f}");
+        assert!(f.contains("[2:a]aresample"), "{f}");
+        assert!(f.contains("[k1s0]atrim=start=1.000000:end=3.000000"), "{f}");
+        assert!(f.contains("atrim=start=0.987600:end=2.987600"), "{f}");
+        assert!(f.contains("[t0][t1]amix=inputs=2:duration=longest:normalize=0,apad,atrim=end=3.000000[aout]"), "{f}");
+        let args = ffmpeg_args(&j);
+        let sys = PathBuf::from("proj").join("system.wav").to_string_lossy().to_string();
+        let mic_i = args.iter().position(|a| a.ends_with("mic.wav")).unwrap();
+        let sys_i = args.iter().position(|a| a == &sys).unwrap();
+        assert!(mic_i < sys_i, "mic is input 1, computer sound input 2");
+    }
+
+    #[test]
+    fn computer_sound_alone_when_the_mic_is_muted_or_missing() {
+        let mut m = mic(0);
+        m.muted = true;
+        let mut j = job(vec![seg(0, 1_000_000, 0)], Some(m), 1_000_000);
+        j.system = Some(MicJob { file: "system.wav".into(), offset_us: 0, volume: 0.5, muted: false });
+        let f = audio_filter(&j).unwrap();
+        assert!(f.starts_with("[1:a]"), "{f}");
+        assert!(!f.contains("amix"), "{f}");
+        assert!(f.contains("volume=0.5[t0]"), "{f}");
+        assert!(ffmpeg_args(&j).join(" ").contains("system.wav"));
     }
 
     #[test]

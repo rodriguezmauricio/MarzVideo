@@ -105,6 +105,7 @@ const PATHS = {
       <path d="M5 11a7 7 0 0014 0M12 18v3M4 4l16 16" />
     </>
   ),
+  speaker: <path d="M4 9h4l5-4v14l-5-4H4zM16.5 9.5a3.5 3.5 0 010 5M19 7a7 7 0 010 10" />,
   zoomout: (
     <>
       <circle cx="10.5" cy="10.5" r="6.5" />

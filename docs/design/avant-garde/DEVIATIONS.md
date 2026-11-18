@@ -84,3 +84,9 @@ Checked in Edge at 1440 x 900 on the demo sample (the export runs for real into 
 - **The strip sits above the main area** (z-index 6) so the panel and tooltips cover the inspector.
 - **Show in folder in the browser does nothing** (no Explorer); in the app it opens Explorer with the file selected (not clicked in the checks: it would open a window on the owner's desktop).
 
+
+## Computer sound (2026-11-18)
+
+- **Setup bar has a "Computer sound" toggle** between Camera and Hide cursor (not in `Recorder-Setup.dc.html`; DESIGN-SYSTEM.md section 6 first). The bar is about 200 px wider.
+- **The System audio lane shows a waveform** when the recording has computer sound, in the Later lane's 22 px slot (44 expanded), so the timeline keeps its height. No volume or mute control for it yet.
+- **New `speaker` icon** (icons.md), same 2px square-cap stroke as the others.

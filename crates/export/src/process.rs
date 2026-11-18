@@ -230,6 +230,7 @@ mod tests {
                 Segment { src_start_us: 1_500_000, src_end_us: 2_300_000, out_start_us: 1_200_000 },
             ],
             mic,
+            system: None,
             output_duration_us: 2_000_000,
         }
     }
@@ -307,6 +308,35 @@ mod tests {
             };
             (ffmpeg, ffprobe)
         }};
+    }
+
+    #[test]
+    fn computer_sound_is_mixed_in_and_heard_without_the_mic() {
+        let (ffmpeg, ffprobe) = tools_or_skip!("computer_sound_mix");
+        for (tag, with_mic) in [("sysonly", false), ("sysmix", true)] {
+            let dir = temp_dir(tag);
+            let h264 = fixtures(&ffmpeg, &dir);
+            // A 3 s stereo computer-sound track, as the recorder writes it.
+            let st = command(&ffmpeg)
+                .args(["-v", "error", "-y", "-f", "lavfi", "-i", "sine=frequency=880:sample_rate=48000", "-ac", "2", "-t", "3"])
+                .arg(dir.join("system.wav"))
+                .stdin(Stdio::null())
+                .status()
+                .unwrap();
+            assert!(st.success());
+            let mut j = job(&dir, if with_mic { mic(12_400) } else { None });
+            j.system = Some(MicJob { file: "system.wav".into(), offset_us: 0, volume: 1.0, muted: false });
+            let out = j.out_path.clone();
+            let mut p = ExportProcess::start(&ffmpeg, j).unwrap();
+            for chunk in h264.chunks(4096) {
+                p.write_chunk(chunk).unwrap();
+            }
+            p.finish().unwrap();
+            let (kinds, dur) = probe(&ffprobe, &out);
+            assert!(kinds.contains(&"audio".to_string()), "{kinds:?}");
+            assert!((dur - 2.0).abs() <= 1.0 / 30.0, "{tag} duration {dur}");
+            assert!(max_volume_db(&ffmpeg, &out) > -20.0, "{tag}: computer sound must be audible");
+        }
     }
 
     #[test]

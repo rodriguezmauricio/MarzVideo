@@ -165,6 +165,20 @@ export function SetupBar({ placed = false }: { placed?: boolean }) {
             type="button"
             className="rb-cursor"
             role="switch"
+            aria-checked={s.systemAudio}
+            disabled={phase !== "setup"}
+            onClick={() => s.update({ systemAudio: !s.systemAudio })}
+          >
+            <Icon name="speaker" size={16} />
+            Computer sound
+            <i className={`rtg${s.systemAudio ? " on" : ""}`}>
+              <i />
+            </i>
+          </button>
+          <button
+            type="button"
+            className="rb-cursor"
+            role="switch"
             aria-checked={s.cursorHidden}
             disabled={phase !== "setup"}
             onClick={() => s.update({ cursorHidden: !s.cursorHidden })}

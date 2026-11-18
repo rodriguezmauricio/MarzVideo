@@ -161,6 +161,11 @@ pub fn validate_job(job: &ExportJob, allowed_dirs: &HashSet<PathBuf>, picked: &H
     {
         return bad("mic file is not a file in the project folder");
     }
+    if let Some(sys) = &job.system
+        && !is_plain_file_name(&sys.file)
+    {
+        return bad("computer sound file is not a file in the project folder");
+    }
     let even = |v: u32| (16..=7680).contains(&v) && v.is_multiple_of(2);
     if !even(job.width) || !even(job.height) || !(1..=120).contains(&job.fps) {
         return bad("size or frame rate out of range");
@@ -468,6 +473,7 @@ mod tests {
                 Segment { src_start_us: 1_500_000, src_end_us: 2_300_000, out_start_us: 1_200_000 },
             ],
             mic: None,
+            system: None,
             output_duration_us: 2_000_000,
         }
     }

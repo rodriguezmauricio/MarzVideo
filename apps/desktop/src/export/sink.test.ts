@@ -38,8 +38,15 @@ describe("buildExportJob", () => {
         { srcStartUs: 1_500_000, srcEndUs: 2_000_000, outStartUs: 500_000 },
       ],
       mic: { file: "mic.wav", offsetUs: 12_400, volume: 0.8, muted: false },
+      system: null,
       outputDurationUs: 1_000_000,
     });
+  });
+
+  it("passes the computer sound track when the project has one", () => {
+    const withSys = { ...project, tracks: { ...project.tracks, system: { file: "system.wav", offsetUs: 0, volume: 1, muted: false } } } as Project;
+    const job = buildExportJob({ project: withSys, preset: PRESETS.youtube, projectDir: "p", outPath: "o.mp4" });
+    expect(job.system).toEqual({ file: "system.wav", offsetUs: 0, volume: 1, muted: false });
   });
 
   it("uses the preset size and fps, and null when there is no mic", () => {

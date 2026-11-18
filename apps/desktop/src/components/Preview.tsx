@@ -22,11 +22,22 @@ export function Preview() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
+  const sysRef = useRef<HTMLAudioElement>(null);
 
   const segs = useMemo(() => keptSegments(project.durationUs, project.edits.cuts), [project.durationUs, project.edits.cuts]);
   // Presentation time of frame 0 in screen.mp4 (0 without B-frames). 0 until the file's start is read.
   const firstFrame = useRef(0);
   const mic = project.tracks.mic;
+  const sys = project.tracks.system;
+  type AudioTrack = NonNullable<typeof mic>;
+  /** The audio elements with their tracks: the mic and the computer's sound. */
+  const audios = (): [HTMLAudioElement, AudioTrack][] =>
+    (
+      [
+        [audioRef.current, mic],
+        [sysRef.current, sys],
+      ] as const
+    ).filter((p): p is [HTMLAudioElement, AudioTrack] => !!p[0] && !!p[1]);
 
   // Latest values for the animation loop without restarting it.
   const live = useRef({ project, segs, editing: false });
@@ -49,7 +60,7 @@ export function Preview() {
     const video = videoRef.current;
     const audio = audioRef.current;
     if (video) video.currentTime = Math.max(0, mediaTimeUs(project, srcUs, firstFrame.current) / 1e6);
-    if (audio && mic) audio.currentTime = Math.max(0, (srcUs - mic.offsetUs) / 1e6);
+    for (const [audio, track] of audios()) audio.currentTime = Math.max(0, (srcUs - track.offsetUs) / 1e6);
   };
 
   // Read where frame 0 sits in screen.mp4 (a Range request on the file's start), then show the playhead again.
@@ -110,11 +121,10 @@ export function Preview() {
   // Play / pause and the frame loop.
   useEffect(() => {
     const video = videoRef.current;
-    const audio = audioRef.current;
     if (!video) return;
     if (!playing) {
       video.pause();
-      audio?.pause();
+      for (const [audio] of audios()) audio.pause();
       return;
     }
 
@@ -125,7 +135,7 @@ export function Preview() {
     }
     seekMedia(start);
     void video.play().catch(() => useEditorStore.getState().pause());
-    if (audio && mic) void audio.play().catch(() => {});
+    for (const [audio] of audios()) void audio.play().catch(() => {});
 
     let raf = 0;
     const loop = () => {
@@ -137,8 +147,8 @@ export function Preview() {
       }
       const next = nextPlaybackTime(live.current.segs, srcUs) ?? srcUs;
       if (next !== srcUs) seekMedia(next);
-      if (audio && mic) {
-        const want = (next - mic.offsetUs) / 1e6;
+      for (const [audio, track] of audios()) {
+        const want = (next - track.offsetUs) / 1e6;
         if (want >= 0 && !audio.ended && audio.paused && !video.paused) void audio.play().catch(() => {});
         if (want >= 0 && !audio.ended && Math.abs(audio.currentTime - want) > AUDIO_DRIFT_S) audio.currentTime = want;
       }
@@ -150,7 +160,7 @@ export function Preview() {
     return () => {
       cancelAnimationFrame(raf);
       video.pause();
-      audio?.pause();
+      for (const [audio] of audios()) audio.pause();
     };
   }, [playing]);
 
@@ -160,6 +170,12 @@ export function Preview() {
       audioRef.current.muted = mic.muted;
     }
   }, [mic?.volume, mic?.muted]);
+  useEffect(() => {
+    if (sysRef.current && sys) {
+      sysRef.current.volume = Math.min(1, Math.max(0, sys.volume));
+      sysRef.current.muted = sys.muted;
+    }
+  }, [sys?.volume, sys?.muted]);
 
   const selectedCut = selection?.kind === "cut" ? project.edits.cuts.find((c) => c.id === selection.id) : undefined;
   const caption = selectedZoom
@@ -192,6 +208,7 @@ export function Preview() {
         style={{ position: "absolute", width: 1, height: 1, opacity: 0, pointerEvents: "none" }}
       />
       {mic && <audio ref={audioRef} src={storage.fileUrl(mic.file)} preload="auto" />}
+      {sys && <audio ref={sysRef} src={storage.fileUrl(sys.file)} preload="auto" />}
     </div>
   );
 }
