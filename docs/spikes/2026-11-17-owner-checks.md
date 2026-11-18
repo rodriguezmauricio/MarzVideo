@@ -154,3 +154,21 @@ at Ctrl+0. The muted 5 s are silent on the mic lane, the length is the wall time
 bar nor the red border is in the video. If a key does nothing, check the bar's error line for
 "Hotkey ... is taken by another app" and send it.
 
+---
+
+## 8. Camera clap check (added 2026-11-18)
+
+Proves: the camera picture lines up with the voice. The camera's own delay (sensor and USB, often 50 to
+150 ms) is not in its timestamps, so it is measured once here; if there is a gap, a constant fixes it.
+
+1. Sit facing the laptop camera with the room light on. Open Marz Recorder, New recording, turn the
+   Camera on (setup bar), check your face shows in the camera box on the overlay.
+2. Press Record. Wait 3 seconds, then clap your hands **in front of your face, in view of the camera**,
+   three times, about 3 seconds apart. Keep still between claps. Stop after about 15 seconds.
+3. Tell Claude the recording's name (for example "2026-11-19 10.12 Recording"). That is all.
+
+Claude reads it: the clap's sound peak in `mic.wav` (with the mic `offsetUs`) against the camera frame
+where the hands meet in `camera.mp4` (with the camera `offsetUs`), for all three claps.
+PASS: the camera is within one camera frame (33 ms) of the sound on all three. If it is later by the same
+amount each time, that amount goes into `CAMERA_DELAY_HNS` in `crates/capture/src/win/camera.rs`.
+Not checked until you do it.

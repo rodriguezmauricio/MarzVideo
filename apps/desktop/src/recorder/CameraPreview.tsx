@@ -11,6 +11,10 @@ import { CAMERA_BUSY, CAMERA_FAILED, recorderApi, type Camera } from "./recorder
 import { useRecorder } from "./recorderStore";
 import type { PxRect } from "./regionMath";
 
+/** A camera that failed (busy in another app) is tried again this often, so the error line goes
+ *  away once the other app lets it go. */
+const RETRY_MS = 3000;
+
 /** The `getUserMedia` device for camera `name` (Media Foundation's friendly name is the label). */
 async function openCamera(name: string): Promise<MediaStream> {
   const want = { width: { ideal: 1280 }, height: { ideal: 720 } };
@@ -39,6 +43,7 @@ export function CameraPreview({ area }: { area: PxRect }) {
   const [cameras, setCameras] = useState<Camera[] | null>(null);
   const [held, setHeld] = useState(false);
   const [size, setSize] = useState({ width: 16, height: 9 });
+  const [attempt, setAttempt] = useState(0);
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
 
@@ -69,6 +74,7 @@ export function CameraPreview({ area }: { area: PxRect }) {
   useEffect(() => {
     if (!active || api.fake) return;
     let live = true;
+    let retry = 0;
     openCamera(name).then(
       (stream) => {
         if (!live) return stream.getTracks().forEach((t) => t.stop());
@@ -80,13 +86,18 @@ export function CameraPreview({ area }: { area: PxRect }) {
         }
         api.cameraError(null);
       },
-      (e: unknown) => live && api.cameraError(errorText(e)),
+      (e: unknown) => {
+        if (!live) return;
+        api.cameraError(errorText(e));
+        retry = window.setTimeout(() => setAttempt((n) => n + 1), RETRY_MS);
+      },
     );
     return () => {
       live = false;
+      window.clearTimeout(retry);
       release();
     };
-  }, [api, active, name]);
+  }, [api, active, name, attempt]);
 
   // Turning the camera off clears its error on the bar.
   useEffect(() => {

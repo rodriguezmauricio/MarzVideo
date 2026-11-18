@@ -75,8 +75,9 @@ MyRecording.marz/
   screen.mp4       fragmented MP4, H.264, constant frame rate
   mic.wav          48 kHz PCM
   system.wav       optional (2026-11-18): the computer's sound, 48 kHz stereo PCM, starts at t0
+  camera.mp4       optional (2026-11-18): the webcam, fragmented MP4, H.264, 30 fps constant
   proxies/         optional, later
-  (later: camera.mp4, transcript.json)
+  (later: transcript.json)
 ```
 
 **Time:** every timestamp is an integer number of **microseconds since recording start** (`tUs`),
@@ -88,6 +89,18 @@ shape. The recorder writes it only when "Computer sound" is on (WASAPI loopback 
 device). Loopback sends nothing while nothing plays, so `system.wav` starts at t0 (`offsetUs` 0) and quiet
 stretches are silence. Preview plays it and export mixes it with the mic at full level. Older projects
 have no `tracks.system` and open as before; `version` stays 1.
+
+**Camera (added 2026-11-18, Mauricio's yes; design `2026-11-18-camera-track-design.md`):** `tracks.camera`
+is optional: `{ "file": "camera.mp4", "offsetUs", "width", "height", "fps" }`. The recorder writes it only
+when the camera is on; `camera.mp4` is never mirrored or burned into `screen.mp4`. `offsetUs` is when its
+first frame was taken on the recording clock (the device timestamp; the camera's own delay is 0 until the
+owner clap check measures it). The file is 30 fps constant: the camera often delivers fewer frames in dim
+light and the last one is repeated, as for the screen. `edits.camera` is optional too, missing means
+`{ "visible": true, "mirror": true, "pip": { "corner": "bottomRight", "widthFrac": 0.22, "marginFrac": 0.03,
+"shape": "rect" }, "scenes": [] }`. `corner` is `topLeft`, `topRight`, `bottomLeft` or `bottomRight`;
+`widthFrac` is the camera width as a share of the output width (S 0.16, M 0.22, L 0.30); `scenes` is reserved
+for timed layouts and kept as is. Preview and export draw the camera last, aspect kept, mirrored when set,
+1px paper border; zooms move the screen only. Older projects open as before; `version` stays 1.
 
 **Coordinates:** in events, pixels in the captured source frame (origin top-left). In edits,
 normalized 0–1 relative to the source frame, so edits survive resolution/proxy changes.
@@ -124,7 +137,8 @@ normalized 0–1 relative to the source frame, so edits survive resolution/proxy
   "tracks": {
     "screen": { "file": "screen.mp4", "offsetUs": 0 },
     "mic":    { "file": "mic.wav", "offsetUs": 12400, "volume": 1, "muted": false },
-    "system": { "file": "system.wav", "offsetUs": 0, "volume": 1, "muted": false }
+    "system": { "file": "system.wav", "offsetUs": 0, "volume": 1, "muted": false },
+    "camera": { "file": "camera.mp4", "offsetUs": 9859, "width": 1280, "height": 720, "fps": 30 }
   },
   "output": { "width": 1920, "height": 1080, "fps": 60 },
   "zoomPresets": [
