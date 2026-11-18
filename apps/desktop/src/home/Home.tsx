@@ -9,20 +9,37 @@ import { projectsApi } from "./projectsApi";
 const NOT_A_PROJECT = "This folder is not a Marz project. Pick a folder that ends in .marz.";
 const message = (err: unknown) => (err instanceof Error ? err.message : String(err));
 
-/** A frame of the recording, 96 x 54. */
-function Thumb({ dir }: { dir: string }) {
+/** A frame of the recording, 96 x 54. The app hands a small cached picture; a browser loads the video. */
+function Thumb({ dir, load }: { dir: string; load?: (dir: string) => Promise<string> }) {
+  const [src, setSrc] = useState<string | null>(null);
+  useEffect(() => {
+    if (!load) return;
+    let live = true;
+    setSrc(null);
+    load(dir).then(
+      (url) => live && setSrc(url),
+      (err) => console.warn("thumbnail", dir, err),
+    );
+    return () => {
+      live = false;
+    };
+  }, [dir, load]);
   return (
     <div className="h-thumb">
-      <video src={`${pickStorage(dir).fileUrl("screen.mp4")}#t=0.5`} preload="metadata" muted playsInline tabIndex={-1} />
+      {load ? (
+        src && <img src={src} alt="" draggable={false} />
+      ) : (
+        <video src={`${pickStorage(dir).fileUrl("screen.mp4")}#t=0.5`} preload="metadata" muted playsInline tabIndex={-1} />
+      )}
     </div>
   );
 }
 
-function Row({ row, onOpen }: { row: RowView; onOpen: () => void }) {
+function Row({ row, onOpen, thumb }: { row: RowView; onOpen: () => void; thumb?: (dir: string) => Promise<string> }) {
   return (
     <button type="button" className="h-row" onClick={onOpen}>
       <span className="h-idx">{row.index}</span>
-      <Thumb dir={row.dir} />
+      <Thumb dir={row.dir} load={thumb} />
       <span className="h-name">{row.name}</span>
       <span className="h-len">{row.length}</span>
       <span className="h-meta">{row.meta}</span>
@@ -218,7 +235,7 @@ export function Home() {
           </div>
           <div className="h-rows">
             {rows.map((r) => (
-              <Row key={r.dir + r.index} row={r} onOpen={() => openProject(r.dir)} />
+              <Row key={r.dir + r.index} row={r} thumb={api.thumb} onOpen={() => openProject(r.dir)} />
             ))}
           </div>
         </>
