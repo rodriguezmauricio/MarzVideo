@@ -96,7 +96,12 @@ export function RecordingBar({ placed = false }: { placed?: boolean }) {
             {warning}
           </div>
         )}
-        <div ref={barRef} className="rb-bar rr-bar">
+        {/* A press on the bar's empty parts or the timer drags the bar window. */}
+        <div
+          ref={barRef}
+          className="rb-bar rr-bar"
+          onPointerDown={(e) => e.button === 0 && (e.target as HTMLElement).closest("button, select, label") === null && api.dragBar()}
+        >
           <span className="rr-time" role="timer" aria-label="Recording time">
             <i className="rr-sq" />
             <b>{formatTimer(rec.recUs)}</b>

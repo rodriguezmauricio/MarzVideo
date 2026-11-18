@@ -2,7 +2,7 @@
 // with sample data for design checks (no Tauri, nothing persisted).
 import { invoke } from "@tauri-apps/api/core";
 import { emitTo, listen } from "@tauri-apps/api/event";
-import type { PxRect } from "./regionMath";
+import type { NormRect, PxRect } from "./regionMath";
 import type { Monitor, RecordOptions } from "./recorderStore";
 
 export type Mic = { id: string; name: string; default: boolean };
@@ -23,6 +23,7 @@ export interface RecorderApi {
   checkRegion(r: PxRect): Promise<string | null>;
   startMeter(micId: string | null): Promise<void>;
   onLevel(cb: (level: number) => void): () => void;
+  /** CSS pixels; sent to Rust as physical pixels with the page's own pixel ratio. */
   fitBar(w: number, h: number, barTop: number, recording: boolean): Promise<void>;
   /** Ask the bar to record (from the overlay's key, or the global hotkey through Rust). */
   requestRecord(): void;
@@ -42,6 +43,13 @@ export interface RecorderApi {
   setMuted(muted: boolean): Promise<void>;
   /** A session preset id ("p1"), or null to zoom out. */
   zoom(presetId: string | null): Promise<void>;
+  /** Move or resize a preset while recording (session id, rect normalized to the source). */
+  setPresetRect(presetId: string, rect: NormRect): Promise<void>;
+  /** Where the overlay takes the mouse (its controls, CSS pixels; sent as physical pixels);
+   * `grab` takes the whole screen. */
+  hits(rects: PxRect[], grab: boolean): void;
+  /** Start dragging the bar window (a press on its empty parts). */
+  dragBar(): void;
   /** Stop: Rust closes the recorder and opens the project in the main window. */
   stop(): Promise<void>;
 }
@@ -54,8 +62,13 @@ function message(err: unknown): string {
 }
 
 function tauriApi(): RecorderApi {
-  const monitor = (window as unknown as { __MARZ_MONITOR__?: Monitor }).__MARZ_MONITOR__;
-  if (!monitor) throw new Error("The recorder window opened without its monitor.");
+  const given = (window as unknown as { __MARZ_MONITOR__?: Monitor }).__MARZ_MONITOR__;
+  if (!given) throw new Error("The recorder window opened without its monitor.");
+  // The page's own pixel ratio, not the monitor's scale: WebView2 also applies the Windows text
+  // size (Accessibility > Text size), so at 100% display scale with 125% text a CSS pixel is 1.25
+  // physical pixels. With the monitor's 1.0 the region was drawn 25% too large and the bar clipped.
+  const monitor: Monitor = { ...given, scale: window.devicePixelRatio || given.scale };
+  const px = (v: number) => v * monitor.scale;
   const unlistenLater = (p: Promise<() => void>) => () => void p.then((u) => u());
   return {
     fake: false,
@@ -67,7 +80,7 @@ function tauriApi(): RecorderApi {
         .catch(message),
     startMeter: (micId) => invoke<void>("start_mic_meter", { micId }),
     onLevel: (cb) => unlistenLater(listen<number>("recorder://level", (e) => cb(e.payload))),
-    fitBar: (w, h, barTop, recording) => invoke<void>("fit_bar", { w, h, barTop, recording }),
+    fitBar: (w, h, barTop, recording) => invoke<void>("fit_bar", { w: px(w), h: px(h), barTop: px(barTop), recording }),
     requestRecord: () => void emitTo("bar", "recorder://record").catch(() => undefined),
     onRecordRequest: (cb) => unlistenLater(listen("recorder://record", () => cb())),
     record: (opts) => invoke<void>("start_recording", { opts }),
@@ -80,6 +93,10 @@ function tauriApi(): RecorderApi {
     resume: () => invoke<void>("resume_recording"),
     setMuted: (muted) => invoke<void>("set_mic_muted", { muted }),
     zoom: (presetId) => invoke<void>("trigger_zoom", { presetId }),
+    setPresetRect: (presetId, rect) => invoke<void>("set_preset_rect", { presetId, rect }),
+    hits: (rects, grab) =>
+      void invoke("overlay_hits", { rects: rects.map((r) => ({ x: px(r.x), y: px(r.y), w: px(r.w), h: px(r.h) })), grab }).catch(() => undefined),
+    dragBar: () => void invoke("drag_bar").catch(() => undefined),
     stop: () => invoke<string>("stop_recording").then(() => undefined),
   };
 }
@@ -137,6 +154,9 @@ function fakeApi(): RecorderApi {
     resume: () => set({ paused: false }),
     setMuted: (muted) => set({ muted }),
     zoom: (presetId) => set({ activePreset: presetId }),
+    setPresetRect: async () => undefined,
+    hits: () => undefined,
+    dragBar: () => undefined,
     stop: async () => undefined,
   };
 }

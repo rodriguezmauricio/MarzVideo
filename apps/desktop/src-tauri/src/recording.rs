@@ -290,6 +290,16 @@ pub fn trigger_zoom(app: tauri::AppHandle, preset_id: Option<String>) -> Result<
     imp::zoom(&app, preset_id)
 }
 
+/// Move or resize a zoom preset while recording (`preset_id` "p1"..; rect normalized to the
+/// source). The zoom running on it now and later zooms to it take the new frame.
+#[tauri::command]
+pub fn set_preset_rect(app: tauri::AppHandle, preset_id: String, rect: NormRect) -> Result<(), String> {
+    if !valid_rect(&rect) {
+        return Err(PRESET_INVALID.into());
+    }
+    imp::set_preset_rect(&app, &preset_id, rect)
+}
+
 /// Stop, close the recorder, show the main window and open the project there. Returns the folder.
 #[tauri::command(async)]
 pub fn stop_recording(app: tauri::AppHandle) -> Result<String, String> {
@@ -479,12 +489,6 @@ mod imp {
         format!("{:04}-{:02}-{:02} {:02}.{:02}", t.wYear, t.wMonth, t.wDay, t.wHour, t.wMinute)
     }
 
-    fn set_click_through(app: &AppHandle, on: bool) {
-        if let Some(w) = app.get_webview_window(OVERLAY) {
-            let _ = w.set_ignore_cursor_events(on);
-        }
-    }
-
     pub fn start(app: &AppHandle, plan: Plan) -> Result<(), String> {
         let st = state(app);
         let attempt = st.attempts.fetch_add(1, Ordering::SeqCst) + 1;
@@ -509,7 +513,6 @@ mod imp {
             let _ = crate::recorder::close_all(app);
             return Ok(());
         }
-        set_click_through(app, true);
         emit_state(app);
         let app = app.clone();
         let _ = thread::Builder::new().name("marz-rec-tick".into()).spawn(move || {
@@ -586,7 +589,6 @@ mod imp {
         let res = finish(app, live);
         lock(&st.slot).stop_done();
         if is_open(app) {
-            set_click_through(app, false);
             arm_setup_keys(app);
             emit_state(app);
             let _ = app.emit_to(BAR, FAILED_EVENT, msg);
@@ -644,6 +646,10 @@ mod imp {
         })
     }
 
+    pub fn set_preset_rect(app: &AppHandle, id: &str, rect: NormRect) -> Result<(), String> {
+        with_live(app, |l| l.session.set_preset_rect(id, rect))
+    }
+
     /// On closing the recorder (`open` already cleared): free the setup hotkeys and stop a running
     /// recording. A second close while a stop runs gets `Busy`.
     pub fn shutdown(app: &AppHandle) -> Shutdown {
@@ -690,6 +696,9 @@ mod imp {
         Err(NOT_RECORDING.into())
     }
     pub fn zoom(_app: &AppHandle, _id: Option<String>) -> Result<(), String> {
+        Err(NOT_RECORDING.into())
+    }
+    pub fn set_preset_rect(_app: &AppHandle, _id: &str, _rect: NormRect) -> Result<(), String> {
         Err(NOT_RECORDING.into())
     }
     pub fn shutdown(_app: &AppHandle) -> Shutdown {

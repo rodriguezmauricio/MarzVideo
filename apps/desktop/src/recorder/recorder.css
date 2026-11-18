@@ -13,6 +13,7 @@ html.rec-page, html.rec-page body, html.rec-page #root { background: transparent
 .ro-area { position: absolute; border: 2px dashed var(--paper); z-index: 5; cursor: move; }
 .ro-area.full { border: 0; cursor: default; }
 .ro-in { position: absolute; inset: 6px; cursor: crosshair; }
+.rec-ov.drawing .ro-area { cursor: crosshair; }
 .ro-area.full .ro-in { inset: 0; }
 .ro-h { position: absolute; z-index: 6; background: var(--paper); }
 .ro-h.corner { width: 14px; height: 14px; margin: -7px 0 0 -7px; border: 2px solid var(--ink); }
@@ -57,7 +58,9 @@ html.rec-page, html.rec-page body, html.rec-page #root { background: transparent
 .rb-wrap.placed { position: absolute; z-index: 20; left: 50%; transform: translateX(-50%); }
 .rb-stack { display: flex; flex-direction: column; }
 .rb-err { height: 24px; display: flex; align-items: center; gap: 8px; padding: 0 16px; background: var(--paper); color: var(--ink); font-weight: 500; border: 1px solid var(--paper); }
-.rb-bar { display: flex; align-items: center; gap: 16px; padding: 10px 12px 10px 16px; background: var(--ink); border: 1px solid var(--paper); }
+.rb-bar { display: flex; align-items: center; gap: 16px; padding: 10px 12px 10px 16px; background: var(--ink); border: 1px solid var(--paper); cursor: move; }
+.rb-bar > * { cursor: default; }
+.rb-bar > .rr-time { cursor: move; }
 .rb-mic { display: flex; align-items: center; gap: 12px; }
 .rb-pick { position: relative; display: flex; align-items: center; gap: 8px; height: 34px; padding: 0 10px; border: 1px solid var(--line); cursor: pointer; }
 .rb-name { max-width: 240px; overflow: hidden; text-overflow: ellipsis; }
@@ -86,7 +89,7 @@ html.rec-page, html.rec-page body, html.rec-page #root { background: transparent
 .rec-ov.recording { pointer-events: none; }
 .rr-dim { position: absolute; background: var(--dim-rec); }
 .rr-area { position: absolute; z-index: 5; border: 3px solid var(--rec); }
-.rr-preset { position: absolute; z-index: 5; border: 2px solid var(--accent); }
+.rr-preset { position: absolute; z-index: 5; border: 2px solid var(--accent); pointer-events: auto; cursor: move; }
 .rr-chip { position: absolute; z-index: 20; display: flex; align-items: center; gap: 8px; padding: 6px 12px; background: var(--ink); border: 1px solid var(--rec); white-space: nowrap; }
 .rr-chip > i { width: 8px; height: 8px; background: var(--rec); flex: none; }
 

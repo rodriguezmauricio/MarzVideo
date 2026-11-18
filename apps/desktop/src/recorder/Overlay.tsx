@@ -1,15 +1,22 @@
 // The recorder overlay: covers the whole monitor (transparent window). Mode picker top centre,
 // capture region with handles and size chip, zoom presets. DESIGN-SYSTEM.md section 6 "Recorder".
-// While recording (Rust reported Recording) the window is click-through and shows only the 3px rec
-// border, the dimming, the live preset and the "Recording this region" chip.
+// The window takes the mouse only over its controls (`useHits`): the mode picker, the size chip,
+// the handles, the dashed borders and the preset tags. Everywhere else clicks reach the apps under
+// it. "Region" and "Add zoom" in the mode picker take the whole screen until the next drag.
+// While recording it shows only the 3px rec border, the dimming, the live preset (which can be
+// moved and resized) and the "Recording this region" chip.
 // Works in CSS pixels; the store keeps the region in physical pixels.
+import { lockAspect } from "@marz/timeline";
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { Icon, type IconName } from "../components/Icon";
+import { useHits } from "./hits";
 import { useRecLive } from "./recLive";
 import { recorderApi } from "./recorderApi";
-import { addPreset, sessionPresetId, useRecorder, type Mode } from "./recorderStore";
+import { addPreset, MAX_PRESETS, sessionPresetId, useRecorder, type Mode } from "./recorderStore";
 import {
+  captureSize,
   dragRect,
+  edgeBands,
   moveRect,
   OUTPUT_ASPECT,
   presetFromDrag,
@@ -33,6 +40,9 @@ const HANDLES: Handle[] = ["nw", "n", "ne", "e", "se", "s", "sw", "w"];
 const CORNERS: Handle[] = ["nw", "ne", "se", "sw"];
 /** A press that moves less than this is a click, not a drag. */
 const CLICK_PX = 4;
+
+/** What the next drag draws: armed by "Region" and "Add zoom", it takes the whole screen. */
+type Drawing = "region" | "preset" | null;
 
 type Drag =
   | { kind: "region-new"; start: Pt }
@@ -59,6 +69,7 @@ export function Overlay({ children }: { children?: ReactNode }) {
   const [drag, setDrag] = useState<Drag | null>(null);
   const [live, setLive] = useState<{ area?: PxRect; preset?: { id: string; rect: PxRect }; draft?: PxRect } | null>(null);
   const [renaming, setRenaming] = useState<string | null>(null);
+  const [drawing, setDrawing] = useState<Drawing>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const recording = useRecLive((l) => l.rec.recording);
 
@@ -105,6 +116,7 @@ export function Overlay({ children }: { children?: ReactNode }) {
     const l = live;
     setDrag(null);
     setLive(null);
+    if (d.kind === "region-new" || d.kind === "preset-new") setDrawing(null);
     const p = at(e);
     const moved = (from: Pt) => Math.abs(p.x - from.x) >= CLICK_PX || Math.abs(p.y - from.y) >= CLICK_PX;
     if ((d.kind === "region-resize" || d.kind === "region-move" || d.kind === "region-new") && l?.area) {
@@ -134,7 +146,10 @@ export function Overlay({ children }: { children?: ReactNode }) {
       if (useRecLive.getState().rec.recording) return; // Stop or Ctrl+Shift+R ends a recording, not Esc
       if (e.key === "Escape") {
         e.preventDefault();
-        void api.close();
+        if (drawing) setDrawing(null);
+        else void api.close();
+      } else if (e.key.toLowerCase() === "z" && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        addZoom();
       } else if (e.key === "Delete" && s.selected) {
         remove(s.selected);
       } else if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.code === "KeyR") {
@@ -146,7 +161,15 @@ export function Overlay({ children }: { children?: ReactNode }) {
     return () => window.removeEventListener("keydown", onKey);
   });
 
-  const setMode = (mode: Mode) => s.update({ mode });
+  const setMode = (mode: Mode) => {
+    s.update({ mode });
+    // "Region" (also when it is already on) draws a new region with the next drag.
+    setDrawing(mode === "region" ? "region" : null);
+  };
+  const full9 = s.presets.length >= MAX_PRESETS;
+  const addZoom = () => {
+    if (!full9) setDrawing((d) => (d === "preset" ? null : "preset"));
+  };
 
   // The area outside the region, dimmed in four bands (none in Full screen).
   const dims = full
@@ -159,24 +182,45 @@ export function Overlay({ children }: { children?: ReactNode }) {
       ];
   const phys = toPhysical(shown, scale);
 
+  // The dashed borders are grabbed to move the region and the presets; their insides stay
+  // click-through (tags and handles are `data-hit`).
+  const bands = [
+    ...(full ? [] : edgeBands(shown)),
+    ...s.presets.flatMap((p) => edgeBands(live?.preset?.id === p.id ? live.preset.rect : presetPx(p.rect, area))),
+  ];
+  useHits(rootRef, recording ? [] : bands, !recording && (drawing !== null || drag !== null));
+
   if (recording) return <RecordingView area={area} full={full} screen={screen}>{children}</RecordingView>;
 
   return (
-    <div ref={rootRef} className="rec-ov" onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp}>
+    <div ref={rootRef} className={`rec-ov${drawing ? " drawing" : ""}`} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp}>
       {dims.map((st, i) => (
         <div
           key={i}
           className="ro-dim"
           style={st}
-          onPointerDown={s.mode === "region" ? (e) => begin(e, { kind: "region-new", start: at(e) }) : undefined}
+          onPointerDown={
+            drawing === "region" ? (e) => begin(e, { kind: "region-new", start: at(e) }) : drawing ? () => setDrawing(null) : undefined
+          }
         />
       ))}
       <div
         className={`ro-area${full ? " full" : ""}`}
         style={{ left: shown.x, top: shown.y, width: shown.w, height: shown.h }}
-        onPointerDown={full ? undefined : (e) => begin(e, { kind: "region-move", from: at(e), start: area })}
+        onPointerDown={
+          drawing === "region" ? (e) => begin(e, { kind: "region-new", start: at(e) }) : full ? undefined : (e) => begin(e, { kind: "region-move", from: at(e), start: area })
+        }
       >
-        <div className="ro-in" onPointerDown={(e) => begin(e, { kind: "preset-new", start: at(e) })} />
+        <div
+          className="ro-in"
+          onPointerDown={
+            drawing === "region"
+              ? (e) => begin(e, { kind: "region-new", start: at(e) })
+              : drawing === "preset"
+                ? (e) => begin(e, { kind: "preset-new", start: at(e) })
+                : undefined
+          }
+        />
       </div>
       {s.mode === "region" &&
         HANDLES.map((h) => {
@@ -185,6 +229,7 @@ export function Overlay({ children }: { children?: ReactNode }) {
           return (
             <i
               key={h}
+              data-hit
               className={`ro-h ${corner ? "corner" : h === "n" || h === "s" ? "hbar" : "vbar"} h-${h}`}
               style={{ left: c.x, top: c.y }}
               onPointerDown={(e) => begin(e, { kind: "region-resize", handle: h, start: area })}
@@ -207,7 +252,7 @@ export function Overlay({ children }: { children?: ReactNode }) {
               begin(e, { kind: "preset-move", id: p.id, from: at(e), start: r });
             }}
           >
-            <span className="ro-tag" onPointerDown={(e) => e.stopPropagation()}>
+            <span className="ro-tag" data-hit onPointerDown={(e) => e.stopPropagation()}>
               <b>{p.id}</b>
               {renaming === p.id ? (
                 <RenameField
@@ -233,6 +278,7 @@ export function Overlay({ children }: { children?: ReactNode }) {
                 return (
                   <i
                     key={h}
+                    data-hit
                     className="ro-ph"
                     style={{ left: c.x, top: c.y }}
                     onPointerDown={(e) => begin(e, { kind: "preset-resize", id: p.id, handle: h, start: r })}
@@ -244,7 +290,7 @@ export function Overlay({ children }: { children?: ReactNode }) {
       })}
       {live?.draft && <div className="ro-preset draft" style={{ left: live.draft.x, top: live.draft.y, width: live.draft.w, height: live.draft.h }} />}
 
-      <div className="ro-modes" role="radiogroup" aria-label="Capture mode">
+      <div className="ro-modes" data-hit role="radiogroup" aria-label="Capture mode">
         {MODES.map((m) =>
           m.mode === "window" ? (
             <span key={m.mode} className="ro-mode off" aria-disabled="true">
@@ -266,6 +312,17 @@ export function Overlay({ children }: { children?: ReactNode }) {
             </button>
           ),
         )}
+        <button
+          type="button"
+          className={`ro-mode${drawing === "preset" ? " on" : ""}${full9 ? " off" : ""}`}
+          aria-pressed={drawing === "preset"}
+          disabled={full9}
+          onClick={addZoom}
+        >
+          <Icon name="zoomadd" size={16} />
+          Add zoom
+          <span className="hk">Z</span>
+        </button>
         <button type="button" className="ro-mode ro-close" onClick={() => void api.close()}>
           <Icon name="close" size={16} />
           Close
@@ -277,12 +334,53 @@ export function Overlay({ children }: { children?: ReactNode }) {
   );
 }
 
-/** The overlay while recording: never takes clicks (the window is click-through too). */
+/** The overlay while recording: takes clicks only on the live preset's border and corner handles,
+ * which move and resize it; the new frame goes to the engine on release (`setPresetRect`). */
 function RecordingView({ area, full, screen, children }: { area: PxRect; full: boolean; screen: { width: number; height: number }; children?: ReactNode }) {
-  const presets = useRecorder((s) => s.presets);
+  const api = recorderApi();
+  const s = useRecorder();
   const activeId = useRecLive((l) => l.rec.activePreset);
-  const active = presets.find((p) => sessionPresetId(p.id) === activeId);
-  const r = active ? presetPx(active.rect, area) : null;
+  const active = s.presets.find((p) => sessionPresetId(p.id) === activeId);
+  const rootRef = useRef<HTMLDivElement>(null);
+  // The drag and its latest frame live in refs: pointerup can arrive before React re-renders.
+  const dragRef = useRef<{ id: string; handle: Handle | null; from: Pt; start: PxRect } | null>(null);
+  const liveRef = useRef<PxRect | null>(null);
+  const [live, setLive] = useState<PxRect | null>(null);
+  const r = active ? (live ?? presetPx(active.rect, area)) : null;
+  useHits(rootRef, r ? edgeBands(r) : [], live !== null);
+
+  const begin = (e: ReactPointerEvent<HTMLElement>, handle: Handle | null) => {
+    if (!active || !r || e.button !== 0) return;
+    e.stopPropagation();
+    e.currentTarget.closest<HTMLElement>(".rr-preset")?.setPointerCapture(e.pointerId);
+    dragRef.current = { id: active.id, handle, from: { x: e.clientX, y: e.clientY }, start: r };
+    liveRef.current = r;
+    setLive(r);
+  };
+  const onMove = (e: ReactPointerEvent) => {
+    const d = dragRef.current;
+    if (!d) return;
+    const local = { width: area.w, height: area.h };
+    const start = { ...d.start, x: d.start.x - area.x, y: d.start.y - area.y };
+    const next = d.handle
+      ? resizeRect(start, d.handle, { x: e.clientX - area.x, y: e.clientY - area.y }, local, OUTPUT_ASPECT)
+      : moveRect(start, e.clientX - d.from.x, e.clientY - d.from.y, local);
+    liveRef.current = { ...next, x: next.x + area.x, y: next.y + area.y };
+    setLive(liveRef.current);
+  };
+  const onUp = () => {
+    const d = dragRef.current;
+    const l = liveRef.current;
+    dragRef.current = null;
+    liveRef.current = null;
+    setLive(null);
+    if (!d || !l || l.w < 1 || l.h < 1) return;
+    const rect = toNorm({ ...l, x: l.x - area.x, y: l.y - area.y }, { width: area.w, height: area.h });
+    s.update({ presets: s.presets.map((p) => (p.id === d.id ? { ...p, rect } : p)) });
+    const source = captureSize(s.mode, s.region, s.monitor);
+    void api.setPresetRect(sessionPresetId(d.id), lockAspect(rect, OUTPUT_ASPECT, source)).catch(() => undefined);
+  };
+
   const dims = full
     ? []
     : [
@@ -293,12 +391,26 @@ function RecordingView({ area, full, screen, children }: { area: PxRect; full: b
       ];
   const chip = full ? { left: 24, top: 100 } : { left: area.x, top: Math.max(0, area.y - 34) };
   return (
-    <div className="rec-ov recording">
+    <div ref={rootRef} className="rec-ov recording">
       {dims.map((st, i) => (
         <div key={i} className="rr-dim" style={st} />
       ))}
       <div className="rr-area" style={{ left: area.x, top: area.y, width: area.w, height: area.h }} />
-      {r && <div className="rr-preset" style={{ left: r.x, top: r.y, width: r.w, height: r.h }} />}
+      {r && (
+        <div
+          className="rr-preset"
+          style={{ left: r.x, top: r.y, width: r.w, height: r.h }}
+          onPointerDown={(e) => begin(e, null)}
+          onPointerMove={onMove}
+          onPointerUp={onUp}
+          onPointerCancel={onUp}
+        >
+          {CORNERS.map((h) => {
+            const c = handlePos({ x: 0, y: 0, w: r.w, h: r.h }, h);
+            return <i key={h} data-hit className="ro-ph" style={{ left: c.x, top: c.y }} onPointerDown={(e) => begin(e, h)} />;
+          })}
+        </div>
+      )}
       <div className="rr-chip" style={chip}>
         <i />
         {full ? "Recording this screen. Autosaving every few seconds" : "Recording this region. Autosaving every few seconds"}
@@ -333,7 +445,7 @@ function SizeChip({ area, phys }: { area: PxRect; phys: PxRect }) {
   const s = useRecorder();
   if (s.mode === "full") {
     return (
-      <div className="ro-chip" style={{ left: 24, top: 100 }}>
+      <div className="ro-chip" data-hit style={{ left: 24, top: 100 }}>
         Full screen, {s.monitor.width} x {s.monitor.height}
       </div>
     );
@@ -348,14 +460,14 @@ function SizeChip({ area, phys }: { area: PxRect; phys: PxRect }) {
       s.update({ region: { x: Math.min(s.region.x, mw - W), y: Math.min(s.region.y, mh - H), w: W, h: H } });
     };
     return (
-      <div className="ro-chip" style={pos}>
+      <div className="ro-chip" data-hit style={pos}>
         <SizeInput label="Width" value={s.region.w} set={(w) => apply(w, s.region.h)} />x
         <SizeInput label="Height" value={s.region.h} set={(h) => apply(s.region.w, h)} />
       </div>
     );
   }
   return (
-    <div className="ro-chip" style={pos}>
+    <div className="ro-chip" data-hit style={pos}>
       <button
         type="button"
         className="ro-lock"

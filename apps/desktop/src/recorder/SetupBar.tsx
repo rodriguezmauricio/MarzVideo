@@ -127,7 +127,8 @@ export function SetupBar({ placed = false }: { placed?: boolean }) {
             {note}
           </div>
         )}
-        <div ref={barRef} className="rb-bar">
+        {/* A press on the bar's empty parts drags the bar window. */}
+        <div ref={barRef} className="rb-bar" onPointerDown={(e) => e.button === 0 && e.target === e.currentTarget && api.dragBar()}>
           <div className="rb-mic">
             <Icon name="mic" size={16} />
             <label className="rb-pick">

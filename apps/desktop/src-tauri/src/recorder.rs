@@ -1,11 +1,16 @@
 //! The recorder setup: the `overlay` (region and zoom presets over the whole monitor) and the `bar`
 //! (mic, meter, Record) windows, both kept out of the capture, plus the mic meter.
 //!
+//! The overlay takes the mouse only over its own controls (`overlay_hits`, see `hits`): everywhere
+//! else clicks go to the apps under it, before and during the recording. The bar can be dragged
+//! anywhere and keeps that place until the app closes.
+//!
 //! The overlay covers the monitor the main window is on, in physical pixels. The page works in CSS
 //! pixels and sends physical, monitor-relative pixels back (`check_region`). The recording itself
 //! (session, hotkeys, stop into the editor) is in `recording.rs`.
 
 use serde::{Deserialize, Serialize};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
 use crate::recording::Shutdown;
 use tauri::{AppHandle, Emitter, Manager, State, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
@@ -64,6 +69,46 @@ pub const SCREEN_NOT_FOUND: &str = "Could not find this screen. Move the window 
 pub struct Recorder {
     monitor: Mutex<Option<RecMonitor>>,
     meter: Mutex<Option<meter::Run>>,
+    /// Where the overlay takes the mouse.
+    hits: Mutex<Hits>,
+    /// Bumped on every open and close, so an old hit-test thread ends.
+    hit_gen: AtomicU64,
+    bar: Mutex<BarPlace>,
+}
+
+/// A rectangle in physical pixels from the overlay's top-left corner.
+#[derive(Deserialize, Clone, Copy, Debug, PartialEq)]
+pub struct HitRect {
+    pub x: f64,
+    pub y: f64,
+    pub w: f64,
+    pub h: f64,
+}
+
+/// The overlay's controls (`rects`), or the whole overlay while drawing (`grab`).
+#[derive(Default, Clone, Debug, PartialEq)]
+pub struct Hits {
+    pub rects: Vec<HitRect>,
+    pub grab: bool,
+}
+
+impl Hits {
+    /// Does the overlay take the mouse at `(x, y)` (physical pixels from its top-left)?
+    pub fn takes(&self, x: f64, y: f64) -> bool {
+        self.grab || self.rects.iter().any(|r| x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h)
+    }
+}
+
+/// The bar window's place. `anchor` is set once the bar is dragged: the bar's centre x and its top
+/// edge, in physical screen pixels; later fits keep it there.
+#[derive(Default, Debug)]
+struct BarPlace {
+    /// Where the last `fit_bar` put the window (its own Moved event is not a drag).
+    placed: Option<(i32, i32)>,
+    /// Physical width of the window and the bar's top inside it, from the last fit.
+    width: u32,
+    bar_top_px: i32,
+    anchor: Option<(i32, i32)>,
 }
 
 fn err(e: impl std::fmt::Display) -> String {
@@ -93,13 +138,24 @@ pub fn checked_region(rect: Rect, mon_w: u32, mon_h: u32) -> Result<Rect, String
 
 /// Where the bar window goes: centred, its bar's top edge at y `design_top` of 900 (704 before
 /// recording, 716 while recording) scaled to the monitor. `w`, `h` and `bar_top` (the bar's top
-/// inside the window) are CSS pixels.
+/// inside the window) are physical pixels: the page converts with its own pixel ratio, which can
+/// differ from the monitor's scale (WebView2 also applies the Windows text size).
 pub fn bar_placement(mon: &RecMonitor, w: f64, h: f64, bar_top: f64, design_top: f64) -> (i32, i32, u32, u32) {
-    let pw = (w * mon.scale).ceil() as u32;
-    let ph = (h * mon.scale).ceil() as u32;
+    let pw = w.ceil() as u32;
+    let ph = h.ceil() as u32;
     let x = mon.x + (mon.width as i32 - pw as i32) / 2;
-    let y = mon.y + (f64::from(mon.height) * design_top / DESIGN_H).round() as i32 - (bar_top * mon.scale).round() as i32;
+    let y = mon.y + (f64::from(mon.height) * design_top / DESIGN_H).round() as i32 - bar_top.round() as i32;
     (x, y, pw, ph)
+}
+
+/// Window position for a bar dragged to `anchor` (bar centre x, bar top y), clamped so the bar
+/// stays on the monitor.
+pub fn anchored_placement(mon: &RecMonitor, anchor: (i32, i32), pw: u32, ph: u32, bar_top_px: i32) -> (i32, i32) {
+    let x = anchor.0 - pw as i32 / 2;
+    let y = anchor.1 - bar_top_px;
+    let max_x = mon.x + mon.width as i32 - pw as i32;
+    let max_y = mon.y + mon.height as i32 - ph as i32;
+    (x.clamp(mon.x, max_x.max(mon.x)), y.clamp(mon.y, max_y.max(mon.y)))
 }
 
 /// Init script that hands the page its monitor (the page reads `window.__MARZ_MONITOR__`).
@@ -144,6 +200,18 @@ pub async fn open_recorder(app: AppHandle, state: State<'_, Recorder>) -> Result
                     }
                 });
             }
+            if let Some(bar) = app.get_webview_window(BAR) {
+                let handle = app.clone();
+                bar.on_window_event(move |e| {
+                    if let tauri::WindowEvent::Moved(p) = e {
+                        bar_moved(&handle, p.x, p.y);
+                    }
+                });
+            }
+            if let Ok(mut h) = state.hits.lock() {
+                *h = Hits::default();
+            }
+            hits::start(&app, state.hit_gen.fetch_add(1, Ordering::SeqCst) + 1);
             overlay.show().map_err(err)?;
             main.hide().map_err(err)?;
             crate::recording::set_open(&app, true);
@@ -197,7 +265,7 @@ fn build_windows(app: &AppHandle, mon: &RecMonitor) -> Result<WebviewWindow, Str
         .map_err(err)?;
     platform::exclude(&bar)?;
     // The bar shows itself once it knows its size (`fit_bar`).
-    let (x, y, w, h) = bar_placement(mon, 900.0, 110.0, 24.0, BAR_TOP_DESIGN);
+    let (x, y, w, h) = bar_placement(mon, 900.0 * mon.scale, 110.0 * mon.scale, 24.0 * mon.scale, BAR_TOP_DESIGN);
     bar.set_position(tauri::PhysicalPosition::new(x, y)).map_err(err)?;
     bar.set_size(tauri::PhysicalSize::new(w, h)).map_err(err)?;
 
@@ -218,6 +286,7 @@ pub(crate) fn close_all(app: &AppHandle) -> Shutdown {
             *m = None;
         }
     }
+    state.hit_gen.fetch_add(1, Ordering::SeqCst);
     let stopped = crate::recording::shutdown(app);
     for label in [BAR, OVERLAY] {
         if let Some(w) = app.get_webview_window(label) {
@@ -276,14 +345,112 @@ pub fn check_region(state: State<'_, Recorder>, rect: Rect) -> Result<Rect, Stri
 
 /// Size and place the bar window around its content, then show it. `recording` puts the bar at
 /// the recording position (y 716 instead of 704).
+/// A bar that was dragged keeps its place (centre and bar top) instead.
 #[tauri::command]
 pub fn fit_bar(window: WebviewWindow, state: State<'_, Recorder>, w: f64, h: f64, bar_top: f64, recording: Option<bool>) -> Result<(), String> {
     let mon = monitor(&state)?;
     let top = if recording == Some(true) { BAR_TOP_RECORDING } else { BAR_TOP_DESIGN };
-    let (x, y, pw, ph) = bar_placement(&mon, w, h, bar_top, top);
+    let (mut x, mut y, pw, ph) = bar_placement(&mon, w, h, bar_top, top);
+    let bar_top_px = bar_top.round() as i32;
+    {
+        let mut place = state.bar.lock().map_err(err)?;
+        if let Some(a) = place.anchor {
+            (x, y) = anchored_placement(&mon, a, pw, ph, bar_top_px);
+        }
+        place.placed = Some((x, y));
+        place.width = pw;
+        place.bar_top_px = bar_top_px;
+    }
     window.set_size(tauri::PhysicalSize::new(pw, ph)).map_err(err)?;
     window.set_position(tauri::PhysicalPosition::new(x, y)).map_err(err)?;
     window.show().map_err(err)
+}
+
+/// Drag the bar window (the page calls this on a press on the bar's empty parts).
+#[tauri::command]
+pub fn drag_bar(window: WebviewWindow) -> Result<(), String> {
+    window.start_dragging().map_err(err)
+}
+
+/// The bar window moved. A move to anywhere but where `fit_bar` put it is a drag.
+fn bar_moved(app: &AppHandle, x: i32, y: i32) {
+    let state = app.state::<Recorder>();
+    let Ok(mut place) = state.bar.lock() else { return };
+    if place.placed == Some((x, y)) || place.width == 0 {
+        return;
+    }
+    place.placed = Some((x, y));
+    place.anchor = Some((x + place.width as i32 / 2, y + place.bar_top_px));
+}
+
+/// Where the overlay takes the mouse: its controls in physical pixels from the overlay's top-left
+/// (the monitor's), or everything while drawing.
+#[tauri::command]
+pub fn overlay_hits(state: State<'_, Recorder>, rects: Vec<HitRect>, grab: bool) -> Result<(), String> {
+    *state.hits.lock().map_err(err)? = Hits { rects, grab };
+    Ok(())
+}
+
+/// The hit-test thread: about 60 times a second it reads the cursor and makes the overlay
+/// click-through unless the cursor is over one of its controls. Nothing changes while a mouse
+/// button is held, so a drag that started on a control keeps going, and a drag in another app
+/// that passes over a control is not taken over.
+mod hits {
+    use super::{Recorder, OVERLAY};
+    use std::sync::atomic::Ordering;
+    use std::time::Duration;
+    use tauri::{AppHandle, Manager};
+
+    pub fn start(app: &AppHandle, generation: u64) {
+        let app = app.clone();
+        let _ = std::thread::Builder::new().name("marz-overlay-hits".into()).spawn(move || {
+            let mut taking: Option<bool> = None;
+            loop {
+                std::thread::sleep(Duration::from_millis(16));
+                let state = app.state::<Recorder>();
+                if state.hit_gen.load(Ordering::SeqCst) != generation {
+                    break;
+                }
+                let Some(w) = app.get_webview_window(OVERLAY) else { break };
+                let Some(mon) = state.monitor.lock().ok().and_then(|m| m.clone()) else { break };
+                if platform::button_down() {
+                    continue;
+                }
+                let Some((cx, cy)) = platform::cursor() else { continue };
+                let (x, y) = (f64::from(cx - mon.x), f64::from(cy - mon.y));
+                let take = state.hits.lock().map(|h| h.takes(x, y)).unwrap_or(false);
+                if taking != Some(take) && w.set_ignore_cursor_events(!take).is_ok() {
+                    taking = Some(take);
+                }
+            }
+        });
+    }
+
+    #[cfg(windows)]
+    mod platform {
+        use windows::Win32::Foundation::POINT;
+        use windows::Win32::UI::Input::KeyboardAndMouse::{GetAsyncKeyState, VK_LBUTTON, VK_MBUTTON, VK_RBUTTON};
+        use windows::Win32::UI::WindowsAndMessaging::GetCursorPos;
+
+        pub fn cursor() -> Option<(i32, i32)> {
+            let mut p = POINT::default();
+            unsafe { GetCursorPos(&mut p) }.ok().map(|()| (p.x, p.y))
+        }
+
+        pub fn button_down() -> bool {
+            [VK_LBUTTON, VK_RBUTTON, VK_MBUTTON].iter().any(|k| unsafe { GetAsyncKeyState(i32::from(k.0)) } as u16 & 0x8000 != 0)
+        }
+    }
+
+    #[cfg(not(windows))]
+    mod platform {
+        pub fn cursor() -> Option<(i32, i32)> {
+            None
+        }
+        pub fn button_down() -> bool {
+            false
+        }
+    }
 }
 
 /// Open `mic_id` (None = default) for the meter; emits `recorder://level` (0..1) to the bar every 50 ms.
@@ -456,12 +623,31 @@ mod tests {
     }
 
     #[test]
+    fn the_overlay_takes_the_mouse_only_over_its_controls() {
+        let h = Hits { rects: vec![HitRect { x: 10.0, y: 10.0, w: 20.0, h: 5.0 }], grab: false };
+        assert!(h.takes(10.0, 10.0));
+        assert!(h.takes(29.9, 14.9));
+        assert!(!h.takes(30.0, 12.0));
+        assert!(!h.takes(500.0, 500.0));
+        assert!(Hits { rects: vec![], grab: true }.takes(500.0, 500.0));
+        assert!(!Hits::default().takes(0.0, 0.0));
+    }
+
+    #[test]
+    fn a_dragged_bar_keeps_its_place_and_stays_on_the_monitor() {
+        let m = RecMonitor { x: 0, width: 1440, height: 900, scale: 1.0, ..mon(1.0) };
+        // dragged so the bar's centre is at 300 and its top at 850 (over the taskbar)
+        assert_eq!(anchored_placement(&m, (300, 850), 800, 100, 24), (0, 800));
+        assert_eq!(anchored_placement(&m, (720, 400), 800, 100, 24), (320, 376));
+    }
+
+    #[test]
     fn bar_sits_centred_at_704_of_900_scaled_to_the_monitor() {
         // 1440 x 900 at 100%: the design position exactly
         let m = RecMonitor { x: 0, width: 1440, height: 900, scale: 1.0, ..mon(1.0) };
         assert_eq!(bar_placement(&m, 800.0, 100.0, 24.0, BAR_TOP_DESIGN), (320, 680, 800, 100));
-        // 2880 x 1800 at 200%, left of the primary: same place in logical pixels
-        assert_eq!(bar_placement(&mon(2.0), 800.0, 100.0, 24.0, BAR_TOP_DESIGN), (-2880 + 640, 1408 - 48, 1600, 200));
+        // 2880 x 1800 at 200%, left of the primary: the page sends physical sizes
+        assert_eq!(bar_placement(&mon(2.0), 1600.0, 200.0, 48.0, BAR_TOP_DESIGN), (-2880 + 640, 1408 - 48, 1600, 200));
         // while recording the bar's top is at 716
         assert_eq!(bar_placement(&m, 800.0, 100.0, 0.0, BAR_TOP_RECORDING), (320, 716, 800, 100));
     }

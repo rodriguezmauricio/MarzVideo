@@ -102,8 +102,8 @@ fn read_zoom_marks(path: &Path) -> Vec<LiveZoomMark> {
         .filter_map(|v| {
             let t_us = v["tUs"].as_i64()?;
             match v["action"].as_str()? {
-                "in" => Some(LiveZoomMark { t_us, preset_id: Some(v["presetId"].as_str()?.to_string()) }),
-                "out" => Some(LiveZoomMark { t_us, preset_id: None }),
+                "in" => Some(LiveZoomMark { t_us, preset_id: Some(v["presetId"].as_str()?.to_string()), rect: None }),
+                "out" => Some(LiveZoomMark { t_us, preset_id: None, rect: None }),
                 _ => None,
             }
         })

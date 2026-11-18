@@ -25,11 +25,13 @@ pub struct ZoomPreset {
     pub rect: NormRect,
 }
 
-/// A zoom hotkey press on the recording clock. `preset_id: None` is a zoom out.
+/// A zoom hotkey press on the recording clock. `preset_id: None` is a zoom out. `rect` is the
+/// preset's frame for this zoom when it was edited live (None: the preset's own rect).
 #[derive(Clone, Debug, PartialEq)]
 pub struct LiveZoomMark {
     pub t_us: i64,
     pub preset_id: Option<String>,
+    pub rect: Option<NormRect>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -75,7 +77,7 @@ pub fn live_zooms(marks: &[LiveZoomMark], presets: &[ZoomPreset], duration_us: i
             "id": format!("live-{}", zooms.len() + 1),
             "startUs": start,
             "endUs": end,
-            "rect": preset.rect,
+            "rect": m.rect.as_ref().unwrap_or(&preset.rect),
             "easeInUs": EASE_US,
             "easeOutUs": EASE_US,
             "easing": "easeInOutCubic",
@@ -172,7 +174,7 @@ mod tests {
     }
 
     fn mark(t_us: i64, id: Option<&str>) -> LiveZoomMark {
-        LiveZoomMark { t_us, preset_id: id.map(str::to_string) }
+        LiveZoomMark { t_us, preset_id: id.map(str::to_string), rect: None }
     }
 
     fn sample_meta() -> ProjectMeta {
@@ -271,6 +273,15 @@ mod tests {
         assert_eq!((z[0]["id"].as_str(), z[0]["startUs"].as_i64(), z[0]["endUs"].as_i64()), (Some("live-1"), Some(1_000), Some(4_000)));
         assert_eq!((z[1]["id"].as_str(), z[1]["startUs"].as_i64(), z[1]["endUs"].as_i64()), (Some("live-2"), Some(4_000), Some(9_000)));
         assert_eq!(z[1]["rect"]["x"], 0.3);
+    }
+
+    #[test]
+    fn live_zoom_uses_the_frame_edited_live() {
+        let edited = NormRect { x: 0.4, y: 0.2, w: 0.3, h: 0.3 };
+        let marks = [LiveZoomMark { t_us: 1_000, preset_id: Some("p1".into()), rect: Some(edited) }, mark(5_000, Some("p1"))];
+        let z = live_zooms(&marks, &[preset("p1", 0.1)], 10_000);
+        assert_eq!(z[0]["rect"]["x"], 0.4);
+        assert_eq!(z[1]["rect"]["x"], 0.1);
     }
 
     #[test]
