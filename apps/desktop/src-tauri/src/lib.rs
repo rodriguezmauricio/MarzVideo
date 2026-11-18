@@ -5,6 +5,7 @@ mod export;
 mod projects;
 mod recorder;
 mod recording;
+mod thumbs;
 
 use tauri::Manager;
 
@@ -26,6 +27,7 @@ pub fn run() {
             projects::write_project_json,
             projects::recover_project,
             projects::discard_project,
+            thumbs::project_thumb,
             recorder::open_recorder,
             recorder::close_recorder,
             recorder::recorder_setup,

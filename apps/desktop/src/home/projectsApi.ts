@@ -13,6 +13,8 @@ export interface ProjectsApi {
   recover(dir: string): Promise<void>;
   discard(dir: string): Promise<void>;
   openRecorder(): Promise<void>;
+  /** A small picture of the recording as a data URL, made once and cached by the app. Browser: none. */
+  thumb?(dir: string): Promise<string>;
   /** A stopped recording whose files could not be finished: the sentence for the warning bar. */
   onRecordingFailed(cb: (text: string) => void): () => void;
 }
@@ -28,6 +30,7 @@ const tauriApi: ProjectsApi = {
   discard: (dir) => invoke<void>("discard_project", { dir }),
   // Opens the recorder windows; a stopped recording comes back as `recorder://open-project`.
   openRecorder: () => invoke<void>("open_recorder"),
+  thumb: (dir) => invoke<string>("project_thumb", { dir }),
   onRecordingFailed: (cb) => {
     const p = listen<string>("recorder://stop-failed", (e) => cb(e.payload));
     return () => void p.then((u) => u());
