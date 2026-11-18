@@ -25,3 +25,4 @@
 - No committed Playwright tests: the browser checks were run by hand.
 - Pin down for the recorder: how `durationUs` relates to the track lengths, and which mouse `button` values it writes.
 - `drawFrame` should scale by the media's real pixel size, not `project.source`, before proxies arrive.
+- [2026-11-18] [claude] Mauricio wants AI to run on his Claude subscription, not a paid API key: the installed Claude Code CLI works headless as `claude -p --output-format json --json-schema <schema> --tools "" --no-session-persistence --strict-mcp-config` (checked on 2.1.326). It counts against his plan's usage limits, and public users would need their own Claude Code or an API-key provider.

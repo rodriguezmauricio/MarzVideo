@@ -10,6 +10,8 @@
 
 **Spec:** `docs/superpowers/specs/2026-11-17-milestone-2-ai-editing-design.md`. Format contract it extends: `docs/superpowers/specs/2026-11-15-milestone-1-design.md`. Design (binding): `docs/design/avant-garde/DESIGN-SYSTEM.md`.
 
+**Status:** APPROVED by Mauricio on 2026-11-18. Execution: subagent-driven (fresh agent per task plus a reviewer), his pick.
+
 **Branch:** start from `claude/capture-plan-d523b6` (M1, PR 1) or from main once PR 1 is merged. File paths below are as they are on that branch.
 
 ## Global Constraints
