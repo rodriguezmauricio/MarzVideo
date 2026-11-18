@@ -1,6 +1,11 @@
 //! Microphone capture with WASAPI (the spike's proven setup): shared event mode, autoconvert to
 //! 48 kHz mono s16, packet `u64QPCPosition` as the mic clock. Every packet goes through
 //! `MicTimeline`, which drops warm-up and paused audio and pads gaps with silence.
+//!
+//! The same loop records the computer's sound (`start_system`): WASAPI loopback on the default
+//! output device, 48 kHz stereo s16, into `system.wav`. Loopback sends nothing while nothing
+//! plays, so that file starts at the recording's t0 and every quiet stretch is padded from the
+//! clock; its offset is always 0.
 
 use std::collections::VecDeque;
 use std::fs::File;
@@ -18,16 +23,36 @@ use crate::mic_timeline::{MicAction, MicTimeline};
 use crate::CaptureError;
 
 pub const RATE: u32 = 48_000;
-const CHANNELS: u16 = 1;
 const BITS: u16 = 16;
-const BYTES_PER_FRAME: u64 = 2;
 const WAV_HEADER_BYTES: u64 = 44;
+/// Loopback buffer: events can stop while nothing plays, and the loop then polls every
+/// `WAIT_MS`, so the buffer must hold more than that.
+const LOOPBACK_BUFFER_HNS: i64 = 2_000_000; // 200 ms
 /// How often the meter level is published.
 const LEVEL_EVERY_HNS: i64 = 500_000; // 50 ms
 /// Event wait, so a stop is seen quickly even if the device goes quiet.
 const WAIT_MS: u32 = 100;
 
 pub const MIC_LOST: &str = "Microphone disconnected. Recording continues without sound.";
+pub const SYSTEM_LOST: &str = "Computer sound stopped (the output device changed). Recording continues without it.";
+
+/// What a capture thread records.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum Source {
+    /// A microphone (None: the default one), mono.
+    Mic(Option<String>),
+    /// The default output device through loopback, stereo, starting at t0.
+    System,
+}
+
+impl Source {
+    fn channels(&self) -> u16 {
+        match self {
+            Source::Mic(_) => 1,
+            Source::System => 2,
+        }
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MicDevice {
@@ -127,6 +152,7 @@ struct MicOutput<W> {
 
 pub struct MicHandle {
     pub device_name: String,
+    channels: u16,
     shared: Arc<MicShared>,
     stop: Arc<AtomicBool>,
     thread: JoinHandle<Result<MicOutput<BufWriter<File>>, CaptureError>>,
@@ -151,15 +177,15 @@ pub struct MicReport {
     pub drift_end_us: i64,
 }
 
-/// Write the 44-byte PCM WAV header for 48 kHz mono s16.
-fn write_wav_header(f: &mut impl Write, data_bytes: u32) -> io::Result<()> {
-    let block = CHANNELS * BITS / 8;
+/// Write the 44-byte PCM WAV header for 48 kHz s16 with `channels`.
+fn write_wav_header(f: &mut impl Write, channels: u16, data_bytes: u32) -> io::Result<()> {
+    let block = channels * BITS / 8;
     f.write_all(b"RIFF")?;
     f.write_all(&(36 + data_bytes).to_le_bytes())?;
     f.write_all(b"WAVEfmt ")?;
     f.write_all(&16u32.to_le_bytes())?;
     f.write_all(&1u16.to_le_bytes())?; // PCM
-    f.write_all(&CHANNELS.to_le_bytes())?;
+    f.write_all(&channels.to_le_bytes())?;
     f.write_all(&RATE.to_le_bytes())?;
     f.write_all(&(RATE * u32::from(block)).to_le_bytes())?;
     f.write_all(&block.to_le_bytes())?;
@@ -169,9 +195,9 @@ fn write_wav_header(f: &mut impl Write, data_bytes: u32) -> io::Result<()> {
     Ok(())
 }
 
-fn write_silence(w: &mut impl Write, frames: u64) -> io::Result<()> {
+fn write_silence(w: &mut impl Write, frames: u64, bytes_per_frame: u64) -> io::Result<()> {
     const ZEROS: [u8; 4096] = [0; 4096];
-    let mut left = frames * BYTES_PER_FRAME;
+    let mut left = frames * bytes_per_frame;
     while left > 0 {
         let n = left.min(ZEROS.len() as u64) as usize;
         w.write_all(&ZEROS[..n])?;
@@ -183,27 +209,38 @@ fn write_silence(w: &mut impl Write, frames: u64) -> io::Result<()> {
 /// Start capturing `device_id` (None = the default mic) into a new WAV at `wav_path`. Returns once
 /// the stream runs, or the device error.
 pub fn start(device_id: Option<&str>, wav_path: &Path, shared: Arc<MicShared>) -> Result<MicHandle, CaptureError> {
+    start_source(Source::Mic(device_id.map(str::to_string)), wav_path, shared)
+}
+
+/// Start recording the computer's sound (loopback on the default output device) into a new WAV
+/// at `wav_path`. The file starts at t0 (offset 0). Returns once the stream runs.
+pub fn start_system(wav_path: &Path, shared: Arc<MicShared>) -> Result<MicHandle, CaptureError> {
+    start_source(Source::System, wav_path, shared)
+}
+
+fn start_source(source: Source, wav_path: &Path, shared: Arc<MicShared>) -> Result<MicHandle, CaptureError> {
+    let channels = source.channels();
     let mut file = File::create(wav_path)?;
-    write_wav_header(&mut file, 0)?;
-    let (device_name, stop, thread) = spawn(device_id, BufWriter::new(file), shared.clone())?;
-    Ok(MicHandle { device_name, shared, stop, thread })
+    write_wav_header(&mut file, channels, 0)?;
+    let (device_name, stop, thread) = spawn(source, BufWriter::new(file), shared.clone())?;
+    Ok(MicHandle { device_name, channels, shared, stop, thread })
 }
 
 /// Spawn the mic thread writing into `wav` and wait until the stream runs.
 #[allow(clippy::type_complexity)]
 fn spawn<W: Write + Send + 'static>(
-    device_id: Option<&str>,
+    source: Source,
     wav: W,
     shared: Arc<MicShared>,
 ) -> Result<(String, Arc<AtomicBool>, JoinHandle<Result<MicOutput<W>, CaptureError>>), CaptureError> {
-    let id = device_id.map(str::to_string);
+    let name = if source == Source::System { "marz-system-audio" } else { "marz-mic" };
     let stop = Arc::new(AtomicBool::new(false));
     let (ready_tx, ready_rx) = mpsc::channel::<Result<String, CaptureError>>();
     let thread = {
         let stop = stop.clone();
         thread::Builder::new()
-            .name("marz-mic".into())
-            .spawn(move || mic_thread(id, wav, shared, stop, ready_tx))?
+            .name(name.into())
+            .spawn(move || mic_thread(source, wav, shared, stop, ready_tx))?
     };
     match ready_rx.recv() {
         Ok(Ok(device_name)) => Ok((device_name, stop, thread)),
@@ -231,7 +268,7 @@ pub struct MeterHandle {
 pub fn start_meter(device_id: Option<&str>) -> Result<MeterHandle, CaptureError> {
     let (warn, _ignored) = mpsc::channel();
     let shared = MicShared::new(super::new_clock(), warn);
-    let (device_name, stop, thread) = spawn(device_id, io::sink(), shared.clone())?;
+    let (device_name, stop, thread) = spawn(Source::Mic(device_id.map(str::to_string)), io::sink(), shared.clone())?;
     Ok(MeterHandle { device_name, shared, stop, thread })
 }
 
@@ -259,27 +296,33 @@ enum LoopError {
 }
 
 fn mic_thread<W: Write>(
-    id: Option<String>,
+    source: Source,
     mut wav: W,
     shared: Arc<MicShared>,
     stop: Arc<AtomicBool>,
     ready: mpsc::Sender<Result<String, CaptureError>>,
 ) -> Result<MicOutput<W>, CaptureError> {
-    let dev_err = |what: &str, e: wasapi::WasapiError| CaptureError::Device(format!("microphone {what}: {e}"));
+    let what_dev = if source == Source::System { "computer sound" } else { "microphone" };
+    let dev_err = |what: &str, e: wasapi::WasapiError| CaptureError::Device(format!("{what_dev} {what}: {e}"));
+    let channels = source.channels();
+    let bytes_per_frame = u64::from(channels * BITS / 8);
     let setup = || -> Result<_, CaptureError> {
         let _ = initialize_mta();
         let en = DeviceEnumerator::new().map_err(|e| dev_err("enumeration failed", e))?;
-        let dev = match &id {
-            Some(id) => en.get_device(id),
-            None => en.get_default_device(Direction::Capture),
+        let dev = match &source {
+            Source::Mic(Some(id)) => en.get_device(id),
+            Source::Mic(None) => en.get_default_device(Direction::Capture),
+            Source::System => en.get_default_device(Direction::Render),
         }
         .map_err(|e| dev_err("not found", e))?;
         let name = dev.get_friendlyname().unwrap_or_default();
         let mut client = dev.get_iaudioclient().map_err(|e| dev_err("could not open", e))?;
-        let fmt = WaveFormat::new(BITS as usize, BITS as usize, SampleType::Int, RATE as usize, CHANNELS as usize, None);
+        let fmt = WaveFormat::new(BITS as usize, BITS as usize, SampleType::Int, RATE as usize, channels as usize, None);
         let (_def, min) = client.get_device_period().map_err(|e| dev_err("period", e))?;
+        // A render device opened for capture is loopback (shared mode only).
+        let buffer = if source == Source::System { LOOPBACK_BUFFER_HNS.max(min) } else { min };
         client
-            .initialize_client(&fmt, Direction::Capture, StreamMode::EventsShared { autoconvert: true, buffer_duration_hns: min }, None)
+            .initialize_client(&fmt, Direction::Capture, StreamMode::EventsShared { autoconvert: true, buffer_duration_hns: buffer }, None)
             .map_err(|e| dev_err("could not start", e))?;
         let ev = client.set_get_eventhandle().map_err(|e| dev_err("event", e))?;
         let cap = client.get_audiocaptureclient().map_err(|e| dev_err("capture client", e))?;
@@ -295,7 +338,7 @@ fn mic_thread<W: Write>(
     };
     let _ = ready.send(Ok(name));
 
-    let mut timeline = MicTimeline::new(RATE);
+    let mut timeline = if source == Source::System { MicTimeline::from_zero(RATE) } else { MicTimeline::new(RATE) };
     let mut q: VecDeque<u8> = VecDeque::with_capacity(RATE as usize * 2);
     let mut peak = 0f32;
     let mut last_level = qpc_hns();
@@ -313,7 +356,7 @@ fn mic_thread<W: Write>(
                 }
                 q.clear();
                 let info = cap.read_from_device_to_deque(&mut q).map_err(|_| LoopError::Device)?;
-                let frames = q.len() / BYTES_PER_FRAME as usize;
+                let frames = q.len() / bytes_per_frame as usize;
                 if frames == 0 {
                     return Ok(());
                 }
@@ -331,9 +374,9 @@ fn mic_thread<W: Write>(
                     if let Some(first) = timeline.first_rec_us() {
                         shared.first_rec_us.store(first, Ordering::SeqCst);
                     }
-                    write_silence(&mut wav, silence_before).map_err(LoopError::Io)?;
+                    write_silence(&mut wav, silence_before, bytes_per_frame).map_err(LoopError::Io)?;
                     if muted {
-                        write_silence(&mut wav, frames as u64).map_err(LoopError::Io)?;
+                        write_silence(&mut wav, frames as u64, bytes_per_frame).map_err(LoopError::Io)?;
                     } else {
                         wav.write_all(pcm).map_err(LoopError::Io)?;
                     }
@@ -353,7 +396,7 @@ fn mic_thread<W: Write>(
                 if !stop.load(Ordering::SeqCst) {
                     shared.lost.store(true, Ordering::SeqCst);
                     shared.level.store(0f32.to_bits(), Ordering::Relaxed);
-                    let _ = shared.warn.send(MIC_LOST.to_string());
+                    let _ = shared.warn.send(if source == Source::System { SYSTEM_LOST } else { MIC_LOST }.to_string());
                 }
                 break;
             }
@@ -380,21 +423,22 @@ impl MicHandle {
         // The file starts at the first sample, so its target length is measured from there.
         let file_us = duration_us - first.unwrap_or(0);
         let add = timeline.finish(file_us);
-        write_silence(&mut wav, add)?;
+        let bpf = u64::from(self.channels * BITS / 8);
+        write_silence(&mut wav, add, bpf)?;
         let excess = timeline.excess_frames(file_us);
         let mut file = wav.into_inner().map_err(|e| CaptureError::Io(e.into_error()))?;
-        let data_bytes = file.metadata()?.len().saturating_sub(WAV_HEADER_BYTES).saturating_sub(excess * BYTES_PER_FRAME);
-        let data_bytes = data_bytes.min(u64::from(u32::MAX - 36)) & !1;
+        let data_bytes = file.metadata()?.len().saturating_sub(WAV_HEADER_BYTES).saturating_sub(excess * bpf);
+        let data_bytes = (data_bytes.min(u64::from(u32::MAX - 36)) / bpf) * bpf;
         file.set_len(WAV_HEADER_BYTES + data_bytes)?;
         file.seek(SeekFrom::Start(0))?;
-        write_wav_header(&mut file, data_bytes as u32)?;
+        write_wav_header(&mut file, self.channels, data_bytes as u32)?;
         file.sync_all()?;
         Ok(MicReport {
             device_name: self.device_name,
             first_rec_us: first,
             gap_padded_us: timeline.padded_us(),
             end_padded_us: (u128::from(add) * 1_000_000 / u128::from(RATE)) as i64,
-            frames: data_bytes / BYTES_PER_FRAME,
+            frames: data_bytes / bpf,
             lost: self.shared.lost.load(Ordering::SeqCst),
             drift_max_us: timeline.max_drift_us(),
             drift_end_us: timeline.last_drift_us(),

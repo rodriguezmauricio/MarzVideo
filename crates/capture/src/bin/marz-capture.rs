@@ -2,7 +2,7 @@
 //!
 //! ```text
 //! marz-capture record <out.marz> [--secs N] [--fps N] [--encoder E] [--monitor N] [--region x,y,w,h]
-//!                     [--no-mic] [--mic-id ID] [--hide-cursor] [--report]
+//!                     [--no-mic] [--mic-id ID] [--system-audio] [--hide-cursor] [--report]
 //!                     [--pause-at a,b,...] [--resume-at a,b,...] [--zoom-at a,b,...]
 //!                     [--simulate-mic-loss-at SECS] [--simulate-static-screen] [--sync-probe]
 //! marz-capture recover <dir>
@@ -19,7 +19,7 @@
 
 const USAGE: &str = "usage:
   marz-capture record <out.marz> [--secs N] [--fps N] [--encoder E] [--monitor N] [--region x,y,w,h]
-                      [--no-mic] [--mic-id ID] [--hide-cursor] [--report]
+                      [--no-mic] [--mic-id ID] [--system-audio] [--hide-cursor] [--report]
                       [--pause-at a,b,...] [--resume-at a,b,...] [--zoom-at a,b,...]
                       [--simulate-mic-loss-at SECS] [--simulate-static-screen] [--sync-probe]
   marz-capture recover <dir>";
@@ -110,6 +110,7 @@ mod cli {
         no_mic: bool,
         mic_id: Option<String>,
         cursor_hidden: bool,
+        system_audio: bool,
         report: bool,
         pause_at: Vec<f64>,
         resume_at: Vec<f64>,
@@ -133,6 +134,7 @@ mod cli {
             no_mic: false,
             mic_id: None,
             cursor_hidden: false,
+            system_audio: false,
             report: false,
             pause_at: Vec::new(),
             resume_at: Vec::new(),
@@ -165,6 +167,7 @@ mod cli {
                 "--no-mic" => a.no_mic = true,
                 "--mic-id" => a.mic_id = Some(it.next().ok_or_else(|| usage("--mic-id needs an id".into()))?.clone()),
                 "--hide-cursor" => a.cursor_hidden = true,
+                "--system-audio" => a.system_audio = true,
                 "--report" => a.report = true,
                 "--pause-at" => a.pause_at = list(flag, it.next())?,
                 "--resume-at" => a.resume_at = list(flag, it.next())?,
@@ -221,6 +224,7 @@ mod cli {
             fps: a.fps,
             mic_id,
             cursor_hidden: a.cursor_hidden,
+            system_audio: a.system_audio,
             presets: vec![ZoomPreset { id: PRESET_ID.into(), name: "Zoom 1".into(), rect: NormRect { x: 0.25, y: 0.25, w: 0.5, h: 0.5 } }],
             encoder: a.encoder.clone(),
         };

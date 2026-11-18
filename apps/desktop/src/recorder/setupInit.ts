@@ -16,6 +16,7 @@ function fakeSetup(): Setup {
     ],
     micId: null,
     cursorHidden: false,
+    systemAudio: true,
   };
 }
 

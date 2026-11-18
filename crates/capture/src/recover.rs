@@ -13,6 +13,8 @@ use std::path::Path;
 const WAV_HEADER_BYTES: u64 = 44;
 const WAV_RATE: i64 = 48_000;
 const WAV_BLOCK_BYTES: u64 = 2;
+/// `system.wav` is stereo.
+const SYSTEM_BLOCK_BYTES: u64 = 4;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct RecoverReport {
@@ -39,9 +41,13 @@ pub fn recover(dir: &Path, ffprobe: &Path) -> Result<RecoverReport, CaptureError
     // The mic track only counts when the marker says one was recorded and the file holds samples
     // (a kill before the first packet leaves a bare header or less).
     let mic_path = dir.join("mic.wav");
-    let mic_us = if meta.mic.is_some() && mic_path.exists() { patch_wav(&mic_path)? } else { None };
+    let mic_us = if meta.mic.is_some() && mic_path.exists() { patch_wav(&mic_path, WAV_BLOCK_BYTES)? } else { None };
     let has_mic = mic_us.is_some_and(|us| us > 0);
     meta.mic = if has_mic { Some(meta.mic.take().unwrap_or(MicMeta { offset_us: 0 })) } else { None };
+    // The computer's sound starts at t0; a kill before its first packet leaves a bare header.
+    let system_path = dir.join("system.wav");
+    let system_us = if meta.system_audio && system_path.exists() { patch_wav(&system_path, SYSTEM_BLOCK_BYTES)? } else { None };
+    meta.system_audio = system_us.is_some_and(|us| us > 0);
 
     // The screen sets the length (on the recording clock, from t0). A shorter mic is padded with
     // silence by the editor and the export, as after a device loss.
@@ -75,12 +81,12 @@ pub fn screen_duration_us(ffprobe: &Path, screen: &Path, fps: u32) -> Result<i64
 
 /// Fix the sizes in the 44-byte header from the real file length, dropping a trailing partial
 /// sample. Returns the audio length in microseconds, or None when the file holds no header.
-fn patch_wav(path: &Path) -> Result<Option<i64>, CaptureError> {
+fn patch_wav(path: &Path, block: u64) -> Result<Option<i64>, CaptureError> {
     let len = std::fs::metadata(path)?.len();
     if len < WAV_HEADER_BYTES {
         return Ok(None);
     }
-    let data = (len - WAV_HEADER_BYTES) / WAV_BLOCK_BYTES * WAV_BLOCK_BYTES;
+    let data = (len - WAV_HEADER_BYTES) / block * block;
     let mut file = OpenOptions::new().read(true).write(true).open(path)?;
     file.set_len(WAV_HEADER_BYTES + data)?;
     file.seek(SeekFrom::Start(4))?;
@@ -88,7 +94,7 @@ fn patch_wav(path: &Path) -> Result<Option<i64>, CaptureError> {
     file.seek(SeekFrom::Start(40))?;
     file.write_all(&(data as u32).to_le_bytes())?;
     file.sync_all()?;
-    let samples = (data / WAV_BLOCK_BYTES) as i64;
+    let samples = (data / block) as i64;
     Ok(Some(samples * 1_000_000 / WAV_RATE))
 }
 
@@ -137,6 +143,7 @@ mod tests {
             fps: 30,
             screen_offset_us: 0,
             mic: with_mic.then_some(MicMeta { offset_us: 0 }),
+            system_audio: false,
             cursor_hidden: false,
             presets: vec![ZoomPreset { id: "p1".into(), name: "Editor".into(), rect: NormRect { x: 0.1, y: 0.1, w: 0.5, h: 0.5 } }],
             zooms: vec![],

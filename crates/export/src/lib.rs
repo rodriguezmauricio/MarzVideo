@@ -45,5 +45,8 @@ pub struct ExportJob {
     pub fps: u32,
     pub segments: Vec<Segment>,
     pub mic: Option<MicJob>,
+    /// The computer's sound (`system.wav`), mixed with the mic. Same shape as the mic.
+    #[serde(default)]
+    pub system: Option<MicJob>,
     pub output_duration_us: i64,
 }

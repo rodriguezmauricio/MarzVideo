@@ -21,6 +21,8 @@ export type Setup = {
   /** Null: the default microphone. */
   micId: string | null;
   cursorHidden: boolean;
+  /** Also record the computer's sound (`system.wav`). */
+  systemAudio: boolean;
 };
 
 export const MAX_PRESETS = 9;
@@ -38,6 +40,7 @@ export function defaultSetup(m: Monitor): Setup {
     presets: [],
     micId: null,
     cursorHidden: false,
+    systemAudio: false,
   };
 }
 
@@ -74,6 +77,8 @@ export function loadSetup(storage: Storage, m: Monitor): Setup {
         .map((p) => ({ id: p.id, name: p.name, rect: { x: p.rect.x, y: p.rect.y, w: p.rect.w, h: p.rect.h } })),
       micId: o.micId as string | null,
       cursorHidden: o.cursorHidden,
+      // Missing in setups saved before the option existed: off.
+      systemAudio: o.systemAudio === true,
     };
   } catch {
     return fallback;
@@ -124,6 +129,7 @@ const pick = (s: Setup): Setup => ({
   presets: s.presets,
   micId: s.micId,
   cursorHidden: s.cursorHidden,
+  systemAudio: s.systemAudio,
 });
 
 export const useRecorder = create<State>((set, get) => ({
@@ -150,7 +156,7 @@ export const useRecorder = create<State>((set, get) => ({
 export const currentSetup = (): Setup => pick(useRecorder.getState());
 
 /** What Record sends to Rust (recording.rs `RecordOptionsDto`). */
-export type RecordOptions = { mode: Mode; region: PxRect; micId: string | null; cursorHidden: boolean; presets: Preset[] };
+export type RecordOptions = { mode: Mode; region: PxRect; micId: string | null; systemAudio: boolean; cursorHidden: boolean; presets: Preset[] };
 
 /** The session preset id for a setup preset ("1" -> "p1"); Ctrl+n zooms into "pn". */
 export const sessionPresetId = (id: string) => `p${id}`;
@@ -164,6 +170,7 @@ export function recordOptions(s: Setup, m: Monitor): RecordOptions {
     mode: s.mode,
     region: { x: Math.round(s.region.x), y: Math.round(s.region.y), w: Math.round(s.region.w), h: Math.round(s.region.h) },
     micId: s.micId,
+    systemAudio: s.systemAudio,
     cursorHidden: s.cursorHidden,
     presets: [...s.presets]
       .sort((a, b) => a.id.localeCompare(b.id))

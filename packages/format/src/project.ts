@@ -43,6 +43,11 @@ const ProjectSchema = z
           .object({ file: z.string(), offsetUs: Us, volume: z.number(), muted: z.boolean() })
           .passthrough()
           .optional(),
+        // The computer's sound (loopback), same shape as the mic. Optional: older projects have none.
+        system: z
+          .object({ file: z.string(), offsetUs: Us, volume: z.number(), muted: z.boolean() })
+          .passthrough()
+          .optional(),
       })
       .passthrough(),
     output: SizeFps,

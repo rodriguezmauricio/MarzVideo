@@ -15,6 +15,8 @@ pub enum MicAction {
 #[derive(Debug)]
 pub struct MicTimeline {
     rate: u32,
+    /// The file starts at recording time 0: the first packet is preceded by silence back to t0.
+    from_zero: bool,
     first_rec_us: Option<i64>,
     /// (rec_us, frames written) at the last anchor. Expected position runs from here.
     anchor: Option<(i64, u64)>,
@@ -29,7 +31,13 @@ pub struct MicTimeline {
 
 impl MicTimeline {
     pub fn new(rate: u32) -> Self {
-        Self { rate, first_rec_us: None, anchor: None, reanchor: false, written: 0, padded_frames: 0, last_drift_frames: 0, max_drift_frames: 0 }
+        Self { rate, from_zero: false, first_rec_us: None, anchor: None, reanchor: false, written: 0, padded_frames: 0, last_drift_frames: 0, max_drift_frames: 0 }
+    }
+
+    /// A timeline whose file starts at recording time 0 (offset 0) whenever its first packet
+    /// arrives: used for the computer's sound, which sends nothing while nothing plays.
+    pub fn from_zero(rate: u32) -> Self {
+        Self { from_zero: true, ..Self::new(rate) }
     }
 
     /// `rec_hns` is the recording clock in 100 ns units with pauses removed, or `None`
@@ -45,6 +53,16 @@ impl MicTimeline {
         let frames = frames as u64;
         let mut silence_before = 0;
         match self.anchor {
+            None if self.from_zero => {
+                self.first_rec_us = Some(0);
+                self.anchor = Some((0, 0));
+                let lead = (rec_us.max(0) as u128 * self.rate as u128 / 1_000_000) as u64;
+                if lead > JITTER_FRAMES {
+                    silence_before = lead;
+                    self.padded_frames += lead;
+                    self.written += lead;
+                }
+            }
             None => {
                 self.first_rec_us = Some(rec_us);
                 self.anchor = Some((rec_us, self.written));
@@ -122,6 +140,22 @@ mod tests {
 
     fn hns_ms(ms: i64) -> Option<i64> {
         Some(ms * 10_000)
+    }
+
+    #[test]
+    fn from_zero_pads_back_to_t0_and_keeps_offset_zero() {
+        let mut t = MicTimeline::from_zero(RATE);
+        // The first sound plays 2 s into the recording.
+        assert_eq!(t.packet(hns_ms(2_000), PKT), MicAction::Write { silence_before: 96_000 });
+        assert_eq!(t.first_rec_us(), Some(0));
+        // Back on the clock, and a quiet stretch (nothing sent) is padded too.
+        assert_eq!(t.packet(hns_ms(2_010), PKT), MicAction::Write { silence_before: 0 });
+        assert_eq!(t.packet(hns_ms(5_000), PKT), MicAction::Write { silence_before: 143_040 });
+        // Nothing at all: the whole length is silence.
+        let mut quiet = MicTimeline::from_zero(RATE);
+        assert_eq!(quiet.finish(1_000_000), 48_000);
+        // A packet right at t0 needs no lead.
+        assert_eq!(MicTimeline::from_zero(RATE).packet(hns_ms(0), PKT), MicAction::Write { silence_before: 0 });
     }
 
     #[test]

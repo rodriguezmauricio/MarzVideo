@@ -52,6 +52,10 @@ pub struct ProjectMeta {
     pub fps: u32,
     pub screen_offset_us: i64,
     pub mic: Option<MicMeta>,
+    /// `system.wav` (the computer's sound) was recorded; its offset is always 0. Missing in
+    /// markers written before it existed.
+    #[serde(default)]
+    pub system_audio: bool,
     pub cursor_hidden: bool,
     pub presets: Vec<ZoomPreset>,
     pub zooms: Vec<Value>,
@@ -92,6 +96,9 @@ pub fn project_json(meta: &ProjectMeta) -> Value {
     let mut tracks = json!({ "screen": { "file": "screen.mp4", "offsetUs": meta.screen_offset_us } });
     if let Some(mic) = &meta.mic {
         tracks["mic"] = json!({ "file": "mic.wav", "offsetUs": mic.offset_us, "volume": 1, "muted": false });
+    }
+    if meta.system_audio {
+        tracks["system"] = json!({ "file": "system.wav", "offsetUs": 0, "volume": 1, "muted": false });
     }
     json!({
         "version": 1,
@@ -190,6 +197,7 @@ mod tests {
             fps: 60,
             screen_offset_us: 0,
             mic: Some(MicMeta { offset_us: 12_400 }),
+            system_audio: false,
             cursor_hidden: false,
             presets,
             zooms,

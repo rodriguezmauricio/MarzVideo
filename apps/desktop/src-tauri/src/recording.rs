@@ -38,6 +38,9 @@ pub struct RecordOptionsDto {
     pub region: Rect,
     /// None records without a mic.
     pub mic_id: Option<String>,
+    /// Also record the computer's sound (`system.wav`). Missing from older pages: off.
+    #[serde(default)]
+    pub system_audio: bool,
     pub cursor_hidden: bool,
     /// Ids "p1" to "p9", rects normalized to the region (the monitor in Full screen).
     pub presets: Vec<PresetDto>,
@@ -48,6 +51,7 @@ pub struct RecordOptionsDto {
 pub struct Plan {
     pub region: Option<Rect>,
     pub mic_id: Option<String>,
+    pub system_audio: bool,
     pub cursor_hidden: bool,
     pub presets: Vec<ZoomPreset>,
 }
@@ -88,7 +92,7 @@ pub fn plan(dto: RecordOptionsDto) -> Result<Plan, String> {
         presets.push(ZoomPreset { id: p.id, name, rect: p.rect });
     }
     presets.sort_by(|a, b| a.id.cmp(&b.id));
-    Ok(Plan { region, mic_id: dto.mic_id, cursor_hidden: dto.cursor_hidden, presets })
+    Ok(Plan { region, mic_id: dto.mic_id, system_audio: dto.system_audio, cursor_hidden: dto.cursor_hidden, presets })
 }
 
 /// `<stamp> Recording`, then `<stamp> Recording 2`, `3`, ... while `taken` says the name is used.
@@ -541,6 +545,7 @@ mod imp {
             region: plan.region.map(|r| PxRect { x: r.x, y: r.y, w: r.w, h: r.h }),
             fps: FPS,
             mic_id: plan.mic_id,
+            system_audio: plan.system_audio,
             cursor_hidden: plan.cursor_hidden,
             presets: plan.presets,
             encoder: None,
@@ -715,6 +720,7 @@ mod tests {
             mode: mode.into(),
             region: Rect { x: 10, y: 20, w: 1280, h: 720 },
             mic_id: Some("mic".into()),
+            system_audio: false,
             cursor_hidden: true,
             presets,
         }

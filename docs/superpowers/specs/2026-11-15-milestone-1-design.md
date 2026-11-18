@@ -74,13 +74,20 @@ MyRecording.marz/
   events.jsonl     input events (recorder-owned, append-only)
   screen.mp4       fragmented MP4, H.264, constant frame rate
   mic.wav          48 kHz PCM
+  system.wav       optional (2026-11-18): the computer's sound, 48 kHz stereo PCM, starts at t0
   proxies/         optional, later
-  (later: camera.mp4, system.wav, transcript.json)
+  (later: camera.mp4, transcript.json)
 ```
 
 **Time:** every timestamp is an integer number of **microseconds since recording start** (`tUs`),
 taken from one monotonic clock (QueryPerformanceCounter). Each track records its own `offsetUs`
 (when its first sample landed on that clock) so tracks can be aligned exactly.
+
+**Computer sound (added 2026-11-18, Mauricio's yes):** `tracks.system` is optional and has the mic's
+shape. The recorder writes it only when "Computer sound" is on (WASAPI loopback on the default output
+device). Loopback sends nothing while nothing plays, so `system.wav` starts at t0 (`offsetUs` 0) and quiet
+stretches are silence. Preview plays it and export mixes it with the mic at full level. Older projects
+have no `tracks.system` and open as before; `version` stays 1.
 
 **Coordinates:** in events, pixels in the captured source frame (origin top-left). In edits,
 normalized 0–1 relative to the source frame, so edits survive resolution/proxy changes.
@@ -116,7 +123,8 @@ normalized 0–1 relative to the source frame, so edits survive resolution/proxy
   "source": { "width": 2560, "height": 1440, "fps": 60 },
   "tracks": {
     "screen": { "file": "screen.mp4", "offsetUs": 0 },
-    "mic":    { "file": "mic.wav", "offsetUs": 12400, "volume": 1, "muted": false }
+    "mic":    { "file": "mic.wav", "offsetUs": 12400, "volume": 1, "muted": false },
+    "system": { "file": "system.wav", "offsetUs": 0, "volume": 1, "muted": false }
   },
   "output": { "width": 1920, "height": 1080, "fps": 60 },
   "zoomPresets": [
