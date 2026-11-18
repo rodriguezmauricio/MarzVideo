@@ -76,6 +76,20 @@ describe("recordOptions", () => {
     micId: "usb",
     cursorHidden: true,
     systemAudio: true,
+    cameraId: "cam",
+    cameraOn: true,
+  });
+
+  it("sends the camera only when it is on, and reads older saved setups as off", () => {
+    expect(recordOptions(setup("region"), MON).cameraId).toBe("cam");
+    expect(recordOptions({ ...setup("region"), cameraOn: false }, MON).cameraId).toBeNull();
+    const st = new Map<string, string>();
+    const storage = { getItem: (k: string) => st.get(k) ?? null, setItem: (k: string, v: string) => void st.set(k, v) } as unknown as Storage;
+    saveSetup(storage, MON, setup("region"));
+    expect(loadSetup(storage, MON)).toMatchObject({ cameraOn: true, cameraId: "cam" });
+    const { cameraOn: _a, cameraId: _b, ...older } = setup("region");
+    st.set(setupKey(MON), JSON.stringify(older));
+    expect(loadSetup(storage, MON)).toMatchObject({ cameraOn: false, cameraId: null });
   });
 
   it("sends presets as p1..p9 in order, locked to 16:9 in the region", () => {

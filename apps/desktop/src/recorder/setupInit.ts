@@ -17,6 +17,8 @@ function fakeSetup(): Setup {
     micId: null,
     cursorHidden: false,
     systemAudio: true,
+    cameraId: null,
+    cameraOn: new URLSearchParams(window.location.search).get("camera") !== "off",
   };
 }
 

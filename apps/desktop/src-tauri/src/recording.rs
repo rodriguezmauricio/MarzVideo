@@ -41,6 +41,9 @@ pub struct RecordOptionsDto {
     /// Also record the computer's sound (`system.wav`). Missing from older pages: off.
     #[serde(default)]
     pub system_audio: bool,
+    /// Media Foundation camera id; None (and older pages) record without a camera.
+    #[serde(default)]
+    pub camera_id: Option<String>,
     pub cursor_hidden: bool,
     /// Ids "p1" to "p9", rects normalized to the region (the monitor in Full screen).
     pub presets: Vec<PresetDto>,
@@ -52,6 +55,7 @@ pub struct Plan {
     pub region: Option<Rect>,
     pub mic_id: Option<String>,
     pub system_audio: bool,
+    pub camera_id: Option<String>,
     pub cursor_hidden: bool,
     pub presets: Vec<ZoomPreset>,
 }
@@ -92,7 +96,7 @@ pub fn plan(dto: RecordOptionsDto) -> Result<Plan, String> {
         presets.push(ZoomPreset { id: p.id, name, rect: p.rect });
     }
     presets.sort_by(|a, b| a.id.cmp(&b.id));
-    Ok(Plan { region, mic_id: dto.mic_id, system_audio: dto.system_audio, cursor_hidden: dto.cursor_hidden, presets })
+    Ok(Plan { region, mic_id: dto.mic_id, system_audio: dto.system_audio, camera_id: dto.camera_id, cursor_hidden: dto.cursor_hidden, presets })
 }
 
 /// `<stamp> Recording`, then `<stamp> Recording 2`, `3`, ... while `taken` says the name is used.
@@ -546,6 +550,7 @@ mod imp {
             fps: FPS,
             mic_id: plan.mic_id,
             system_audio: plan.system_audio,
+            camera_id: plan.camera_id,
             cursor_hidden: plan.cursor_hidden,
             presets: plan.presets,
             encoder: None,
@@ -721,6 +726,7 @@ mod tests {
             region: Rect { x: 10, y: 20, w: 1280, h: 720 },
             mic_id: Some("mic".into()),
             system_audio: false,
+            camera_id: None,
             cursor_hidden: true,
             presets,
         }
@@ -736,6 +742,10 @@ mod tests {
         assert_eq!(pl.region, Some(Rect { x: 10, y: 20, w: 1280, h: 720 }));
         assert_eq!(pl.presets.iter().map(|z| (z.id.as_str(), z.name.as_str())).collect::<Vec<_>>(), [("p1", "Zoom 1"), ("p2", "Terminal output")]);
         assert_eq!(pl.mic_id.as_deref(), Some("mic"));
+        assert_eq!(pl.camera_id, None);
+        let mut with_cam = dto("full", vec![]);
+        with_cam.camera_id = Some("cam".into());
+        assert_eq!(plan(with_cam).unwrap().camera_id.as_deref(), Some("cam"));
         assert!(pl.cursor_hidden);
         assert_eq!(plan(dto("full", vec![])).unwrap().region, None);
         assert!(plan(dto("window", vec![])).is_err());

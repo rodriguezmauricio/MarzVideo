@@ -9,6 +9,7 @@
 import { lockAspect } from "@marz/timeline";
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { Icon, type IconName } from "../components/Icon";
+import { CameraPreview } from "./CameraPreview";
 import { useHits } from "./hits";
 import { useRecLive } from "./recLive";
 import { recorderApi } from "./recorderApi";
@@ -237,6 +238,7 @@ export function Overlay({ children }: { children?: ReactNode }) {
           );
         })}
 
+      <CameraPreview area={shown} />
       <SizeChip area={shown} phys={phys} />
 
       {s.presets.map((p) => {

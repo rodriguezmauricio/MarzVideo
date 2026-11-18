@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, test } from "vitest";
-import { FormatError, parseProject, serializeProject } from "./project";
+import { cameraEdits, DEFAULT_CAMERA_EDITS, FormatError, parseProject, serializeProject } from "./project";
 
 const example = () => ({
   version: 1,
@@ -93,5 +93,47 @@ describe("parseProject with the Rust writer fixture", () => {
     expect(p.edits.zooms).toHaveLength(1);
     expect(p.edits.zooms[0]).toMatchObject({ id: "live-1", startUs: 4100000, endUs: 8200000, origin: "live", easing: "easeInOutCubic" });
     expect(p.edits.cuts).toEqual([]);
+  });
+});
+
+describe("camera track", () => {
+  const withCamera = () => {
+    const e = example() as Record<string, any>;
+    e.tracks.camera = { file: "camera.mp4", offsetUs: 41000, width: 1280, height: 720, fps: 30 };
+    return e;
+  };
+
+  test("a project without a camera has no camera track and default camera edits", () => {
+    const p = parseProject(example());
+    expect(p.tracks.camera).toBeUndefined();
+    expect(p.edits.camera).toBeUndefined();
+    expect(cameraEdits(p)).toEqual(DEFAULT_CAMERA_EDITS);
+    expect(serializeProject(p)).not.toContain('"camera"');
+  });
+
+  test("parses tracks.camera and edits.camera and round-trips with unknown fields", () => {
+    const e = withCamera();
+    e.edits.camera = {
+      visible: false,
+      mirror: false,
+      pip: { corner: "topLeft", widthFrac: 0.3, marginFrac: 0.03, shape: "rect", future: 1 },
+      scenes: [{ id: "s1", startUs: 0, endUs: 10, layout: "side" }],
+      later: "kept",
+    };
+    const p = parseProject(e);
+    expect(p.tracks.camera).toEqual({ file: "camera.mp4", offsetUs: 41000, width: 1280, height: 720, fps: 30 });
+    expect(cameraEdits(p).pip.corner).toBe("topLeft");
+    const again = JSON.parse(serializeProject(parseProject(JSON.parse(serializeProject(p)))));
+    expect(again.edits.camera.later).toBe("kept");
+    expect(again.edits.camera.pip.future).toBe(1);
+    expect(again.edits.camera.scenes).toHaveLength(1);
+  });
+
+  test("missing scenes default to an empty list; a bad corner is refused", () => {
+    const e = withCamera();
+    e.edits.camera = { visible: true, mirror: true, pip: { corner: "bottomRight", widthFrac: 0.22, marginFrac: 0.03, shape: "rect" } };
+    expect(parseProject(e).edits.camera?.scenes).toEqual([]);
+    e.edits.camera.pip.corner = "middle";
+    expect(() => parseProject(e)).toThrow(FormatError);
   });
 });
