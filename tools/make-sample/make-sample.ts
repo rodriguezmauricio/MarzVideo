@@ -64,7 +64,11 @@ function buildEvents(durationSec: number): string {
  * beep arriving `syncOffsetMs` after the flash in recording time. The mic offset is compensated,
  * so `pnpm sync-check` should read exactly that offset.
  */
-export async function makeSample(outDir: string, opts: { durationSec?: number; syncOffsetMs?: number } = {}): Promise<void> {
+/** The synthetic camera's first frame on the recording clock (like a real take's `offsetUs`). */
+export const CAMERA_OFFSET_US = 41_000;
+
+/** `camera` adds a synthetic 1280 x 720 30 fps `camera.mp4` (a moving test pattern) as `tracks.camera`. */
+export async function makeSample(outDir: string, opts: { durationSec?: number; syncOffsetMs?: number; camera?: boolean } = {}): Promise<void> {
   const durationSec = opts.durationSec ?? 20;
   const sync = opts.syncOffsetMs !== undefined;
   await mkdir(outDir, { recursive: true });
@@ -95,6 +99,16 @@ export async function makeSample(outDir: string, opts: { durationSec?: number; s
 
   await writeFile(join(outDir, "events.jsonl"), buildEvents(durationSec));
 
+  if (opts.camera) {
+    await run("ffmpeg", [
+      "-y", "-v", "error",
+      "-f", "lavfi", "-i", `testsrc2=size=1280x720:rate=30:duration=${durationSec - CAMERA_OFFSET_US / 1e6}`,
+      "-c:v", "libx264", "-pix_fmt", "yuv420p", "-bf", "0", "-g", "30", "-r", "30",
+      "-movflags", "frag_keyframe+empty_moov+default_base_moof",
+      join(outDir, "camera.mp4"),
+    ]);
+  }
+
   const project: Project = parseProject({
     version: 1,
     id: crypto.randomUUID(),
@@ -105,6 +119,7 @@ export async function makeSample(outDir: string, opts: { durationSec?: number; s
     tracks: {
       screen: { file: "screen.mp4", offsetUs: 0 },
       mic: { file: "mic.wav", offsetUs: MIC_OFFSET_US, volume: 1, muted: false },
+      ...(opts.camera ? { camera: { file: "camera.mp4", offsetUs: CAMERA_OFFSET_US, width: 1280, height: 720, fps: 30 } } : {}),
     },
     output: { width: W, height: H, fps: FPS },
     zoomPresets: [],
@@ -115,6 +130,7 @@ export async function makeSample(outDir: string, opts: { durationSec?: number; s
 
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
   const root = resolve(fileURLToPath(import.meta.url), "../../..");
-  const out = process.argv[2] ?? join(root, "samples", "demo.marz");
-  makeSample(out).then(() => console.log(`sample written to ${out}`));
+  const camera = process.argv.includes("--camera");
+  const out = process.argv.slice(2).find((a) => !a.startsWith("--")) ?? join(root, "samples", camera ? "demo-camera.marz" : "demo.marz");
+  makeSample(out, { camera }).then(() => console.log(`sample written to ${out}`));
 }

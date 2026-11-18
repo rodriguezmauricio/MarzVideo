@@ -1,5 +1,5 @@
-import type { Cut, Zoom } from "@marz/format";
-import { setCursorHidden, updateCut, updateZoom } from "@marz/timeline";
+import { cameraEdits, PIP_CORNERS, PIP_SIZES, type Corner, type Cut, type Project, type Zoom } from "@marz/format";
+import { setCursorHidden, updateCamera, updateCut, updateZoom } from "@marz/timeline";
 import { deleteSelection, MIN_US } from "../state/actions";
 import { useEditorStore } from "../state/editorStore";
 import { Icon } from "./Icon";
@@ -148,6 +148,60 @@ function Toggle(props: { label: string; on: boolean; onChange?: (on: boolean) =>
   );
 }
 
+const CORNER_NAMES: Record<Corner, string> = {
+  topLeft: "Top left",
+  topRight: "Top right",
+  bottomLeft: "Bottom left",
+  bottomRight: "Bottom right",
+};
+
+/** Camera block of the Project panel: show, mirror, corner and size of the picture-in-picture. */
+function CameraBlock({ project }: { project: Project }) {
+  const apply = useEditorStore((s) => s.apply);
+  const cam = cameraEdits(project);
+  return (
+    <div className="insp-cam">
+      <div className="mut insp-sec">Camera</div>
+      <Toggle label="Show camera" on={cam.visible} onChange={(visible) => apply(updateCamera({ visible }))} />
+      <Toggle label="Mirror" on={cam.mirror} onChange={(mirror) => apply(updateCamera({ mirror }))} />
+      <div className="irow">
+        <span>Corner</span>
+        <span className="corners" role="radiogroup" aria-label="Camera corner">
+          {PIP_CORNERS.map((c) => (
+            <button
+              key={c}
+              type="button"
+              role="radio"
+              aria-checked={cam.pip.corner === c}
+              aria-label={CORNER_NAMES[c]}
+              data-tip={CORNER_NAMES[c]}
+              className={cam.pip.corner === c ? "on" : ""}
+              onClick={() => apply(updateCamera({ pip: { corner: c } }))}
+            />
+          ))}
+        </span>
+      </div>
+      <div className="irow">
+        <span>Size</span>
+        <span className="seg" role="radiogroup" aria-label="Camera size">
+          {(Object.entries(PIP_SIZES) as [string, number][]).map(([label, frac]) => (
+            <button
+              key={label}
+              type="button"
+              role="radio"
+              aria-checked={cam.pip.widthFrac === frac}
+              className={cam.pip.widthFrac === frac ? "on" : ""}
+              onClick={() => apply(updateCamera({ pip: { widthFrac: frac } }))}
+            >
+              {label}
+            </button>
+          ))}
+        </span>
+      </div>
+    </div>
+  );
+}
+
 export function Inspector({ compact = false }: { compact?: boolean }) {
   const project = useEditorStore((s) => s.project)!;
   const selection = useEditorStore((s) => s.selection);
@@ -171,6 +225,7 @@ export function Inspector({ compact = false }: { compact?: boolean }) {
             {/* Shows the stored setting; switching click effects is not built yet (see DEVIATIONS.md). */}
             <Toggle label="Click highlight" on={project.edits.clicks.effect !== "none"} />
           </div>
+          {project.tracks.camera && <CameraBlock project={project} />}
           {!compact && <p className="insp-note">Select a zoom or a cut on the timeline to edit it.</p>}
         </>
       )}

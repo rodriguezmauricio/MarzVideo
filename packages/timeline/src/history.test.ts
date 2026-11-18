@@ -1,8 +1,8 @@
 import { describe, expect, test, vi } from "vitest";
-import { parseProject, type Cut, type Project, type Zoom } from "@marz/format";
+import { DEFAULT_CAMERA_EDITS, parseProject, type Cut, type Project, type Zoom } from "@marz/format";
 import { History } from "./history";
 import {
-  addCut, addZoom, removeCut, removeZoom, replaceAutoZooms, setCursorHidden, updateCut, updateZoom,
+  addCut, addZoom, removeCut, removeZoom, replaceAutoZooms, setCursorHidden, updateCamera, updateCut, updateZoom,
 } from "./commands";
 
 const zoom = (id: string, origin: Zoom["origin"] = "manual"): Zoom => ({
@@ -133,5 +133,21 @@ describe("commands", () => {
       p = cmd(p);
       expect((p as any).futureThing).toEqual({ keep: true });
     }
+  });
+});
+
+describe("updateCamera", () => {
+  test("fills in the defaults, keeps unknown fields, and is a no-op when nothing changes", () => {
+    const p = parseProject({
+      version: 1, id: "p", name: "n", createdAt: "2026-11-18T00:00:00Z", durationUs: 1_000_000,
+      source: { width: 1920, height: 1080, fps: 60 },
+      tracks: { screen: { file: "screen.mp4", offsetUs: 0 }, camera: { file: "camera.mp4", offsetUs: 0, width: 1280, height: 720, fps: 30 } },
+      output: { width: 1920, height: 1080, fps: 60 },
+    });
+    expect(updateCamera({ mirror: true })(p)).toBe(p);
+    const q = updateCamera({ pip: { corner: "topLeft" } })(p);
+    expect(q.edits.camera).toEqual({ ...DEFAULT_CAMERA_EDITS, pip: { ...DEFAULT_CAMERA_EDITS.pip, corner: "topLeft" } });
+    const withExtra = { ...q, edits: { ...q.edits, camera: { ...q.edits.camera!, later: 1 } } };
+    expect((updateCamera({ visible: false })(withExtra).edits.camera as Record<string, unknown>).later).toBe(1);
   });
 });

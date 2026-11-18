@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef } from "react";
-import { drawFrame, frameAt } from "@marz/compositor";
+import { cameraLayout, cameraMediaUs, drawFrame, frameAt } from "@marz/compositor";
 import { keptSegments, outputToSource } from "@marz/timeline";
 import { useEditorStore } from "../state/editorStore";
 import { mediaTimeUs, nextPlaybackTime, playbackEnded, sourceTimeUs, startTimeForPlay } from "../playback/clock";
@@ -8,6 +8,10 @@ import { mmss } from "./timecode";
 import { ZoomOverlay } from "./ZoomOverlay";
 
 const AUDIO_DRIFT_S = 0.04;
+/** Camera sync while playing: a seek past this gap, else a small speed nudge (a video seek lands late
+ *  on a decoder that has to start at a keyframe, so seeking for small gaps never settles). */
+const CAMERA_SEEK_S = 0.25;
+const CAMERA_LOCK_S = 0.012;
 
 export function Preview() {
   const project = useEditorStore((s) => s.project)!;
@@ -23,6 +27,8 @@ export function Preview() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
   const sysRef = useRef<HTMLAudioElement>(null);
+  const camRef = useRef<HTMLVideoElement>(null);
+  const cam = project.tracks.camera;
 
   const segs = useMemo(() => keptSegments(project.durationUs, project.edits.cuts), [project.durationUs, project.edits.cuts]);
   // Presentation time of frame 0 in screen.mp4 (0 without B-frames). 0 until the file's start is read.
@@ -49,11 +55,23 @@ export function Preview() {
     if (!canvas || !video || video.readyState < 2) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
+    // The export's setting, so the scaled camera looks the same in both.
+    ctx.imageSmoothingQuality = "high";
     const { project: p, editing } = live.current;
     const srcUs = sourceTimeUs(p, Math.round(video.currentTime * 1e6), firstFrame.current);
     const { events } = useEditorStore.getState();
     const shown = editing ? { ...p, edits: { ...p.edits, zooms: [] } } : p;
-    drawFrame(ctx, video, frameAt(shown, events, srcUs), p.output);
+    const layout = cameraLayout(p, p.output);
+    const camVideo = camRef.current;
+    const camera = layout && camVideo && camVideo.readyState >= 2 ? { source: camVideo, ...layout } : null;
+    drawFrame(ctx, video, frameAt(shown, events, srcUs), p.output, camera);
+  };
+
+  /** Camera media time (s) for source time `srcUs`, held on its last frame past its end. */
+  const cameraTimeS = (srcUs: number) => {
+    const v = camRef.current;
+    const t = cameraMediaUs(live.current.project, srcUs) / 1e6;
+    return v && Number.isFinite(v.duration) ? Math.min(t, Math.max(0, v.duration - 0.001)) : t;
   };
 
   const seekMedia = (srcUs: number) => {
@@ -61,6 +79,7 @@ export function Preview() {
     const audio = audioRef.current;
     if (video) video.currentTime = Math.max(0, mediaTimeUs(project, srcUs, firstFrame.current) / 1e6);
     for (const [audio, track] of audios()) audio.currentTime = Math.max(0, (srcUs - track.offsetUs) / 1e6);
+    if (camRef.current && cam) camRef.current.currentTime = cameraTimeS(srcUs);
   };
 
   // Read where frame 0 sits in screen.mp4 (a Range request on the file's start), then show the playhead again.
@@ -84,14 +103,18 @@ export function Preview() {
 
   // Redraw when the video lands on a new frame while paused, and whenever edits change.
   useEffect(() => {
-    const video = videoRef.current;
-    video?.addEventListener("seeked", draw);
-    video?.addEventListener("loadeddata", draw);
+    const els = [videoRef.current, camRef.current];
+    for (const v of els) {
+      v?.addEventListener("seeked", draw);
+      v?.addEventListener("loadeddata", draw);
+    }
     return () => {
-      video?.removeEventListener("seeked", draw);
-      video?.removeEventListener("loadeddata", draw);
+      for (const v of els) {
+        v?.removeEventListener("seeked", draw);
+        v?.removeEventListener("loadeddata", draw);
+      }
     };
-  }, []);
+  }, [cam?.file]);
   useEffect(draw, [project, editingZoom?.id]);
 
   // Dev only: `window.__marzGrab(outUs)` pauses, seeks to output time `outUs`, draws and returns the
@@ -106,7 +129,8 @@ export function Preview() {
       const store = useEditorStore.getState();
       store.pause();
       store.select(null);
-      const seeked = new Promise<void>((r) => video.addEventListener("seeked", () => r(), { once: true }));
+      const seekedOf = (v: HTMLVideoElement | null) => (v ? new Promise<void>((r) => v.addEventListener("seeked", () => r(), { once: true })) : Promise.resolve());
+      const seeked = Promise.all([seekedOf(video), seekedOf(live.current.project.tracks.camera ? camRef.current : null)]);
       store.seek(outputToSource(live.current.segs, outUs));
       await seeked;
       await new Promise((r) => requestAnimationFrame(r));
@@ -124,6 +148,8 @@ export function Preview() {
     if (!video) return;
     if (!playing) {
       video.pause();
+      camRef.current?.pause();
+      if (camRef.current) camRef.current.playbackRate = 1;
       for (const [audio] of audios()) audio.pause();
       return;
     }
@@ -136,6 +162,7 @@ export function Preview() {
     seekMedia(start);
     void video.play().catch(() => useEditorStore.getState().pause());
     for (const [audio] of audios()) void audio.play().catch(() => {});
+    if (camRef.current && cam) void camRef.current.play().catch(() => {});
 
     let raf = 0;
     const loop = () => {
@@ -152,6 +179,14 @@ export function Preview() {
         if (want >= 0 && !audio.ended && audio.paused && !video.paused) void audio.play().catch(() => {});
         if (want >= 0 && !audio.ended && Math.abs(audio.currentTime - want) > AUDIO_DRIFT_S) audio.currentTime = want;
       }
+      const cv = camRef.current;
+      if (cv && live.current.project.tracks.camera) {
+        const want = cameraTimeS(next);
+        if (!cv.ended && cv.paused && !video.paused) void cv.play().catch(() => {});
+        const gap = want - cv.currentTime;
+        if (!cv.ended && Math.abs(gap) > CAMERA_SEEK_S) cv.currentTime = want;
+        else cv.playbackRate = Math.abs(gap) <= CAMERA_LOCK_S ? 1 : gap > 0 ? 1.1 : 0.9;
+      }
       useEditorStore.getState().tick(next);
       draw();
       raf = requestAnimationFrame(loop);
@@ -160,6 +195,7 @@ export function Preview() {
     return () => {
       cancelAnimationFrame(raf);
       video.pause();
+      camRef.current?.pause();
       for (const [audio] of audios()) audio.pause();
     };
   }, [playing]);
@@ -209,6 +245,16 @@ export function Preview() {
       />
       {mic && <audio ref={audioRef} src={storage.fileUrl(mic.file)} preload="auto" />}
       {sys && <audio ref={sysRef} src={storage.fileUrl(sys.file)} preload="auto" />}
+      {cam && (
+        <video
+          ref={camRef}
+          src={storage.fileUrl(cam.file)}
+          muted
+          playsInline
+          preload="auto"
+          style={{ position: "absolute", width: 1, height: 1, opacity: 0, pointerEvents: "none" }}
+        />
+      )}
     </div>
   );
 }
