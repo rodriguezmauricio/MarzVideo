@@ -2,8 +2,8 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Status:** draft, not approved. Build nothing until Mauricio says yes to
-`docs/superpowers/specs/2026-11-18-camera-track-design.md` (format change, design, questions 1 to 4).
+**Status:** approved by Mauricio on 2026-11-18 with the recommended picks
+(`docs/superpowers/specs/2026-11-18-camera-track-design.md`). Start with Task 0.
 
 **Goal:** Record a webcam into `camera.mp4` on the shared clock, show it as its own lane, and draw a
 default picture-in-picture in preview and export.

@@ -1,7 +1,8 @@
 # Camera track design
 
-Status: **draft, waiting for Mauricio's yes** on the format change, the design and the open questions
-below. No code until then.
+Status: **approved by Mauricio on 2026-11-18** ("Yes, all picks"): the format change, the design and
+the recommended answer to every question below (live setup preview yes, mirrored by default yes,
+bottom-right medium rectangle, no virtual cameras in this step).
 
 Asked by Mauricio (2026-11-18): "Is it capturing cameras? One of the big features is separated layers
 for cameras and screen and the flexible AI editing", then "Yes, plan it".
