@@ -112,6 +112,13 @@ const PATHS = {
       <path d="M7 14h4M13 14h4M7 10h10" />
     </>
   ),
+  split: <path d="M12 3v18M3 8h5v8H3M21 8h-5v8h5" />,
+  join: (
+    <>
+      <rect x="3" y="8" width="18" height="8" />
+      <path d="M9 12h6" />
+    </>
+  ),
   speaker: <path d="M4 9h4l5-4v14l-5-4H4zM16.5 9.5a3.5 3.5 0 010 5M19 7a7 7 0 010 10" />,
   zoomout: (
     <>

@@ -4,3 +4,4 @@
 @import "tailwindcss/utilities.css" layer(utilities);
 @import "./styles/editor.css";
 @import "./styles/home.css";
+@import "./styles/captions.css";

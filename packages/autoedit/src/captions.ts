@@ -1,4 +1,4 @@
-import { aiEdits, captionEdits, type Project, type Word } from "@marz/format";
+import { aiEdits, captionEdits, type CaptionBreak, type Project, type Word } from "@marz/format";
 import { keptSegments } from "@marz/timeline";
 
 export type CaptionLook = "subtitles" | "highlight";
@@ -41,39 +41,67 @@ export function captionWords(project: Project, words: Word[]): CaptionWord[] {
 }
 
 /** Caption lines for a look. Subtitles: up to 32 characters a line, two lines a block. Highlight:
- * one to four words a line. Both break at sentence ends and pauses. Empty when captions are off. */
+ * one to four words a line. Both break at sentence ends and pauses. A "split" word always starts a
+ * caption; a "join" word never does (a subtitle line still wraps by length, so a joined caption can
+ * have more than two lines; a highlight line just grows). Empty when captions are off. */
 export function captionLines(project: Project, words: Word[], look: CaptionLook): CaptionLine[] {
   if (!aiEdits(project).kinds.captions) return [];
   const cws = captionWords(project, words);
+  const { breaks } = captionEdits(project);
   const lines: CaptionLine[] = [];
   let cur: CaptionWord[] = [];
   let block = 0;
   let linesInBlock = 0;
-  const flush = (endBlock: boolean) => {
-    if (cur.length) {
-      lines.push({ startUs: cur[0]!.startUs, endUs: cur[cur.length - 1]!.endUs, words: cur, block });
-      linesInBlock++;
-      cur = [];
-    }
-    if (look === "highlight" || endBlock || linesInBlock >= 2) {
-      if (linesInBlock > 0) block++;
-      linesInBlock = 0;
-    }
+  const pushLine = () => {
+    if (!cur.length) return;
+    lines.push({ startUs: cur[0]!.startUs, endUs: cur[cur.length - 1]!.endUs, words: cur, block });
+    linesInBlock++;
+    cur = [];
+  };
+  const endBlock = () => {
+    pushLine();
+    if (linesInBlock > 0) block++;
+    linesInBlock = 0;
   };
   for (let i = 0; i < cws.length; i++) {
     const w = cws[i]!;
     const prev = cws[i - 1];
-    if (prev && w.startUs - prev.endUs > CAPTION_PAUSE_US) flush(true);
-    const tooLong =
-      look === "subtitles"
-        ? cur.length > 0 && lineChars([...cur, w]) > SUBTITLE_MAX_CHARS
-        : cur.length >= HIGHLIGHT_MAX_WORDS || (cur.length > 0 && lineChars([...cur, w]) > HIGHLIGHT_MAX_CHARS);
-    if (tooLong) flush(false);
+    const brk = breaks[w.id];
+    let blockBreak = !!prev && (w.startUs - prev.endUs > CAPTION_PAUSE_US || sentenceEnd(prev.text));
+    if (brk === "split" && prev) blockBreak = true;
+    if (brk === "join") blockBreak = false;
+    if (blockBreak) endBlock();
+    else if (cur.length > 0) {
+      const tooLong =
+        look === "subtitles"
+          ? lineChars([...cur, w]) > SUBTITLE_MAX_CHARS
+          : cur.length >= HIGHLIGHT_MAX_WORDS || lineChars([...cur, w]) > HIGHLIGHT_MAX_CHARS;
+      if (tooLong && brk === "join") {
+        // Joined: wrap the subtitle line inside the same caption; a highlight line keeps growing.
+        if (look === "subtitles") pushLine();
+      } else if (tooLong) {
+        if (look === "highlight") endBlock();
+        else {
+          pushLine();
+          if (linesInBlock >= 2) endBlock();
+        }
+      }
+    }
     cur.push(w);
-    if (sentenceEnd(w.text)) flush(true);
   }
-  flush(true);
+  endBlock();
   return lines;
+}
+
+/** The ids of the words that start a caption (the first word of every block). */
+export function captionStarts(lines: CaptionLine[]): Set<string> {
+  const out = new Set<string>();
+  let last = -1;
+  for (const l of lines) {
+    if (l.block !== last && l.words[0]) out.add(l.words[0].id);
+    last = l.block;
+  }
+  return out;
 }
 
 /** The time a block is on screen: its first word to its last word plus the hold, cut short by the
@@ -92,4 +120,41 @@ export function blockSpans(lines: CaptionLine[]): Array<{ block: number; startUs
     blocks[i]!.endUs = Math.min(blocks[i]!.endUs + CAPTION_HOLD_US, next ? next.startUs : Infinity);
   }
   return blocks;
+}
+
+/** The `edits.captions.breaks` value that makes `wordId` start a caption (`wantStart`) or not:
+ * a hand split or join is removed first when that is enough. Undefined when nothing changes (the
+ * word already is, or is not, a start; or it is not in the captions at all). */
+export function captionBreakFor(project: Project, words: Word[], look: CaptionLook, wordId: string, wantStart: boolean): CaptionBreak | null | undefined {
+  const cur = captionEdits(project).breaks[wordId];
+  const without: Project = cur
+    ? (() => {
+        const breaks = { ...(project.edits.captions?.breaks ?? {}) };
+        delete breaks[wordId];
+        return { ...project, edits: { ...project.edits, captions: { ...captionEdits(project), ...project.edits.captions, breaks } } };
+      })()
+    : project;
+  const lines = captionLines(without, words, look);
+  if (!lines.some((l) => l.words.some((w) => w.id === wordId))) return undefined;
+  const startsWithout = captionStarts(lines).has(wordId);
+  const want: CaptionBreak | null = wantStart ? (startsWithout ? null : "split") : startsWithout ? "join" : null;
+  if (lines[0]!.words[0]!.id === wordId) return undefined;
+  return want === (cur ?? null) ? undefined : want;
+}
+
+/** All transcript words (cut and hidden ones too) grouped into paragraphs, one per caption: a word
+ * in `starts` opens a new paragraph once the current one holds a start. */
+export function transcriptParagraphs(words: Word[], starts: Set<string>): Word[][] {
+  const out: Word[][] = [];
+  let hasStart = false;
+  for (const w of words) {
+    const start = starts.has(w.id);
+    if (out.length === 0 || (start && hasStart)) {
+      out.push([]);
+      hasStart = false;
+    }
+    if (start) hasStart = true;
+    out[out.length - 1]!.push(w);
+  }
+  return out;
 }

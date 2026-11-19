@@ -17,3 +17,15 @@ export function toSrt(lines: CaptionLine[]): string {
     .map((cue) => cue + "\r\n\r\n")
     .join("");
 }
+
+export function vttTime(us: number): string {
+  return srtTime(us).replace(",", ".");
+}
+
+/** WebVTT text for subtitle lines (one cue per block, its lines on separate rows), LF line ends. */
+export function toVtt(lines: CaptionLine[]): string {
+  const cues = blockSpans(lines).map(
+    (b) => [`${vttTime(b.startUs)} --> ${vttTime(b.endUs)}`, ...b.lines.map((l) => l.words.map((w) => w.text).join(" "))].join("\n") + "\n\n",
+  );
+  return cues.length ? "WEBVTT\n\n" + cues.join("") : "";
+}

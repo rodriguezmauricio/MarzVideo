@@ -14,6 +14,7 @@ import { refuseEmpty } from "./export/outputFrames";
 import { addCutAtPlayhead, addZoomAtPlayhead, deleteSelection, runAutoZoom } from "./state/actions";
 import { abortAiPass, answerModelAsk, loadTranscriptWords, startAiPass } from "./ai/aiActions";
 import { statusText } from "./ai/runAiPass";
+import { setCaptionStartAt } from "./captions/captionActions";
 import { useAppStore } from "./state/appStore";
 import { flushAutosave, useEditorStore } from "./state/editorStore";
 import { pickStorage } from "./storage/pickStorage";
@@ -162,6 +163,14 @@ function Editor({ dir }: { dir: string }) {
       else if (e.code === "KeyC") addCutAtPlayhead();
       else if (e.code === "KeyA") runAutoZoom();
       else if (e.code === "KeyE" && e.shiftKey) void startAiPass();
+      // Captions editor (DESIGN-SYSTEM.md Inspector, "Tabs" and "Transcript panel").
+      else if (e.code === "KeyT" && s.words.length > 0) s.setInspectorTab(s.inspectorTab === "edit" ? "transcript" : "edit");
+      else if (e.code === "KeyS" && s.selection?.kind === "word") setCaptionStartAt(s.selection.id, true);
+      else if (e.code === "KeyJ" && s.selection?.kind === "word") setCaptionStartAt(s.selection.id, false);
+      else if (e.code === "Enter" && s.selection?.kind === "word" && s.inspectorTab === "transcript") {
+        e.preventDefault();
+        s.setTranscriptEditing(s.selection.id);
+      }
       else if (e.code === "Delete" || e.code === "Backspace") deleteSelection();
       else if (e.code === "Escape") s.select(null);
     };

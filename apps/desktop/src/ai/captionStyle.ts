@@ -1,6 +1,6 @@
-import { blockSpans, captionLines, type CaptionLook } from "@marz/autoedit";
+import { blockSpans, captionLines } from "@marz/autoedit";
 import type { CaptionBlock, CaptionStyle } from "@marz/compositor";
-import type { Project, Word } from "@marz/format";
+import type { CaptionStyleChoice, Project, Word } from "@marz/format";
 
 /** Caption colours and font from tokens.css (no colour is written anywhere else). */
 export function captionStyle(): CaptionStyle {
@@ -13,9 +13,10 @@ export function captionStyle(): CaptionStyle {
   return { ink, paper, accent, family: v("--font-display") || "sans-serif" };
 }
 
-/** The caption blocks for a look, in output time. */
-export function captionBlocks(project: Project, words: Word[], look: CaptionLook): CaptionBlock[] {
-  return words.length ? blockSpans(captionLines(project, words, look)) : [];
+/** The caption blocks for a preset's style, in output time: word highlight builds short lines,
+ * otherwise subtitle lines. */
+export function captionBlocks(project: Project, words: Word[], style: Pick<CaptionStyleChoice, "highlight">): CaptionBlock[] {
+  return words.length ? blockSpans(captionLines(project, words, style.highlight ? "highlight" : "subtitles")) : [];
 }
 
 /** Waits until the display font can be drawn on a canvas (fonts load lazily). */

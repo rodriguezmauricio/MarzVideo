@@ -79,11 +79,39 @@ const CutSchema = z.preprocess(
     .passthrough(),
 );
 
-/** `edits.captions`: per-word text fixes and hidden words, keyed by transcript word id. */
+const CAPTION_BREAKS = ["split", "join"] as const;
+const CAPTION_STYLE_NAMES = ["inkBand", "paperBand", "accentBand", "plain"] as const;
+const CAPTION_SIZES = ["S", "M", "L"] as const;
+const CAPTION_POSITIONS = ["top", "middle", "bottom"] as const;
+
+/** One export preset's caption style. Every field optional: missing means the preset default. An
+ * unknown value is dropped from the type (so the default applies) and kept on save. */
+const CaptionStyleSchema = z.preprocess(
+  (v) =>
+    tolerant(v, {
+      style: { known: CAPTION_STYLE_NAMES, fallback: undefined },
+      size: { known: CAPTION_SIZES, fallback: undefined },
+      position: { known: CAPTION_POSITIONS, fallback: undefined },
+    }),
+  z
+    .object({
+      style: z.enum(CAPTION_STYLE_NAMES).optional(),
+      size: z.enum(CAPTION_SIZES).optional(),
+      position: z.enum(CAPTION_POSITIONS).optional(),
+      highlight: z.boolean().optional(),
+    })
+    .passthrough(),
+);
+
+/** `edits.captions`: per-word text fixes and hidden words, caption splits and joins, keyed by
+ * transcript word id; caption style per export preset. */
 const CaptionEditsSchema = z
   .object({
     overrides: z.record(z.string()).default({}),
     hidden: z.array(z.string()).default([]),
+    /** "split": a caption starts at this word. "join": no caption starts at this word. */
+    breaks: z.record(z.unknown()).optional(),
+    styles: z.record(z.unknown()).optional(),
   })
   .passthrough();
 
@@ -220,7 +248,24 @@ export const DEFAULT_AI_EDITS: AiEdits = {
   rejected: [],
 };
 
-export const DEFAULT_CAPTION_EDITS: CaptionEdits = { overrides: {}, hidden: [] };
+export type CaptionBreak = (typeof CAPTION_BREAKS)[number];
+export type CaptionStyleName = (typeof CAPTION_STYLE_NAMES)[number];
+export type CaptionSize = (typeof CAPTION_SIZES)[number];
+export type CaptionPosition = (typeof CAPTION_POSITIONS)[number];
+/** The export presets that carry a caption style (`edits.captions.styles` keys). */
+export type CaptionPresetId = "youtube" | "vertical";
+export type CaptionStyleChoice = { style: CaptionStyleName; size: CaptionSize; position: CaptionPosition; highlight: boolean };
+export const CAPTION_STYLE_LIST: readonly CaptionStyleName[] = CAPTION_STYLE_NAMES;
+export const CAPTION_SIZE_LIST: readonly CaptionSize[] = CAPTION_SIZES;
+export const CAPTION_POSITION_LIST: readonly CaptionPosition[] = CAPTION_POSITIONS;
+
+/** Defaults keep the M2 output: YouTube two-line subtitles on an ink band, vertical word highlight. */
+export const DEFAULT_CAPTION_STYLES: Record<CaptionPresetId, CaptionStyleChoice> = {
+  youtube: { style: "inkBand", size: "M", position: "bottom", highlight: false },
+  vertical: { style: "plain", size: "M", position: "bottom", highlight: true },
+};
+
+export const DEFAULT_CAPTION_EDITS: CaptionEdits = { overrides: {}, hidden: [], breaks: {}, styles: {} };
 
 /** The AI settings in force: `edits.ai`, or the defaults. */
 export function aiEdits(p: Project): AiEdits {
@@ -228,8 +273,33 @@ export function aiEdits(p: Project): AiEdits {
   return ai ?? DEFAULT_AI_EDITS;
 }
 
-export function captionEdits(p: Project): CaptionEdits {
-  return p.edits.captions ?? DEFAULT_CAPTION_EDITS;
+/** The caption edits in force. `breaks` holds only the values this build knows. */
+export type CaptionEditsInForce = {
+  overrides: Record<string, string>;
+  hidden: string[];
+  breaks: Record<string, CaptionBreak>;
+  styles: Record<string, unknown>;
+};
+export function captionEdits(p: Project): CaptionEditsInForce {
+  const c = p.edits.captions ?? DEFAULT_CAPTION_EDITS;
+  const breaks: Record<string, CaptionBreak> = {};
+  for (const [id, v] of Object.entries(c.breaks ?? {}))
+    if (typeof v === "string" && (CAPTION_BREAKS as readonly string[]).includes(v)) breaks[id] = v as CaptionBreak;
+  return { overrides: c.overrides ?? {}, hidden: c.hidden ?? [], breaks, styles: c.styles ?? {} };
+}
+
+/** The caption style of an export preset: the stored fields over the preset default. */
+export function captionStyleFor(p: Project, preset: CaptionPresetId): CaptionStyleChoice {
+  const raw = (p.edits.captions?.styles ?? {})[preset];
+  const parsed = raw === undefined ? null : CaptionStyleSchema.safeParse(raw);
+  const s = parsed?.success ? parsed.data : {};
+  const d = DEFAULT_CAPTION_STYLES[preset];
+  return {
+    style: s.style ?? d.style,
+    size: s.size ?? d.size,
+    position: s.position ?? d.position,
+    highlight: typeof s.highlight === "boolean" ? s.highlight : d.highlight,
+  };
 }
 
 /** Whether an edit came from the AI pass. */

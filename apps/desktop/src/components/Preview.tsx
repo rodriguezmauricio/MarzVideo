@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef } from "react";
 import { canvasMeasure, captionLayout, cameraLayout, cameraMediaUs, drawCaptions, drawFrame, frameAt, type CaptionStyle } from "@marz/compositor";
 import { keptSegments, outputToSource, sourceToOutput } from "@marz/timeline";
+import { captionStyleFor } from "@marz/format";
 import { captionBlocks, captionStyle, loadCaptionFont } from "../ai/captionStyle";
 import { useEditorStore } from "../state/editorStore";
 import { mediaTimeUs, nextPlaybackTime, playbackEnded, sourceTimeUs, startTimeForPlay } from "../playback/clock";
@@ -47,7 +48,8 @@ export function Preview() {
     ).filter((p): p is [HTMLAudioElement, AudioTrack] => !!p[0] && !!p[1]);
 
   const words = useEditorStore((s) => s.words);
-  const look = useEditorStore((s) => s.captionLook);
+  const preset = useEditorStore((s) => s.captionPreset);
+  const look = useMemo(() => captionStyleFor(project, preset), [project, preset]);
   const blocks = useMemo(() => captionBlocks(project, words, look), [project, words, look]);
   const style = useRef<CaptionStyle | null>(null);
 
@@ -134,7 +136,7 @@ export function Preview() {
       }
     };
   }, [cam?.file]);
-  useEffect(draw, [project, editingZoom?.id, blocks]);
+  useEffect(draw, [project, editingZoom?.id, blocks, look]);
   // The display font loads lazily; draw again once it can be used on the canvas.
   useEffect(() => {
     if (blocks.length === 0) return;

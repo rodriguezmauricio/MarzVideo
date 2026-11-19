@@ -1,13 +1,13 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { Project } from "@marz/format";
+import { captionStyleFor, type Project } from "@marz/format";
 import { create } from "zustand";
 import { isTauri } from "../platform";
 import { useAppStore } from "../state/appStore";
 import { useEditorStore } from "../state/editorStore";
 import { exportProject } from "./exportVideo";
 import { failureText, panelKey, percent, readBurn, readLastPreset, writeBurn, writeLastPreset, type PanelState } from "./exportUi";
-import { blockSpans, captionLines, toSrt } from "@marz/autoedit";
-import { captionStyle, loadCaptionFont } from "../ai/captionStyle";
+import { captionLines, toSrt, toVtt } from "@marz/autoedit";
+import { captionBlocks, captionStyle, loadCaptionFont } from "../ai/captionStyle";
 import { createMemorySink } from "./memorySink";
 import { PRESETS, type ExportPresetId } from "./presets";
 import { asFailure, cancelLeftoverExports, createTauriSink } from "./tauriSink";
@@ -102,8 +102,8 @@ export const useExportStore = create<ExportState>((set, get) => ({
     const dir = useAppStore.getState().dir;
     if (!project || !files || !dir) return;
     writeLastPreset(storage(), id);
-    // The preview shows the look of the preset last picked.
-    useEditorStore.getState().setCaptionLook(PRESETS[id].captionLook);
+    // The preview shows the caption style of the preset last picked.
+    useEditorStore.getState().setCaptionPreset(id);
     const words = useEditorStore.getState().words;
     set({ last: id, panel: { open: false, highlight: id }, phase: "picking", failure: null, outPath: null, doneFor: null });
 
@@ -122,12 +122,12 @@ export const useExportStore = create<ExportState>((set, get) => ({
     const controller = new AbortController();
     set({ phase: "exporting", progress: 0, controller });
     try {
-      const look = PRESETS[id].captionLook;
+      const look = captionStyleFor(project, id);
       let captions = null;
       if (words.length > 0 && get().burn[id]) {
         const style = captionStyle();
         await loadCaptionFont(style.family);
-        captions = { blocks: blockSpans(captionLines(project, words, look)), look, style };
+        captions = { blocks: captionBlocks(project, words, look), look, style };
       }
       const report = await exportProject({
         project,
@@ -145,10 +145,14 @@ export const useExportStore = create<ExportState>((set, get) => ({
         },
       });
       if (get().controller !== controller) return;
-      // The .srt beside the MP4 whenever there is a transcript (output times, after cuts).
+      // The .srt and .vtt beside the MP4 whenever there is a transcript (subtitle lines with the
+      // edited text, output times, after cuts).
       if (isTauri() && words.length > 0) {
-        const srt = toSrt(captionLines(project, words, "subtitles"));
+        const lines = captionLines(project, words, "subtitles");
+        const srt = toSrt(lines);
         if (srt) await invoke("export_write_srt", { outPath: report.outPath, text: srt }).catch((e: unknown) => console.error("[export] srt", e));
+        const vtt = toVtt(lines);
+        if (vtt) await invoke("export_write_vtt", { outPath: report.outPath, text: vtt }).catch((e: unknown) => console.error("[export] vtt", e));
       }
       set({ phase: "done", outPath: report.outPath, doneFor: useEditorStore.getState().project, controller: null, progress: 100 });
     } catch (e) {

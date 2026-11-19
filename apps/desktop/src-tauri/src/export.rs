@@ -432,7 +432,12 @@ pub fn srt_path(mp4: &Path) -> PathBuf {
 
 /// Write `text` through `<name>.srt.part` and a rename (the export's `.part` rule).
 pub fn write_srt_atomic(mp4: &Path, text: &str) -> std::io::Result<PathBuf> {
-    let dest = srt_path(mp4);
+    write_beside_atomic(mp4, "srt", text)
+}
+
+/// Write `text` to `<name>.<ext>` beside the MP4 through a `.part` file and a rename.
+pub fn write_beside_atomic(mp4: &Path, ext: &str, text: &str) -> std::io::Result<PathBuf> {
+    let dest = mp4.with_extension(ext);
     let part = PathBuf::from(format!("{}.part", dest.to_string_lossy()));
     std::fs::write(&part, text.as_bytes())?;
     if let Err(e) = std::fs::rename(&part, &dest) {
@@ -450,6 +455,16 @@ pub fn export_write_srt(exports: State<'_, Exports>, out_path: String, text: Str
         return Err("This file was not exported here".into());
     }
     write_srt_atomic(&mp4, &text).map(|p| p.to_string_lossy().into_owned()).map_err(|e| e.to_string())
+}
+
+/// Captions as WebVTT beside a finished export. Only for MP4s this app just exported.
+#[tauri::command(async)]
+pub fn export_write_vtt(exports: State<'_, Exports>, out_path: String, text: String) -> Result<String, String> {
+    let mp4 = PathBuf::from(&out_path);
+    if !lock(&exports.done).contains(&mp4) {
+        return Err("This file was not exported here".into());
+    }
+    write_beside_atomic(&mp4, "vtt", &text).map(|p| p.to_string_lossy().into_owned()).map_err(|e| e.to_string())
 }
 
 /// Open Explorer with a finished export selected. Only files this app exported.
@@ -492,6 +507,18 @@ Hi
         assert_eq!(srt, dir.join("Demo YouTube.srt"));
         assert!(std::fs::read_to_string(&srt).unwrap().contains("Hi"));
         assert!(!dir.join("Demo YouTube.srt.part").exists());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn writes_the_vtt_beside_the_mp4_without_a_part_file() {
+        let dir = std::env::temp_dir().join(format!("marz-vtt-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let mp4 = dir.join("Demo Vertical.mp4");
+        let vtt = write_beside_atomic(&mp4, "vtt", "WEBVTT\n\n00:00:00.000 --> 00:00:01.000\nHi\n\n").unwrap();
+        assert_eq!(vtt, dir.join("Demo Vertical.vtt"));
+        assert!(std::fs::read_to_string(&vtt).unwrap().starts_with("WEBVTT"));
+        assert!(!dir.join("Demo Vertical.vtt.part").exists());
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

@@ -1,4 +1,4 @@
-import { canvasMeasure, captionLayout, cameraLayout, cameraMediaUs, drawCaptions, drawFrame, frameAt, type CaptionBlock, type CaptionLook, type CaptionStyle } from "@marz/compositor";
+import { canvasMeasure, captionLayout, cameraLayout, cameraMediaUs, drawCaptions, drawFrame, frameAt, type CaptionBlock, type CaptionLookOpts, type CaptionStyle } from "@marz/compositor";
 import type { MarzEvent, Project } from "@marz/format";
 import { keptSegments } from "@marz/timeline";
 import { mediaTimeUs } from "../playback/clock";
@@ -26,7 +26,7 @@ export interface ExportOptions {
   signal: AbortSignal;
   onProgress(p: number): void;
   /** Captions to burn in (null: none). Output-time blocks, drawn after the frame. */
-  captions?: { blocks: CaptionBlock[]; look: CaptionLook; style: CaptionStyle } | null;
+  captions?: { blocks: CaptionBlock[]; look: CaptionLookOpts; style: CaptionStyle } | null;
 }
 
 /** Ink behind the vertical letterbox, read from tokens.css so the colour lives in one place. */
