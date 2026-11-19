@@ -366,7 +366,7 @@ mod tests {
     #[test]
     fn normalized_export_lands_near_the_target_and_fades_in() {
         let (ffmpeg, ffprobe) = tools_or_skip!("normalized_export");
-        let dir = temp_dir("loud");
+        let dir = temp_dir("loudnorm");
         let h264 = fixtures(&ffmpeg, &dir);
         let plain_out = {
             let j = job(&dir, mic(0));
