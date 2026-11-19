@@ -107,7 +107,7 @@ export function Preview() {
       lay && camVideo && camVideo.readyState >= 2
         ? cameraLayerFor(p, lay, p.output, camVideo, { width: camVideo.videoWidth, height: camVideo.videoHeight }, tokenColors())
         : null;
-    drawFrame(ctx, video, frameAt(shown, events, srcUs, lay?.screen), p.output, camera);
+    drawFrame(ctx, video, frameAt(shown, events, srcUs, lay?.screen), p.output, camera, tokenColors());
     // Captions: the same layout and drawing as the export (DESIGN-SYSTEM.md "Captions in the video").
     const { blocks: bl, look: lk, segs: sg } = live.current;
     const tOut = bl.length ? sourceToOutput(sg, srcUs) : null;

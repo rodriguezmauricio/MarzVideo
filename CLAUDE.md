@@ -59,6 +59,13 @@ Windows-first screen recorder + non-destructive editor (Tauri 2, Rust, React/TS)
   caption style per export preset (Ink, Paper, Accent band, Plain; S/M/L; top/middle/bottom; word highlight), `.vtt`
   beside every export next to the `.srt`. Code: `apps/desktop/src/captions`, `packages/autoedit/src/captions.ts`,
   `packages/compositor/src/captions.ts`.
+- **Built on branch `claude/cursor-clicks-08f5d3` (2026-11-19, not merged):** cursor and clicks (design
+  `docs/superpowers/specs/2026-11-19-cursor-clicks-design.md`, plan `docs/superpowers/plans/2026-11-19-cursor-clicks.md`).
+  `cursorShape` lines in `events.jsonl` (Windows cursor shape and size, from the 16 ms poll), `source.cursor` "layer" or "baked",
+  the compositor draws the recorded shape at the recorded size (x 1, 1.5, 2), Cursor lane blocks (H) hide the cursor or switch
+  click effects per section, click effects Ripple, Pulse, Ring with token colour and size, in preview and export.
+  Code: `packages/format/src/cursor.ts`, `packages/timeline/src/cursor.ts`, `packages/compositor/src/cursor.ts` and `cursorShapes.ts`,
+  `crates/capture/src/win/cursor.rs`, `apps/desktop/src/components/CursorPanel.tsx`.
 - **Not checked by hand yet:** the owner checks in `docs/spikes/2026-11-17-owner-checks.md` (clean 3-minute run,
   flash and beep sync, clicks, static screen, mic unplug, 60 Hz, real hotkeys), plus: open New recording once and
   look at the overlay, play an export in Windows Media Player, upload one export of each preset privately and

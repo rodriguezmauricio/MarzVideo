@@ -29,8 +29,8 @@ describe("frameAt", () => {
 
   test("cursor is the latest sample at or before the time, with no interpolation", () => {
     const evs = [cur(1_000_000, 100, 100), cur(2_000_000, 300, 300), cur(3_000_000, 900, 900)];
-    expect(frameAt(project(), evs, 2_500_000).cursor).toEqual({ x: 150, y: 150 });
-    expect(frameAt(project(), evs, 2_000_000).cursor).toEqual({ x: 150, y: 150 });
+    expect(frameAt(project(), evs, 2_500_000).cursor).toMatchObject({ x: 150, y: 150 });
+    expect(frameAt(project(), evs, 2_000_000).cursor).toMatchObject({ x: 150, y: 150 });
     expect(frameAt(project(), evs, 999_999).cursor).toBeNull();
   });
 
@@ -39,12 +39,12 @@ describe("frameAt", () => {
       cur(1_000_000, 200, 200),
       { tUs: 1_500_000, type: "click", button: "left", state: "down", x: 1, y: 1 },
     ];
-    expect(frameAt(project(), evs, 2_000_000).cursor).toEqual({ x: 100, y: 100 });
+    expect(frameAt(project(), evs, 2_000_000).cursor).toMatchObject({ x: 100, y: 100 });
   });
 
   test("cursor is mapped through the zoom rect into output pixels", () => {
     const evs = [cur(1_000_000, 1000, 500)];
-    expect(frameAt(project([zoom()]), evs, 5_000_000).cursor).toEqual({ x: 500, y: 250 });
+    expect(frameAt(project([zoom()]), evs, 5_000_000).cursor).toMatchObject({ x: 500, y: 250 });
   });
 
   test("cursor outside the zoom rect is null", () => {
@@ -94,7 +94,7 @@ describe("frameAt letterboxing (source aspect differs from output aspect)", () =
     expect(f.cursor!.x).toBeCloseTo(960);
     expect(f.cursor!.y).toBeCloseTo(540);
     const corner = frameAt(wide(), [cur(1, 0, 0)], 1_000_000);
-    expect(corner.cursor).toEqual({ x: 96, y: 0 });
+    expect(corner.cursor).toMatchObject({ x: 96, y: 0 });
   });
 
   test("a 16:9-wide source is letterboxed top and bottom", () => {

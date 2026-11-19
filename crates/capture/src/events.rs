@@ -59,6 +59,21 @@ struct CursorLine {
 }
 
 #[derive(Serialize)]
+struct CursorShapeLine<'a> {
+    #[serde(rename = "tUs")]
+    t_us: i64,
+    r#type: &'static str,
+    shape: &'a str,
+    px: u32,
+}
+
+/// Cursor shape names written in `cursorShape` lines (see the cursor and clicks design doc).
+pub const CURSOR_SHAPES: [&str; 15] = [
+    "arrow", "hand", "ibeam", "wait", "progress", "cross", "move", "sizeNS", "sizeWE", "sizeNWSE", "sizeNESW", "no", "help",
+    "hidden", "other",
+];
+
+#[derive(Serialize)]
 struct ClickLine {
     #[serde(rename = "tUs")]
     t_us: i64,
@@ -106,6 +121,7 @@ pub struct EventLog<W: Write> {
     fps: u32,
     last_cursor_slot: Option<i64>,
     last_cursor: Option<(i32, i32)>,
+    last_shape: Option<(String, u32)>,
     last_flush_us: i64,
     error: Option<io::Error>,
 }
@@ -123,7 +139,7 @@ impl<W: Write> EventLog<W> {
         serde_json::to_writer(&mut out, &line).map_err(io::Error::from)?;
         out.write_all(b"\n")?;
         out.flush()?;
-        Ok(Self { out, origin, fps, last_cursor_slot: None, last_cursor: None, last_flush_us: 0, error: None })
+        Ok(Self { out, origin, fps, last_cursor_slot: None, last_cursor: None, last_shape: None, last_flush_us: 0, error: None })
     }
 
     /// Records a cursor move. At most one line per frame slot (the first move in it), and only
@@ -140,6 +156,16 @@ impl<W: Write> EventLog<W> {
         self.last_cursor_slot = Some(slot);
         self.last_cursor = Some(pos);
         self.write_line(rec_us, &CursorLine { t_us: rec_us, r#type: "cursor", x: pos.0, y: pos.1 });
+    }
+
+    /// Records the cursor's shape (one of `CURSOR_SHAPES`) and cell size in captured pixels. Written only
+    /// when either differs from the last `cursorShape` line.
+    pub fn cursor_shape(&mut self, rec_us: i64, shape: &str, px: u32) {
+        if self.last_shape.as_ref().is_some_and(|(s, p)| s == shape && *p == px) {
+            return;
+        }
+        self.last_shape = Some((shape.to_string(), px));
+        self.write_line(rec_us, &CursorShapeLine { t_us: rec_us, r#type: "cursorShape", shape, px });
     }
 
     pub fn click(&mut self, rec_us: i64, button: Button, down: bool, screen_x: i32, screen_y: i32) {
@@ -264,6 +290,25 @@ mod tests {
                 HEADER_LINE,
                 r#"{"tUs":1000,"type":"cursor","x":10,"y":10}"#,
                 r#"{"tUs":16667,"type":"cursor","x":40,"y":40}"#,
+            ]
+        );
+    }
+
+    #[test]
+    fn cursor_shape_written_on_change_only() {
+        let mut log = new_log((0, 0));
+        log.cursor_shape(1_000, "arrow", 32);
+        log.cursor_shape(17_000, "arrow", 32);
+        log.cursor_shape(33_000, "hand", 32);
+        log.cursor_shape(50_000, "hand", 48);
+        let out = text(log);
+        assert_eq!(
+            lines(&out),
+            vec![
+                HEADER_LINE,
+                r#"{"tUs":1000,"type":"cursorShape","shape":"arrow","px":32}"#,
+                r#"{"tUs":33000,"type":"cursorShape","shape":"hand","px":32}"#,
+                r#"{"tUs":50000,"type":"cursorShape","shape":"hand","px":48}"#,
             ]
         );
     }

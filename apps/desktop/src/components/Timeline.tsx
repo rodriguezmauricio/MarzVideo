@@ -1,19 +1,19 @@
 import { useEffect, useRef, useState } from "react";
-import { cameraScenes } from "@marz/format";
-import { updateCut, updateScene, updateZoom } from "@marz/timeline";
+import { cameraScenes, cursorSections } from "@marz/format";
+import { updateCursorSection, updateCut, updateScene, updateZoom } from "@marz/timeline";
 import { MIN_US } from "../state/actions";
 import { useEditorStore, type Selection } from "../state/editorStore";
 import { Icon } from "./Icon";
 import { MicWave, ScreenThumbs } from "./Lanes";
 import { count, mmss } from "./timecode";
 import { handleWidthPx, MAX_TIMELINE_ZOOM, pxToUs, snapUs, timelineWidthPx, usToPx } from "./timelineMath";
-import { cutCapLabel, LAYOUT_LABEL, zoomLabels } from "./zoomLabels";
+import { cursorBlockLabel, cutCapLabel, LAYOUT_LABEL, zoomLabels } from "./zoomLabels";
 import { useCaptionFacts } from "../captions/captionActions";
 
 /** Roughly how wide a 10px mono label is, to hide labels that would not fit (micro type). */
 const labelPx = (text: string, ai: boolean) => text.length * 7 + (ai ? 26 : 0) + 8;
 
-type Kind = "zoom" | "cut" | "layout";
+type Kind = "zoom" | "cut" | "layout" | "cursor";
 type Mode = "move" | "start" | "end";
 type Range = { startUs: number; endUs: number };
 type Drag = { kind: Kind; id: string; mode: Mode; startX: number; orig: Range };
@@ -67,6 +67,7 @@ export function Timeline({ expanded, onToggleLanes }: { expanded: boolean; onTog
 
   const D = project.durationUs;
   const scenes = cameraScenes(project);
+  const curSecs = cursorSections(project);
   const width = timelineWidthPx(viewport, zoomFactor);
   const pps = width / (D / 1e6);
   const x = (us: number) => usToPx(us, pps);
@@ -106,6 +107,7 @@ export function Timeline({ expanded, onToggleLanes }: { expanded: boolean; onTog
     for (const z of project.edits.zooms) if (!(skip.kind === "zoom" && skip.id === z.id)) t.push(z.startUs, z.endUs);
     for (const c of project.edits.cuts) if (!(skip.kind === "cut" && skip.id === c.id)) t.push(c.startUs, c.endUs);
     for (const sc of scenes) if (!(skip.kind === "layout" && skip.id === sc.id)) t.push(sc.startUs, sc.endUs);
+    for (const cs of curSecs) if (!(skip.kind === "cursor" && skip.id === cs.id)) t.push(cs.startUs, cs.endUs);
     return t;
   };
 
@@ -147,7 +149,7 @@ export function Timeline({ expanded, onToggleLanes }: { expanded: boolean; onTog
     setDraft(null);
     if (!d || !final || (final.startUs === d.orig.startUs && final.endUs === d.orig.endUs)) return;
     const patch = { startUs: final.startUs, endUs: final.endUs };
-    apply(d.kind === "layout" ? updateScene(d.id, patch) : d.kind === "zoom" ? updateZoom(d.id, patch) : updateCut(d.id, patch));
+    apply(d.kind === "cursor" ? updateCursorSection(d.id, patch) : d.kind === "layout" ? updateScene(d.id, patch) : d.kind === "zoom" ? updateZoom(d.id, patch) : updateCut(d.id, patch));
   };
 
   const stepS = TICK_STEPS_S.find((s) => s * pps >= 70) ?? TICK_STEPS_S[TICK_STEPS_S.length - 1]!;
@@ -221,6 +223,7 @@ export function Timeline({ expanded, onToggleLanes }: { expanded: boolean; onTog
             )}
           </div>
           <div className="lb" style={{ height: rows.zoom }}>Zoom</div>
+          <div className="lb" style={{ height: rows.later }}>Cursor</div>
           {LATER_LANES.map((name) =>
             real(name) ? (
               <div key={name} className="lb" style={{ height: rows.later }}>{name}</div>
@@ -276,6 +279,33 @@ export function Timeline({ expanded, onToggleLanes }: { expanded: boolean; onTog
                     <i className="g r" />
                     {handle("zoom", z.id, "start", z, w)}
                     {handle("zoom", z.id, "end", z, w)}
+                  </div>
+                );
+              })}
+            </div>
+            {/* Cursor blocks (DESIGN-SYSTEM.md "Cursor lane"): the layout block's geometry, paper fill. */}
+            <div className="tk" style={{ height: rows.later }} data-testid="cursor-lane">
+              {curSecs.map((cs) => {
+                const r = rangeOf("cursor", cs.id, cs);
+                const sel = selection?.kind === "cursor" && selection.id === cs.id;
+                const w = Math.max(4, x(r.endUs - r.startUs));
+                const pad = rows.later > 30 ? 6 : 3;
+                const label = cursorBlockLabel(cs);
+                return (
+                  <div
+                    key={cs.id}
+                    data-testid={`cursor-${cs.id}`}
+                    onPointerDown={(e) => onBlockDown(e, "cursor", cs.id, "move", cs)}
+                    onPointerMove={onBlockMove}
+                    onPointerUp={onBlockUp}
+                    className={`blk blk-cur${sel ? " sel" : ""}`}
+                    style={{ left: x(r.startUs), width: w, top: pad, height: rows.later - 2 * pad }}
+                  >
+                    <i className="g l" />
+                    {w >= labelPx(label, false) + 16 && <span>{label}</span>}
+                    <i className="g r" />
+                    {handle("cursor", cs.id, "start", cs, w)}
+                    {handle("cursor", cs.id, "end", cs, w)}
                   </div>
                 );
               })}

@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { cameraScenes, parseProject, serializeProject, type CaptionPresetId, type MarzEvent, type Project, type Section, type Word } from "@marz/format";
+import { cameraScenes, cursorSections, parseProject, serializeProject, type CaptionPresetId, type MarzEvent, type Project, type Section, type Word } from "@marz/format";
 import type { Levels } from "@marz/autoedit";
 import type { AiStatus } from "../ai/runAiPass";
 import { History, importLiveLayouts, type Command } from "@marz/timeline";
@@ -7,7 +7,7 @@ import { createAutosave, type SaveStatus } from "../storage/autosave";
 import type { ProjectStorage } from "../storage/types";
 import { loadEventsOrEmpty } from "./loadEvents";
 
-export type Selection = { kind: "zoom" | "cut" | "word" | "layout"; id: string } | null;
+export type Selection = { kind: "zoom" | "cut" | "word" | "layout" | "cursor"; id: string } | null;
 
 /** The AI pass as the editor shows it: status line, warning, the model download ask. */
 export type AiUi = {
@@ -134,7 +134,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         const stillThere =
           !sel ||
           sel.kind === "word" ||
-          (sel.kind === "layout" ? cameraScenes(p) : sel.kind === "zoom" ? p.edits.zooms : p.edits.cuts).some((x) => x.id === sel.id);
+          (sel.kind === "layout" ? cameraScenes(p) : sel.kind === "cursor" ? cursorSections(p) : sel.kind === "zoom" ? p.edits.zooms : p.edits.cuts).some((x) => x.id === sel.id);
         // The "AI edit: ..." line stays until the next edit.
         const ai = get().ai;
         const clearDone = ai.status?.step === "done" || ai.status?.step === "nothing";

@@ -125,7 +125,7 @@ export async function exportProject(opts: ExportOptions): Promise<ExportReport> 
       const camFrame = camSource && lay.camera ? await camSource.frameAt(cameraMediaUs(project, srcUs) + camSource.firstFrameUs) : null;
       try {
         const camera = camFrame ? cameraLayerFor(project, lay, out, camFrame, { width: camFrame.displayWidth, height: camFrame.displayHeight }, colors) : null;
-        drawFrame(compCtx, frame, frameAt(project, events, srcUs, lay.screen), out, camera);
+        drawFrame(compCtx, frame, frameAt(project, events, srcUs, lay.screen), out, camera, colors);
       } finally {
         frame.close();
         camFrame?.close();
