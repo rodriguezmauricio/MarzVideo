@@ -106,13 +106,13 @@ Windows-first screen recorder + non-destructive editor (Tauri 2, Rust, React/TS)
   Checked: a real take in the app fed with synthetic speech ("Checklist test.marz": 3 topics ticked locally, 1 by Claude, 1 left
   open and flagged), encoder holds 60 fps with Whisper running beside it (`pipe-bench`). Not checked: his real mic with real
   talking, typing topics by hand, Ctrl+Shift+K pressed for real.
-- **Built on branch `claude/light-theme-310e97`, not merged:** light theme (design `docs/superpowers/specs/2026-11-19-light-theme-design.md`,
+- **Done (merged 2026-11-19, not checked by hand yet):** light theme (design `docs/superpowers/specs/2026-11-19-light-theme-design.md`,
   plan `docs/superpowers/plans/2026-11-19-light-theme.md`, DESIGN-SYSTEM.md section 3 "Light theme"). Dark (default), Light or Windows,
   stored in `localStorage` `marz.theme`, applied in every window by `src/theme.ts`; Home strip button cycles it. Light swaps ground and
   panels through tokens only (`:root[data-theme="light"]` in `tokens.css`); bare accent uses `--accent-on-ink` (accent-deep `#4A5C00` in light).
   Video output reads the fixed `--brand-*` tokens and never changes. `pnpm design:check` guards both. Checked: 1440 x 900 screenshots of Home,
   Editor (inspector, transcript, export panel, timeline) and the recorder fake pages in both themes. Not checked: the Tauri app, Windows follow mode live.
-- **Built on branch `claude/export-extras-b9d4ec`, not merged (2026-11-19):** export extras (design
+- **Done (merged 2026-11-19, not checked by hand yet):** export extras (design
   `docs/superpowers/specs/2026-11-19-export-extras-design.md`, plan `docs/superpowers/plans/2026-11-19-export-extras.md`).
   Export panel rows per preset: Codec (H.264, HEVC), Size (YouTube: 720p, 1080p, 1440p; vertical stays 1080 x 1920), Frame rate
   (24, 30, 60, capped at the recording), remembered per preset in local storage (not in `project.json`). Landscape is composited
@@ -125,20 +125,20 @@ Windows-first screen recorder + non-destructive editor (Tauri 2, Rust, React/TS)
   (slower than H.264); H.264 1440p60 1050 MB (184 MB/min), 236 s; 720p30 234 MB (41 MB/min), 66 s; 1080p24 369 MB, 78 s; vertical HEVC 30 fps
   159 MB (28 MB/min), 83 s. Every file checked with ffprobe (codec, size, fps, length, `hvc1` tag). Not checked: playback in Windows
   Media Player (HEVC there needs the HEVC Video Extensions), a real MarzOS reading the drop folder.
-- **Built on branch `claude/camera-extras-5a1c71`, not merged (2026-11-19):** camera extras (design
+- **Done (merged 2026-11-19, not checked by hand yet):** camera extras (design
   `docs/superpowers/specs/2026-11-19-camera-extras-design.md`, plan `docs/superpowers/plans/2026-11-19-camera-extras.md`).
   Star and imported-SVG masks (one closed path, stored as points in `edits.camera.customMask`), Float layout (9:16 panel over the
   screen, Ctrl+Shift+5), switch presets per layout pair in `edits.camera.transitions` (length, easing, morph along or at end, a bent
   path dragged on the preview, used by live switches too). Code: `packages/compositor/src/masks.ts`, `layout.ts`,
   `packages/timeline/src/cameraExtras.ts`, `apps/desktop/src/camera`. Side column with the screen reflowed already existed.
-- **Built on branch `claude/canvas-editing-1fe956`, not merged (2026-11-19):** canvas editing and the hybrid timeline
+- **Done (merged 2026-11-19, not checked by hand yet):** canvas editing and the hybrid timeline
   (design `docs/superpowers/specs/2026-11-19-canvas-editing-design.md`, plan `docs/superpowers/plans/2026-11-19-canvas-editing.md`).
   Click the corner camera bubble on the paused preview: drag it anywhere, pull a corner to resize, let go near a corner to snap
   (optional `pip.x/y`). The timeline opens on one main track (Screen, Edits, Mic; every block on Edits, stacked where they
   overlap); G or "Show lanes" switches to the lanes view, remembered per user. Code: `packages/compositor/src/pipPlace.ts`,
   `apps/desktop/src/components/CameraOverlay.tsx`, `mainTrack.ts`, `state/lanesView.ts`. Checked in Edge on both samples at
   1440 x 900 and 1280 x 720. Not checked: the Tauri app.
-- **Built on branch `claude/onboarding-settings-c8c378`, not merged:** onboarding and settings (design
+- **Done (merged 2026-11-19, not checked by hand yet):** onboarding and settings (design
   `docs/superpowers/specs/2026-11-19-onboarding-settings-design.md`, plan `docs/superpowers/plans/2026-11-19-onboarding-settings.md`).
   Home Settings button opens Settings: projects, exports and archive folders, default mic (with meter), camera and computer sound,
   rebindable recorder hotkeys with a clash check (`crates/capture/src/hotkeys.rs`, mirrored in `apps/desktop/src/settings/hotkeyMap.ts`),
