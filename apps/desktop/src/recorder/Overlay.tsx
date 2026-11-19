@@ -10,6 +10,7 @@ import { lockAspect } from "@marz/timeline";
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { Icon, type IconName } from "../components/Icon";
 import { CameraPreview } from "./CameraPreview";
+import { DrawLayer } from "./DrawLayer";
 import { useHits } from "./hits";
 import { useRecLive } from "./recLive";
 import { recorderApi } from "./recorderApi";
@@ -348,8 +349,10 @@ function RecordingView({ area, full, screen, children }: { area: PxRect; full: b
   const dragRef = useRef<{ id: string; handle: Handle | null; from: Pt; start: PxRect } | null>(null);
   const liveRef = useRef<PxRect | null>(null);
   const [live, setLive] = useState<PxRect | null>(null);
-  const r = active ? (live ?? presetPx(active.rect, area)) : null;
-  useHits(rootRef, r ? edgeBands(r) : [], live !== null);
+  const drawing = useRecLive((l) => l.rec.drawing);
+  const r = active && !drawing ? (live ?? presetPx(active.rect, area)) : null;
+  // Draw mode takes the whole screen (mouse and keyboard) until it is left.
+  useHits(rootRef, r ? edgeBands(r) : [], live !== null || drawing);
 
   const begin = (e: ReactPointerEvent<HTMLElement>, handle: Handle | null) => {
     if (!active || !r || e.button !== 0) return;
@@ -413,6 +416,7 @@ function RecordingView({ area, full, screen, children }: { area: PxRect; full: b
           })}
         </div>
       )}
+      {drawing && <DrawLayer />}
       <div className="rr-chip" style={chip}>
         <i />
         {full ? "Recording this screen. Autosaving every few seconds" : "Recording this region. Autosaving every few seconds"}

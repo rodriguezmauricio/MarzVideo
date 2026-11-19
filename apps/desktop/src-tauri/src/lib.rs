@@ -52,6 +52,8 @@ pub fn run() {
             recording::set_preset_rect,
             recording::stop_recording,
             recording::recording_state,
+            recording::toggle_draw,
+            recording::draw_op,
             export::pick_export_path,
             export::export_begin,
             export::export_chunk,
