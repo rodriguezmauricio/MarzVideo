@@ -105,6 +105,7 @@ Left: back link "Projects" (underlined, arrow icon), "/", project title (mono 50
 
 ### Warning bar (24px, under the strip, shifts content down 24px)
 Paper background, ink text, alert icon, bold lead sentence. Text: "No usable events file. Click effects and auto zoom are unavailable. You can still add zooms and cuts by hand." Auto zoom row and Click highlight toggle become faint/disabled.
+A `screen.mp4` that is missing or cannot be played: "The screen recording is missing or cannot be played. Check screen.mp4 in the project folder." (a damaged file: "The screen recording is damaged and cannot be played. ..."). The preview stays ink; the timeline and inspector still work.
 
 ### Export (Export MP4 button in the top strip, hotkey Ctrl+E)
 - Idle: the strip button above. Tooltip "Export MP4 / Ctrl+E", right-aligned to the button.

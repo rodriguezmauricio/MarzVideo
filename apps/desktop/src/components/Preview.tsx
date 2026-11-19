@@ -12,6 +12,7 @@ import { captionBlocks, captionStyle, loadCaptionFont } from "../ai/captionStyle
 import { useEditorStore } from "../state/editorStore";
 import { audioStep, mediaTimeUs, nextPlaybackTime, playbackEnded, sourceTimeUs, startTimeForPlay } from "../playback/clock";
 import { readFirstFrameUs } from "../playback/firstFrame";
+import { screenErrorText } from "../playback/screenError";
 import { mmss } from "./timecode";
 import { tokenColors } from "./cameraColors";
 import { ZoomOverlay } from "./ZoomOverlay";
@@ -490,6 +491,7 @@ export function Preview() {
         muted
         playsInline
         preload="auto"
+        onError={(e) => useEditorStore.setState({ warning: screenErrorText(e.currentTarget.error?.code) })}
         style={{ position: "absolute", width: 1, height: 1, opacity: 0, pointerEvents: "none" }}
       />
       {mic && micFile && <audio ref={audioRef} src={storage.fileUrl(micFile)} preload="auto" data-testid="mic-audio" />}
