@@ -203,7 +203,7 @@ const CameraEditsSchema = z
   })
   .passthrough();
 
-const SizeFps = z.object({ width: z.number(), height: z.number(), fps: z.number() }).passthrough();
+const SizeFps = z.object({ width: z.number().positive(), height: z.number().positive(), fps: z.number().positive() }).passthrough();
 
 const ProjectSchema = z
   .object({
@@ -211,7 +211,7 @@ const ProjectSchema = z
     id: z.string(),
     name: z.string(),
     createdAt: z.string(),
-    durationUs: Us,
+    durationUs: Us.positive(),
     source: SizeFps,
     tracks: z
       .object({
