@@ -131,6 +131,13 @@ Windows-first screen recorder + non-destructive editor (Tauri 2, Rust, React/TS)
   screen, Ctrl+Shift+5), switch presets per layout pair in `edits.camera.transitions` (length, easing, morph along or at end, a bent
   path dragged on the preview, used by live switches too). Code: `packages/compositor/src/masks.ts`, `layout.ts`,
   `packages/timeline/src/cameraExtras.ts`, `apps/desktop/src/camera`. Side column with the screen reflowed already existed.
+- **Built on branch `claude/canvas-editing-1fe956`, not merged (2026-11-19):** canvas editing and the hybrid timeline
+  (design `docs/superpowers/specs/2026-11-19-canvas-editing-design.md`, plan `docs/superpowers/plans/2026-11-19-canvas-editing.md`).
+  Click the corner camera bubble on the paused preview: drag it anywhere, pull a corner to resize, let go near a corner to snap
+  (optional `pip.x/y`). The timeline opens on one main track (Screen, Edits, Mic; every block on Edits, stacked where they
+  overlap); G or "Show lanes" switches to the lanes view, remembered per user. Code: `packages/compositor/src/pipPlace.ts`,
+  `apps/desktop/src/components/CameraOverlay.tsx`, `mainTrack.ts`, `state/lanesView.ts`. Checked in Edge on both samples at
+  1440 x 900 and 1280 x 720. Not checked: the Tauri app.
 - **Not checked by hand yet:** the owner checks in `docs/spikes/2026-11-17-owner-checks.md` (clean 3-minute run,
   flash and beep sync, clicks, static screen, mic unplug, 60 Hz, real hotkeys), plus: open New recording once and
   look at the overlay, play an export in Windows Media Player, upload one export of each preset privately and

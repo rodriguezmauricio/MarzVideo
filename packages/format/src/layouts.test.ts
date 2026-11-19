@@ -72,3 +72,16 @@ describe("layout events", () => {
     expect(parseEvents(text).events).toEqual([{ tUs: 100, type: "layout", layout: "side" }]);
   });
 });
+
+describe("free camera position (pip.x, pip.y)", () => {
+  test("kept when set, missing is fine", () => {
+    const p = parseProject(base({ visible: true, mirror: true, pip: { ...pip, x: 0.4, y: 0.25 } }));
+    expect(cameraEdits(p).pip.x).toBe(0.4);
+    expect(cameraEdits(p).pip.y).toBe(0.25);
+    expect(cameraEdits(parseProject(base({ visible: true, mirror: true, pip }))).pip.x).toBeUndefined();
+  });
+
+  test("out of range is refused", () => {
+    expect(() => parseProject(base({ visible: true, mirror: true, pip: { ...pip, x: 1.5, y: 0 } }))).toThrow();
+  });
+});

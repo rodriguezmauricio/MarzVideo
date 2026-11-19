@@ -151,13 +151,17 @@ const CORNERS = ["topLeft", "topRight", "bottomLeft", "bottomRight"] as const;
 
 /** The camera's picture-in-picture: corner, width as a share of the output width, gap to the edges
  * as a share of the output width. `shape`: rect, rounded, circle, square, star, custom (`customMask`);
- * anything else draws as rect. */
+ * anything else draws as rect. Optional `x`, `y` (added 2026-11-19, canvas editing): the bubble box's
+ * left and top as shares of the output width and height, a free position dragged on the preview;
+ * missing means the bubble sits in `corner`. */
 const PipSchema = z
   .object({
     corner: z.enum(CORNERS),
     widthFrac: z.number().positive().max(1),
     marginFrac: z.number().min(0).max(0.5),
     shape: z.string(),
+    x: z.number().min(0).max(1).optional(),
+    y: z.number().min(0).max(1).optional(),
   })
   .passthrough();
 

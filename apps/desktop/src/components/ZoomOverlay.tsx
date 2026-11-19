@@ -34,6 +34,8 @@ export function ZoomOverlay({ zoom }: { zoom: Zoom }) {
 
   const start = (e: React.PointerEvent, mode: Drag["mode"]) => {
     e.stopPropagation();
+    // No text selection or native drag: either cancels the pointer mid drag.
+    e.preventDefault();
     ref.current!.setPointerCapture(e.pointerId);
     const { nx, ny } = norm(e);
     drag.current = { mode, nx0: nx, ny0: ny, orig: rect };

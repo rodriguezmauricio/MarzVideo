@@ -55,7 +55,7 @@ export function Toolbar({ horizontal = false }: { horizontal?: boolean }) {
       <LedgerRow icon="auto" label="Auto zoom" hotkey="A" onClick={runAutoZoom} disabled={noEvents} />
       <LedgerRow icon="ai" label="Edit with AI" hotkey="Shift+E" onClick={() => void startAiPass()} disabled={aiRunning}
         tip={aiRunning ? "AI edit is running" : undefined} />
-      <LedgerRow icon="trash" label="Delete" hotkey="Del" onClick={deleteSelection} disabled={!selection || selection.kind === "word"} />
+      <LedgerRow icon="trash" label="Delete" hotkey="Del" onClick={deleteSelection} disabled={!selection || selection.kind === "word" || selection.kind === "camera"} />
       <LedgerRow icon="undo" label="Undo" hotkey="Ctrl+Z" onClick={undo} disabled={!history.canUndo} />
       <LedgerRow icon="redo" label="Redo" hotkey="Ctrl+Shift+Z" onClick={redo} disabled={!history.canRedo} />
     </nav>

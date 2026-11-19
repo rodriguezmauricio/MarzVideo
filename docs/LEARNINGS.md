@@ -10,6 +10,7 @@
 - [2026-11-16] [claude] The `.dc.html` mockups render in Edge without support.js: replace `{{accent}}` with the hex and screenshot `.win`. Their computed styles are the reference (e.g. `.win button { padding: 0 }` beats `.lr2` padding).
 - [2026-11-16] [claude] design-check flags `el.blur()` and words like "rounded" in comments. Use a `design-check-ignore` comment with a reason rather than renaming the DOM call.
 - [2026-11-16] [claude] Fonts are bundled locally (src/assets/fonts, src/styles/fonts.css), the desktop app must work offline. Both are variable fonts, so one woff2 per subset covers all weights: declare weight ranges ("500 700"), not one face per weight.
+- [2026-11-19] [claude] Preview drags (zoom area, strokes, camera bubble) must `preventDefault()` on pointerdown: after an earlier drag left a text selection, the next press started a native drag, the browser fired `pointercancel` after one move and the drag stopped short. Only visible in a second drag in a row, so test two drags.
 
 ## Deferred from the M1 editor review (minor; status per line)
 

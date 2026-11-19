@@ -296,3 +296,8 @@ input { font: inherit; color: inherit; letter-spacing: inherit; text-transform: 
 .insp-audio { margin-top: 18px; border-top: 1px solid var(--ink); }
 .insp-audio .irow { border-top: 0; border-bottom: 1px solid var(--ink); }
 .insp-audio .irow.k34 { min-height: 34px; }
+
+/* Timeline view toggle: DESIGN-SYSTEM.md "Timeline", two views. The key letter in faint, as on the ledger. */
+.bx-key { color: var(--faint); }
+/* The lanes view scrolls its lanes when they do not all fit (the Vertical lane's rule). */
+.expanded .tl-body { overflow-y: auto; align-items: flex-start; scrollbar-width: thin; scrollbar-color: var(--line) transparent; }

@@ -571,7 +571,7 @@ export function Inspector({ compact = false }: { compact?: boolean }) {
       ) : (
         <div className="insp-scroll">
           <h2 className="insp-title">Project</h2>
-          <div className="mut insp-sub">Nothing selected</div>
+          <div className="mut insp-sub">{selection?.kind === "camera" ? "Camera bubble selected" : "Nothing selected"}</div>
           <CursorBlock project={project} />
           {project.tracks.camera && <CameraBlock project={project} />}
           <VerticalBlock project={project} />

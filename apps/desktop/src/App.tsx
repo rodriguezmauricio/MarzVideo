@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { lanesStore, readLanesView, writeLanesView } from "./state/lanesView";
 import { hasChecklist } from "@marz/format";
 import { ExportControl, ExportProgressLine, useExportDoneLine } from "./export/ExportStatus";
 import { useExportStore } from "./export/exportStore";
@@ -155,7 +156,15 @@ function Editor({ dir }: { dir: string }) {
   const aiWarning = useEditorStore((s) => s.ai.warning);
   const aiAsk = useEditorStore((s) => s.ai.ask);
   const aiShown = useEditorStore((s) => s.ai.status !== null || s.ai.downloadPct !== null);
-  const [lanesExpanded, setLanesExpanded] = useState(false);
+  // The timeline view, remembered per user (DESIGN-SYSTEM.md "Timeline", two views). G toggles it.
+  const [lanesExpanded, setLanesState] = useState(() => readLanesView(lanesStore()));
+  const toggleLanes = () =>
+    setLanesState((v) => {
+      writeLanesView(lanesStore(), !v);
+      return !v;
+    });
+  const toggleLanesRef = useRef(toggleLanes);
+  toggleLanesRef.current = toggleLanes;
 
   useEffect(() => {
     let live = true;
@@ -210,6 +219,7 @@ function Editor({ dir }: { dir: string }) {
       else if (e.code === "KeyA") runAutoZoom();
       else if (e.code === "KeyV") s.toggleVerticalPreview();
       else if (e.code === "KeyF") holdFrameHere();
+      else if (e.code === "KeyG") toggleLanesRef.current();
       else if (e.code === "KeyE" && e.shiftKey) void startAiPass();
       // Captions editor (DESIGN-SYSTEM.md Inspector, "Tabs" and "Transcript panel").
       else if (e.code === "KeyT" && s.words.length > 0) s.setInspectorTab(s.inspectorTab === "transcript" ? "edit" : "transcript");
@@ -284,7 +294,7 @@ function Editor({ dir }: { dir: string }) {
         <Preview />
         <Inspector compact={lanesExpanded} />
       </main>
-      <Timeline expanded={lanesExpanded} onToggleLanes={() => setLanesExpanded((v) => !v)} />
+      <Timeline expanded={lanesExpanded} onToggleLanes={toggleLanes} />
     </div>
   );
 }

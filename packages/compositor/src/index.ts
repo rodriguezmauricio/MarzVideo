@@ -10,3 +10,4 @@ export * from "./cursorShapes";
 export * from "./background";
 export * from "./path";
 export * from "./masks";
+export * from "./pipPlace";
