@@ -331,6 +331,7 @@ mod imp {
     use super::*;
     use crate::recorder::{BAR, OVERLAY};
     use marz_capture::region::PxRect;
+    use marz_capture::events::LAYOUTS;
     use marz_capture::win::input::{self, Hotkey, InputHandle, InputShared};
     use marz_capture::win::new_clock;
     use marz_capture::win::session::{RecordOptions, Session, SessionEvent};
@@ -348,6 +349,8 @@ mod imp {
         presets: Vec<String>,
         active: Option<String>,
         mic: bool,
+        /// The live camera layout (`events::LAYOUTS`), so a repeat press is not logged again.
+        layout: &'static str,
     }
 
     /// Lock order: `slot` alone, or `keys` alone; never both. Nothing that emits or touches a
@@ -455,6 +458,9 @@ mod imp {
             Hotkey::ZoomOut => {
                 let _ = zoom(app, None);
             }
+            Hotkey::Layout(n) => {
+                let _ = layout(app, n);
+            }
         }
     }
 
@@ -510,7 +516,7 @@ mod imp {
             }
         };
         let generation = st.generation.fetch_add(1, Ordering::SeqCst) + 1;
-        let early = lock(&st.slot).attach(attempt, Live { session, presets, active: None, mic });
+        let early = lock(&st.slot).attach(attempt, Live { session, presets, active: None, mic, layout: LAYOUTS[0] });
         if let Some((live, msg)) = early {
             // The engine failed between its start and here: handle it as any failure.
             after_failure(app, live, msg);
@@ -658,6 +664,19 @@ mod imp {
 
     pub fn set_preset_rect(app: &AppHandle, id: &str, rect: NormRect) -> Result<(), String> {
         with_live(app, |l| l.session.set_preset_rect(id, rect))
+    }
+
+    /// Camera layout `n` (1..=4, `events::LAYOUTS`). A repeat of the current layout, and presses
+    /// while paused, are not logged.
+    pub fn layout(app: &AppHandle, n: u8) -> Result<(), String> {
+        let Some(&name) = LAYOUTS.get(usize::from(n.saturating_sub(1))) else { return Ok(()) };
+        with_live(app, |l| {
+            if l.layout == name || l.session.is_paused() {
+                return;
+            }
+            l.session.layout(name);
+            l.layout = name;
+        })
     }
 
     /// On closing the recorder (`open` already cleared): free the setup hotkeys and stop a running

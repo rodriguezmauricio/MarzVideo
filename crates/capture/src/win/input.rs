@@ -44,6 +44,8 @@ pub enum Hotkey {
     Preset(u8),
     /// Ctrl+0
     ZoomOut,
+    /// Ctrl+Shift+1 .. Ctrl+Shift+4: camera layout n (`events::LAYOUTS[n - 1]`).
+    Layout(u8),
 }
 
 impl Hotkey {
@@ -52,6 +54,7 @@ impl Hotkey {
         let mut v = vec![Hotkey::RecordStop, Hotkey::Pause, Hotkey::Mute];
         v.extend((1..=9).map(Hotkey::Preset));
         v.push(Hotkey::ZoomOut);
+        v.extend((1..=4).map(Hotkey::Layout));
         v
     }
 
@@ -63,6 +66,7 @@ impl Hotkey {
             Hotkey::Mute => "Ctrl+Shift+M".into(),
             Hotkey::Preset(n) => format!("Ctrl+{n}"),
             Hotkey::ZoomOut => "Ctrl+0".into(),
+            Hotkey::Layout(n) => format!("Ctrl+Shift+{n}"),
         }
     }
 
@@ -73,6 +77,7 @@ impl Hotkey {
             Hotkey::Mute => 3,
             Hotkey::Preset(n) => 3 + i32::from(n),
             Hotkey::ZoomOut => 13,
+            Hotkey::Layout(n) => 13 + i32::from(n),
         }
     }
 
@@ -89,6 +94,7 @@ impl Hotkey {
             Hotkey::Mute => (ctrl_shift, u32::from(b'M')),
             Hotkey::Preset(n) => (ctrl, u32::from(b'0' + n)),
             Hotkey::ZoomOut => (ctrl, u32::from(b'0')),
+            Hotkey::Layout(n) => (ctrl_shift, u32::from(b'0' + n)),
         }
     }
 }

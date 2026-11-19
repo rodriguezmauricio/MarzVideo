@@ -58,19 +58,22 @@ input { font: inherit; color: inherit; letter-spacing: inherit; text-transform: 
 /* main area: everything between the strip (and warning bar) and the timeline.
    A size container: below 525 px of height (1440 x 900 gives 516, 492 with the warning bar) the hero timecode, the playline, the ledger
    and the preview move up together. 319 = ledger 273 (eight rows since M2) + 12 gap + 34 playline step; 206 = the playline
-   top at full size. Ledger rows stay 34 px. */
+   top at full size. Ledger rows stay 34 px. A project with a camera has a ninth row (Add layout): `--lx` 34px moves the
+   rest up by one more row. */
 .main { position: relative; flex: 1; min-height: 0; container-type: size; }
+.main.has-cam { --lx: 34px; }
+.expanded .main.has-cam { --lx: 0px; }
 .timecode {
-  position: absolute; left: 18px; top: max(-14px, calc((100cqh - 319px) * -14 / 206)); z-index: 1; pointer-events: none; white-space: nowrap;
+  position: absolute; left: 18px; top: max(-14px, calc((100cqh - 319px - var(--lx, 0px)) * -14 / 206)); z-index: 1; pointer-events: none; white-space: nowrap;
   font-family: var(--font-display); font-weight: 700; text-transform: none;
-  font-size: min(250px, calc((100cqh - 319px) * 250 / 206)); line-height: 0.8; letter-spacing: -0.05em; color: var(--paper);
+  font-size: min(250px, calc((100cqh - 319px - var(--lx, 0px)) * 250 / 206)); line-height: 0.8; letter-spacing: -0.05em; color: var(--paper);
 }
-.playline { position: absolute; left: 24px; top: min(206px, calc(100cqh - 319px)); color: var(--faint); }
+.playline { position: absolute; left: 24px; top: min(206px, calc(100cqh - 319px - var(--lx, 0px))); color: var(--faint); }
 .expanded .timecode { font-size: 150px; top: 14px; }
 .expanded .playline { top: 150px; }
 
 /* tool ledger: vertical list of 34px rows */
-.ledger { position: absolute; left: 24px; top: min(240px, calc(100cqh - 285px)); width: 352px; z-index: 2; border-bottom: 1px solid var(--line); }
+.ledger { position: absolute; left: 24px; top: min(240px, calc(100cqh - 285px - var(--lx, 0px))); width: 352px; z-index: 2; border-bottom: 1px solid var(--line); }
 .lr2 { width: 100%; height: var(--row-h); display: flex; align-items: center; justify-content: space-between; padding: 0; border-top: 1px solid var(--line); }
 .lr2 .lbl { display: flex; align-items: center; gap: 10px; }
 .lr2 .hk { color: var(--faint); }
@@ -85,7 +88,7 @@ input { font: inherit; color: inherit; letter-spacing: inherit; text-transform: 
 .ledger-h .lr2 .lbl { gap: 8px; }
 
 /* preview frame */
-.pv-wrap { position: absolute; left: 420px; top: min(106px, calc((100cqh - 319px) * 106 / 206)); right: 380px; bottom: 0; z-index: 2; container-type: size; --cap: 26px; }
+.pv-wrap { position: absolute; left: 420px; top: min(106px, calc((100cqh - 319px - var(--lx, 0px)) * 106 / 206)); right: 380px; bottom: 0; z-index: 2; container-type: size; --cap: 26px; }
 .expanded .pv-wrap { left: 560px; top: 20px; right: auto; bottom: auto; width: min(391px, calc(100% - 940px)); height: 220px; --cap: 0px; }
 .pv-frame { position: relative; width: min(100cqw, calc((100cqh - var(--cap)) * var(--ar))); aspect-ratio: var(--ar); border: 1px solid var(--paper); overflow: hidden; background: var(--ink); }
 .pv-frame canvas { display: block; width: 100%; height: 100%; }
@@ -137,6 +140,7 @@ input { font: inherit; color: inherit; letter-spacing: inherit; text-transform: 
 .seg { display: flex; border: 1px solid var(--ink); }
 .seg button { padding: 6px 12px; }
 .seg button.on { background: var(--ink); color: var(--paper); }
+.seg-4 button { padding: 6px 8px; }
 .btns { display: flex; flex-direction: column; gap: 8px; margin-top: 16px; }
 .fb { height: 42px; padding: 0 16px; display: flex; align-items: center; justify-content: center; gap: 8px; font-weight: 500; width: 100%; text-align: center; }
 .fb-line { border: 1px solid var(--ink); }
@@ -151,6 +155,20 @@ input { font: inherit; color: inherit; letter-spacing: inherit; text-transform: 
 .corners { display: grid; grid-template-columns: 22px 22px; gap: 2px; }
 .corners button { width: 22px; height: 22px; border: 1px solid var(--ink); }
 .corners button.on { background: var(--ink); }
+/* Camera block colour row and Layout inspector picker: DESIGN-SYSTEM.md Inspector. */
+.swatches { display: flex; gap: 2px; }
+.swatches button { position: relative; width: 22px; height: 22px; border: 1px solid var(--ink); }
+.swatches button.on::after { content: ""; position: absolute; inset: 4px; border: 2px solid var(--ink); }
+.sw-paper { background: var(--paper); }
+.sw-ink { background: var(--ink); }
+.sw-ink.on::after { border-color: var(--paper) !important; }
+.sw-accent { background: var(--accent); }
+.lay-row { padding: 10px 0 12px; border-top: 1px solid var(--ink); }
+.lay-grid { display: grid; grid-template-columns: 1fr 1fr; margin-top: 8px; border: 1px solid var(--ink); }
+.lay-grid button { height: 34px; text-align: center; }
+.lay-grid button:nth-child(even) { border-left: 1px solid var(--ink); }
+.lay-grid button:nth-child(n + 3) { border-top: 1px solid var(--ink); }
+.lay-grid button.on { background: var(--ink); color: var(--paper); }
 
 /* toggle 34 x 18, square knob */
 .tg { width: 34px; height: 18px; border: 1px solid var(--paper); position: relative; flex: none; }
@@ -200,6 +218,9 @@ input { font: inherit; color: inherit; letter-spacing: inherit; text-transform: 
 .blk span { white-space: nowrap; overflow: hidden; pointer-events: none; }
 .blk-zoom { background: var(--accent); color: var(--accent-ink); }
 .blk-sug { border: 1px dashed var(--accent); color: var(--accent); }
+/* Layout lane blocks: DESIGN-SYSTEM.md "Layout lane". */
+.blk-lay { background: var(--paper); color: var(--ink); }
+.blk-lay.live { background: var(--accent); color: var(--accent-ink); }
 .blk .g { position: absolute; top: 50%; translate: 0 -50%; width: 3px; height: 14px; background: var(--ink); pointer-events: none; }
 .blk-sug .g { background: var(--accent); }
 .blk .g.l { left: 4px; }

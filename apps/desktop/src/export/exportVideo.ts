@@ -1,7 +1,8 @@
-import { canvasMeasure, captionLayout, cameraLayout, cameraMediaUs, drawCaptions, drawFrame, frameAt, type CaptionBlock, type CaptionLook, type CaptionStyle } from "@marz/compositor";
-import type { MarzEvent, Project } from "@marz/format";
+import { canvasMeasure, captionLayout, cameraLayerFor, cameraMediaUs, drawCaptions, drawFrame, frameAt, layoutAt, type CaptionBlock, type CaptionLook, type CaptionStyle } from "@marz/compositor";
+import { cameraEdits, type MarzEvent, type Project } from "@marz/format";
 import { keptSegments } from "@marz/timeline";
 import { mediaTimeUs } from "../playback/clock";
+import { tokenColors } from "../components/cameraColors";
 import type { ProjectStorage } from "../storage/types";
 import { createFrameSource } from "./frameSource";
 import { outputFrameCount, outputFrameTimes, outputFrameUs, refuseEmpty } from "./outputFrames";
@@ -71,8 +72,9 @@ export async function exportProject(opts: ExportOptions): Promise<ExportReport> 
   const capsFrame = { x: rect.x, y: rect.y, w: rect.w, h: rect.h };
 
   let source: Awaited<ReturnType<typeof createFrameSource>> | null = null;
-  // The camera picture-in-picture, drawn by the same compositor as the preview (null: none or hidden).
-  const camLayout = cameraLayout(project, out);
+  // The camera and its layouts, drawn by the same compositor as the preview.
+  const colors = tokenColors();
+  const camShown = !!project.tracks.camera && cameraEdits(project).visible;
   let camSource: Awaited<ReturnType<typeof createFrameSource>> | null = null;
   let encoder: VideoEncoder | null = null;
   let failure: Error | null = null;
@@ -93,7 +95,7 @@ export async function exportProject(opts: ExportOptions): Promise<ExportReport> 
 
   try {
     source = await createFrameSource(storage.fileUrl(project.tracks.screen.file));
-    if (camLayout && project.tracks.camera) camSource = await createFrameSource(storage.fileUrl(project.tracks.camera.file));
+    if (camShown && project.tracks.camera) camSource = await createFrameSource(storage.fileUrl(project.tracks.camera.file));
     await sink.begin(buildExportJob({ project, preset, projectDir: opts.projectDir, outPath: opts.outPath, cleanMic: opts.cleanMic }));
 
     encoder = new VideoEncoder({
@@ -119,9 +121,11 @@ export async function exportProject(opts: ExportOptions): Promise<ExportReport> 
       if (failure) throw failure;
 
       const frame = await source.frameAt(mediaTimeUs(project, srcUs, source.firstFrameUs));
-      const camFrame = camSource ? await camSource.frameAt(cameraMediaUs(project, srcUs) + camSource.firstFrameUs) : null;
+      const lay = layoutAt(project, srcUs, out);
+      const camFrame = camSource && lay.camera ? await camSource.frameAt(cameraMediaUs(project, srcUs) + camSource.firstFrameUs) : null;
       try {
-        drawFrame(compCtx, frame, frameAt(project, events, srcUs), out, camFrame && camLayout ? { source: camFrame, ...camLayout } : null);
+        const camera = camFrame ? cameraLayerFor(project, lay, out, camFrame, { width: camFrame.displayWidth, height: camFrame.displayHeight }, colors) : null;
+        drawFrame(compCtx, frame, frameAt(project, events, srcUs, lay.screen), out, camera);
       } finally {
         frame.close();
         camFrame?.close();

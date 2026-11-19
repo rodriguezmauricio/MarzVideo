@@ -132,14 +132,46 @@ const PipSchema = z
   })
   .passthrough();
 
-/** `edits.camera`. Optional: missing means `DEFAULT_CAMERA_EDITS`. `scenes` is reserved for timed
- * layout scenes and kept as is. */
+const LAYOUTS = ["pip", "side", "camera", "screen"] as const;
+const SCENE_ORIGINS = ["live", "manual"] as const;
+const BORDER_COLORS = ["paper", "ink", "accent"] as const;
+
+/** A timed layout scene (source time). An unknown layout reads as "pip", an unknown origin as
+ * "manual"; both raw values are kept on save. */
+const SceneSchema = z.preprocess(
+  (v) =>
+    tolerant(v, {
+      layout: { known: LAYOUTS, fallback: "pip" },
+      origin: { known: SCENE_ORIGINS, fallback: "manual" },
+    }),
+  z
+    .object({
+      id: z.string(),
+      startUs: Us,
+      endUs: Us,
+      layout: z.enum(LAYOUTS),
+      origin: z.enum(SCENE_ORIGINS).default("manual"),
+    })
+    .passthrough(),
+);
+
+/** The camera border: width in pixels at 1080 output height, colour a design token name. */
+const BorderSchema = z.preprocess(
+  (v) => tolerant(v, { color: { known: BORDER_COLORS, fallback: "paper" } }),
+  z.object({ width: z.number().min(0).max(32), color: z.enum(BORDER_COLORS) }).passthrough(),
+);
+
+/** `edits.camera`. Optional: missing means `DEFAULT_CAMERA_EDITS`. Scenes this build cannot read
+ * stay in the list as they are (use `cameraScenes` for the valid ones). */
 const CameraEditsSchema = z
   .object({
     visible: z.boolean(),
     mirror: z.boolean(),
     pip: PipSchema,
-    scenes: z.array(z.unknown()).default([]),
+    border: BorderSchema.optional(),
+    scenes: z.array(z.union([SceneSchema, z.unknown()])).default([]),
+    /** True once the live layout presses of events.jsonl became scenes (never imported again). */
+    liveImported: z.boolean().optional(),
   })
   .passthrough();
 
@@ -198,6 +230,14 @@ export type Project = z.infer<typeof ProjectSchema>;
 export type ZoomPreset = Project["zoomPresets"][number];
 export type CameraEdits = z.infer<typeof CameraEditsSchema>;
 export type Pip = z.infer<typeof PipSchema>;
+export type Scene = z.infer<typeof SceneSchema>;
+export type LayoutKind = (typeof LAYOUTS)[number];
+export type CameraBorder = z.infer<typeof BorderSchema>;
+export type BorderColor = (typeof BORDER_COLORS)[number];
+export type PipShape = "rect" | "rounded" | "circle" | "square";
+export const LAYOUT_KINDS: readonly LayoutKind[] = LAYOUTS;
+export const BORDER_COLOR_NAMES: readonly BorderColor[] = BORDER_COLORS;
+export const PIP_SHAPES: readonly PipShape[] = ["rect", "rounded", "circle", "square"];
 export type CutReason = (typeof CUT_REASONS)[number];
 export type CaptionEdits = z.infer<typeof CaptionEditsSchema>;
 export type AiKinds = z.infer<typeof AiKindsSchema>;
@@ -252,6 +292,25 @@ export function cameraEdits(p: Project): CameraEdits {
   return p.edits.camera ?? DEFAULT_CAMERA_EDITS;
 }
 
+/** Today's look: 1px paper. */
+export const DEFAULT_CAMERA_BORDER: CameraBorder = { width: 1, color: "paper" };
+
+export function cameraBorder(p: Project): CameraBorder {
+  const b = cameraEdits(p).border;
+  return b ? { width: b.width, color: b.color } : DEFAULT_CAMERA_BORDER;
+}
+
+const isScene = (s: unknown): s is Scene => {
+  const r = s as Partial<Scene> | null;
+  return !!r && typeof r === "object" && typeof r.id === "string" && typeof r.layout === "string" &&
+    Number.isInteger(r.startUs) && Number.isInteger(r.endUs) && r.endUs! > r.startUs!;
+};
+
+/** The layout scenes this build can draw, sorted by start. */
+export function cameraScenes(p: Project): Scene[] {
+  return (cameraEdits(p).scenes as unknown[]).filter(isScene).sort((a, b) => a.startUs - b.startUs || a.endUs - b.endUs);
+}
+
 export function parseProject(json: unknown): Project {
   const result = ProjectSchema.safeParse(json);
   if (!result.success) {
@@ -263,7 +322,7 @@ export function parseProject(json: unknown): Project {
 
 /** Puts the raw values of tolerant fields back. A field the editor changed since it was read keeps
  * the edited value; one still at its fallback (or removed) gets the original back. */
-const FALLBACKS = new Set(["manual", "easeInOutCubic"]);
+const FALLBACKS = new Set(["manual", "easeInOutCubic", "pip", "paper"]);
 function restoreRaw(v: unknown): unknown {
   if (Array.isArray(v)) return v.map(restoreRaw);
   if (!v || typeof v !== "object") return v;

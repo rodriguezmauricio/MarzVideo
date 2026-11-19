@@ -1,8 +1,10 @@
 import {
   aiEdits,
   captionEdits,
+  cameraBorder,
   cameraEdits,
   type AiEdits,
+  type CameraBorder,
   type AiKinds,
   type CameraEdits,
   type Cut,
@@ -123,20 +125,24 @@ export const setCursorHidden =
   (p) =>
     withEdits(p, { cursor: { ...p.edits.cursor, hidden } });
 
-/** Change the camera picture-in-picture (show, mirror, corner, size). Writes the whole
- *  `edits.camera` (defaults filled in), keeping fields this build does not know. Returns `p`
- *  itself when nothing changes, so History skips the entry. */
+/** Change the camera picture-in-picture (show, mirror, corner, size, shape) and its border. Writes
+ *  the whole `edits.camera` (defaults filled in), keeping fields this build does not know and the
+ *  scenes. Returns `p` itself when nothing changes, so History skips the entry. */
 export const updateCamera =
-  (patch: Partial<Omit<CameraEdits, "pip">> & { pip?: Partial<Pip> }): Command =>
+  (patch: Partial<Omit<CameraEdits, "pip" | "border">> & { pip?: Partial<Pip>; border?: Partial<CameraBorder> }): Command =>
   (p) => {
     const cur = cameraEdits(p);
-    const next: CameraEdits = { ...cur, ...patch, pip: { ...cur.pip, ...patch.pip } };
+    const { border: borderPatch, pip: pipPatch, ...rest } = patch;
+    const border = borderPatch ? { ...cameraBorder(p), ...borderPatch } : cur.border;
+    const next: CameraEdits = { ...cur, ...rest, pip: { ...cur.pip, ...pipPatch }, ...(border ? { border } : {}) };
     const same =
       next.visible === cur.visible &&
       next.mirror === cur.mirror &&
       next.pip.corner === cur.pip.corner &&
       next.pip.widthFrac === cur.pip.widthFrac &&
-      next.pip.marginFrac === cur.pip.marginFrac;
+      next.pip.marginFrac === cur.pip.marginFrac &&
+      next.pip.shape === cur.pip.shape &&
+      JSON.stringify(next.border ?? null) === JSON.stringify(cur.border ?? null);
     return same ? p : withEdits(p, { camera: next });
   };
 

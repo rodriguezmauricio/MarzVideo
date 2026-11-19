@@ -1,5 +1,5 @@
 import { useEditorStore } from "../state/editorStore";
-import { addCutAtPlayhead, addZoomAtPlayhead, deleteSelection, runAutoZoom } from "../state/actions";
+import { addCutAtPlayhead, addLayoutAtPlayhead, addZoomAtPlayhead, deleteSelection, runAutoZoom } from "../state/actions";
 import { startAiPass } from "../ai/aiActions";
 import { Icon, type IconName } from "./Icon";
 
@@ -51,6 +51,7 @@ export function Toolbar({ horizontal = false }: { horizontal?: boolean }) {
       <LedgerRow icon={playing ? "pause" : "play"} label="Play / pause" hotkey="Space" onClick={togglePlay} on />
       <LedgerRow icon="zoomadd" label="Add zoom" hotkey="Z" onClick={addZoomAtPlayhead} />
       <LedgerRow icon="cut" label="Add cut" hotkey="C" onClick={addCutAtPlayhead} />
+      {project?.tracks.camera && <LedgerRow icon="layout" label="Add layout" hotkey="L" onClick={addLayoutAtPlayhead} />}
       <LedgerRow icon="auto" label="Auto zoom" hotkey="A" onClick={runAutoZoom} disabled={noEvents} />
       <LedgerRow icon="ai" label="Edit with AI" hotkey="Shift+E" onClick={() => void startAiPass()} disabled={aiRunning}
         tip={aiRunning ? "AI edit is running" : undefined} />

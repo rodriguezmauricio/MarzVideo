@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef } from "react";
-import { canvasMeasure, captionLayout, cameraLayout, cameraMediaUs, drawCaptions, drawFrame, frameAt, type CaptionStyle } from "@marz/compositor";
+import { canvasMeasure, captionLayout, cameraLayerFor, cameraMediaUs, drawCaptions, drawFrame, frameAt, layoutAt, type CaptionStyle } from "@marz/compositor";
 import { keptSegments, outputDurationUs, outputToSource, sourceToOutput, trackGain } from "@marz/timeline";
 import { audioEdits } from "@marz/format";
 import { ensureCleanMic, previewMicFile, useCleanMic } from "../audio/cleanMic";
@@ -9,6 +9,7 @@ import { useEditorStore } from "../state/editorStore";
 import { mediaTimeUs, nextPlaybackTime, playbackEnded, sourceTimeUs, startTimeForPlay } from "../playback/clock";
 import { readFirstFrameUs } from "../playback/firstFrame";
 import { mmss } from "./timecode";
+import { tokenColors } from "./cameraColors";
 import { ZoomOverlay } from "./ZoomOverlay";
 
 const AUDIO_DRIFT_S = 0.04;
@@ -98,10 +99,14 @@ export function Preview() {
     const srcUs = sourceTimeUs(p, Math.round(video.currentTime * 1e6), firstFrame.current);
     const { events } = useEditorStore.getState();
     const shown = editing ? { ...p, edits: { ...p.edits, zooms: [] } } : p;
-    const layout = cameraLayout(p, p.output);
+    // While a zoom is edited the frame is the screen alone, so the zoom area overlay lines up.
+    const lay = editing ? null : layoutAt(p, srcUs, p.output);
     const camVideo = camRef.current;
-    const camera = layout && camVideo && camVideo.readyState >= 2 ? { source: camVideo, ...layout } : null;
-    drawFrame(ctx, video, frameAt(shown, events, srcUs), p.output, camera);
+    const camera =
+      lay && camVideo && camVideo.readyState >= 2
+        ? cameraLayerFor(p, lay, p.output, camVideo, { width: camVideo.videoWidth, height: camVideo.videoHeight }, tokenColors())
+        : null;
+    drawFrame(ctx, video, frameAt(shown, events, srcUs, lay?.screen), p.output, camera);
     // Captions: the same layout and drawing as the export (DESIGN-SYSTEM.md "Captions in the video").
     const { blocks: bl, look: lk, segs: sg } = live.current;
     const tOut = bl.length ? sourceToOutput(sg, srcUs) : null;
@@ -277,6 +282,8 @@ export function Preview() {
   const selectedCut = selection?.kind === "cut" ? project.edits.cuts.find((c) => c.id === selection.id) : undefined;
   const caption = selectedZoom
     ? "Press Play to see the result"
+    : selection?.kind === "layout"
+      ? "Press Play to see the switch"
     : selectedCut
       ? "This part is skipped when you export"
       : "Full frame. Select a zoom or cut on the timeline to edit it";

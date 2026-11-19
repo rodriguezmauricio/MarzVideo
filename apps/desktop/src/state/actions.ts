@@ -1,9 +1,11 @@
-import type { Cut, Zoom } from "@marz/format";
+import { cameraScenes, type Cut, type Zoom } from "@marz/format";
 import {
   addCut,
+  addScene,
   addZoom,
   lockAspect,
   removeCut,
+  removeScene,
   removeZoom,
   replaceAutoZooms,
   suggestZooms,
@@ -45,6 +47,15 @@ export function addCutAtPlayhead(): void {
   select({ kind: "cut", id: c.id });
 }
 
+/** L: a 4 s Side layout at the playhead, in the free time after it (projects with a camera). */
+export function addLayoutAtPlayhead(): void {
+  const { project, playheadUs, apply, select } = useEditorStore.getState();
+  if (!project?.tracks.camera) return;
+  const id = newId("layout");
+  apply(addScene({ id, startUs: playheadUs, endUs: playheadUs + 4_000_000, layout: "side", origin: "manual" }));
+  if (cameraScenes(useEditorStore.getState().project!).some((s) => s.id === id)) select({ kind: "layout", id });
+}
+
 export function runAutoZoom(): void {
   const { project, events, apply } = useEditorStore.getState();
   if (!project) return;
@@ -56,7 +67,7 @@ export function deleteSelection(): void {
   const { selection, apply, select } = useEditorStore.getState();
   // A caption word is not deleted (hide it from captions in the inspector instead).
   if (!selection || selection.kind === "word") return;
-  apply(selection.kind === "zoom" ? removeZoom(selection.id) : removeCut(selection.id));
+  apply(selection.kind === "layout" ? removeScene(selection.id) : selection.kind === "zoom" ? removeZoom(selection.id) : removeCut(selection.id));
   select(null);
 }
 

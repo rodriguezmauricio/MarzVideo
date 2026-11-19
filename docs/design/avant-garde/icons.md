@@ -31,6 +31,7 @@ Template:
 | `micoff` | `<rect x="9" y="3" width="6" height="11"/><path d="M5 11a7 7 0 0014 0M12 18v3M4 4l16 16"/>` |
 | `speaker` | `<path d="M4 9h4l5-4v14l-5-4H4zM16.5 9.5a3.5 3.5 0 010 5M19 7a7 7 0 010 10"/>` (computer sound) |
 | `camera` | `<rect x="3" y="6" width="13" height="12"/><path d="M16 10l5-3v10l-5-3"/>` |
+| `layout` | `<rect x="3" y="5" width="18" height="14"/><path d="M14 5v14"/>` |
 | `cursor` | `<path d="M5 3l13 6-5.5 1.8L10 16z"/>` |
 | `pause` | `<path d="M8 5v14M16 5v14"/>` |
 | `stop` | `<rect x="6" y="6" width="12" height="12"/>` |

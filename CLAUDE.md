@@ -47,6 +47,12 @@ Windows-first screen recorder + non-destructive editor (Tauri 2, Rust, React/TS)
   "Remove mic noise" (FFmpeg `highpass` + `afftdn`, cached `cache/mic.clean.wav`, played in preview, read by export; RNNoise when
   `rnnoise.rnnn` is in the app data `models` folder) and "Even loudness at export" (`ebur128` measure, `loudnorm` to -14 LUFS). Optional
   `edits.audio`. App exports of the copy "Audio test": -14.8 LUFS, true peak -1.2 dB, both presets. Not listened to yet.
+- **Done (branch `claude/camera-layouts-826937`, not merged yet):** camera layouts (design
+  `docs/superpowers/specs/2026-11-19-camera-layouts-design.md`, plan `docs/superpowers/plans/2026-11-19-camera-layouts.md`).
+  Masks (plain, round, circle, square) and border on the corner bubble; layout scenes (corner, side column, camera
+  fullscreen, screen only) on the Layout lane (L adds, drag, trim, delete, undo); 0.4 s eased switches drawn by
+  `packages/compositor/src/layout.ts` in preview and export; live hotkeys Ctrl+Shift+1..4 logged as `layout` events
+  and turned into Live blocks when the take first opens (`importLiveLayouts`).
 - **Not checked by hand yet:** the owner checks in `docs/spikes/2026-11-17-owner-checks.md` (clean 3-minute run,
   flash and beep sync, clicks, static screen, mic unplug, 60 Hz, real hotkeys), plus: open New recording once and
   look at the overlay, play an export in Windows Media Player, upload one export of each preset privately and

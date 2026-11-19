@@ -4,3 +4,4 @@ export * from "./autozoom";
 export * from "./commands";
 export * from "./history";
 export * from "./audio";
+export * from "./scenes";
