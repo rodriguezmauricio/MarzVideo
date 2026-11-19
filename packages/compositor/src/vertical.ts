@@ -1,5 +1,6 @@
 import { cameraEdits, verticalEdits, type CameraSlot, type LayoutKind, type MarzEvent, type Project, type Zoom } from "@marz/format";
 import { aimAt, cropRectAt, zoomRectAt, type AimPath } from "@marz/timeline";
+import { framedBox } from "./background";
 import type { Box } from "./camera";
 import type { CaptionRect } from "./captions";
 import { frameAt, type FrameSpec } from "./frame";
@@ -56,11 +57,13 @@ export function verticalFrameAt(
   const box = layout.screen;
   const zoom = zoomRectAt(project.edits.zooms, srcUs);
   const aim = aimAt(path, verticalEdits(project).holds, srcUs);
-  const crop = cropRectAt(aim, zoom, project.source, box.w / Math.max(1, box.h));
+  // With a background the window is cut to the framed box (the screen box less the margin).
+  const framed = framedBox(project, box, out);
+  const crop = cropRectAt(aim, zoom, project.source, framed.w / Math.max(1, framed.h));
   // The window as a zoom that covers the whole take: frameAt then places the screen and the cursor.
   const window: Zoom = { id: "vertical-window", startUs: 0, endUs: Number.MAX_SAFE_INTEGER, rect: crop, easeInUs: 0, easeOutUs: 0, easing: "linear", origin: "manual" };
   const shown = { ...project, edits: { ...project.edits, zooms: [window] } };
-  return { spec: frameAt(shown, events, srcUs, box), layout, crop };
+  return { spec: frameAt(shown, events, srcUs, box, { out, fill: true }), layout, crop };
 }
 
 /** Where captions may go on the vertical picture: the safe area, kept inside the screen box (away

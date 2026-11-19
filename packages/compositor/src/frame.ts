@@ -1,5 +1,6 @@
 import type { MarzEvent, Project } from "@marz/format";
 import { zoomRectAt } from "@marz/timeline";
+import { backgroundPx, framedBox, type BackgroundDraw } from "./background";
 import { clickEffectsAt, cursorAt, type ClickDraw, type CursorDraw } from "./cursor";
 
 export type FrameSpec = {
@@ -11,6 +12,8 @@ export type FrameSpec = {
   cursor: CursorDraw | null;
   /** Click effects to draw under the cursor. */
   clicks: ClickDraw[];
+  /** The backdrop and the framed screen's box, when the project has a background (`edits.background`). */
+  background?: BackgroundDraw;
 };
 
 /** Fit a source area of size sw x sh inside the box without stretching it ("contain"). */
@@ -23,15 +26,35 @@ function containRect(sw: number, sh: number, box: { x: number; y: number; w: num
 
 /** Everything needed to draw the frame for source time `srcUs`. Shared by preview and export.
  *  `screenBox` is where the screen goes on the output (the layout's screen box; the whole output by
- *  default). */
-export function frameAt(project: Project, events: MarzEvent[], srcUs: number, screenBox?: { x: number; y: number; w: number; h: number }): FrameSpec {
+ *  default). With a background the screen is framed inside that box, the margin away from its edges:
+ *  the full picture at its own aspect, or the whole margin box with `opts.fill` (the vertical window,
+ *  already cut to that box's aspect). Zooms happen inside the frame. `opts.out` is the output size
+ *  (default `project.output`). */
+export function frameAt(
+  project: Project,
+  events: MarzEvent[],
+  srcUs: number,
+  screenBox?: { x: number; y: number; w: number; h: number },
+  opts?: { out?: { width: number; height: number }; fill?: boolean },
+): FrameSpec {
   const { width: srcW, height: srcH } = project.source;
   const r = zoomRectAt(project.edits.zooms, srcUs);
   const srcRect = { sx: r.x * srcW, sy: r.y * srcH, sw: r.w * srcW, sh: r.h * srcH };
+  const out = opts?.out ?? project.output;
+  const box = screenBox ?? { x: 0, y: 0, w: out.width, h: out.height };
 
-  const dstRect = containRect(srcRect.sw, srcRect.sh, screenBox ?? { x: 0, y: 0, w: project.output.width, h: project.output.height });
+  const bg = backgroundPx(project, out);
+  let background: BackgroundDraw | undefined;
+  let into = box;
+  if (bg) {
+    const inner = framedBox(project, box, out);
+    const f = opts?.fill ? null : containRect(srcW, srcH, inner);
+    into = f ? { x: f.dx, y: f.dy, w: f.dw, h: f.dh } : inner;
+    background = { style: bg.style, frame: into, radius: bg.radius, shadow: bg.shadow };
+  }
+  const dstRect = containRect(srcRect.sw, srcRect.sh, into);
 
   const cursor = cursorAt(project, events, srcUs, srcRect, dstRect);
   const clicks = clickEffectsAt(project, events, srcUs, srcRect, dstRect);
-  return { srcRect, dstRect, cursor, clicks };
+  return background ? { srcRect, dstRect, cursor, clicks, background } : { srcRect, dstRect, cursor, clicks };
 }

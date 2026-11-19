@@ -127,6 +127,10 @@ for timed layouts and kept as is. Preview and export draw the camera last, aspec
   (optional) `{ "framing": "follow" | "fit", "cameraSlot": "top" | "bottom", "holds": [ { "id", "startUs", "endUs", "x" } ] }`.
   Missing = follow, slot from the camera corner, no holds; unknown values read as the default and are kept on save. `x` is the
   9:16 window's centre as a share of the screen width (source time like every edit).
+- Background and frame (2026-11-19, owner's pre-approval; design `2026-11-19-background-frame-design.md`): `edits.background`
+  (optional) `{ "style": "off" | "ink" | "paper" | "glow" | "grid", "padding": "S" | "M" | "L", "corners": "square" | "round",
+  "shadow": bool }`. Missing = off (the screen fills the frame, as before); a missing or unknown field reads as its default
+  (padding M, corners round, shadow on) and the raw object is kept on save. One background per project.
 - Tolerant readers: an unknown zoom or cut `origin` reads as `"manual"`, an unknown `easing` as
   `"easeInOutCubic"`, an unknown cut `reason` as none; the original value is written back on save unless the
   editor changed that field. Older projects open as before; `version` stays 1.

@@ -1,4 +1,5 @@
 import { AudioBlock } from "./AudioBlock";
+import { BackgroundBlock } from "./BackgroundBlock";
 import { CursorBlock, CursorInspector } from "./CursorPanel";
 import { useEffect, useState } from "react";
 import { aiEdits, BORDER_COLOR_NAMES, cursorKind, cursorSections, drawingStrokes, STROKE_COLORS, strokeWidths, type Stroke, type StrokeColor, cameraBorder, cameraEdits, cameraScenes, captionEdits, LAYOUT_KINDS, PIP_CORNERS, PIP_SIZES, type BorderColor, type Corner, type Cut, type PipShape, type Project, type Scene, type Word, type Zoom } from "@marz/format";
@@ -577,6 +578,7 @@ export function Inspector({ compact = false }: { compact?: boolean }) {
           <CursorBlock project={project} />
           {project.tracks.camera && <CameraBlock project={project} />}
           <VerticalBlock project={project} />
+          <BackgroundBlock project={project} />
           <AudioBlock project={project} />
           {words.length > 0 && <CaptionsBlock project={project} />}
           <AiBlock project={project} />

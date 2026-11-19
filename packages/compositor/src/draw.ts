@@ -4,6 +4,8 @@ import type { FrameSpec } from "./frame";
 import { drawStrokes, type DrawLayer } from "./drawings";
 import type { ClickDraw } from "./cursor";
 import { drawCursorShape } from "./cursorShapes";
+import { BACKDROP_FALLBACK, paintBackdrop, type BackgroundDraw } from "./background";
+import { roundedPath } from "./path";
 
 /** Click effect colours by token name. Callers pass the `tokens.css` values they read at run time. */
 export type ClickColors = Record<ClickDraw["color"], string>;
@@ -40,10 +42,21 @@ export function drawFrame(
 ): void {
   const { sx, sy, sw, sh } = spec.srcRect;
   const { dx, dy, dw, dh } = spec.dstRect;
-  ctx.fillStyle = "#000000";
-  ctx.fillRect(0, 0, out.width, out.height);
+  const bg = spec.background;
+  if (bg) {
+    drawBackdropAndFrame(ctx, bg, out, clickColors);
+    ctx.save();
+    roundedPath(ctx, bg.frame.x, bg.frame.y, bg.frame.w, bg.frame.h, bg.radius);
+    ctx.clip();
+    ctx.fillStyle = "#000000";
+    ctx.fillRect(bg.frame.x, bg.frame.y, bg.frame.w, bg.frame.h);
+  } else {
+    ctx.fillStyle = "#000000";
+    ctx.fillRect(0, 0, out.width, out.height);
+  }
   ctx.drawImage(source, sx, sy, sw, sh, dx, dy, dw, dh);
   if (drawings) drawStrokes(ctx, drawings.items, spec, drawings.colors, drawings.family);
+  if (bg) ctx.restore();
   if (spec.clicks.length > 0) drawClicks(ctx, spec.clicks, clickColors);
   if (spec.cursor) drawCursorShape(ctx, spec.cursor.shape, spec.cursor.x, spec.cursor.y, spec.cursor.scale);
   if (camera) drawCamera(ctx, camera);
@@ -52,21 +65,6 @@ export function drawFrame(
 /** Border width in output pixels for a width given at 1080 output height (0 stays 0, else at least 1). */
 export const borderPx = (widthAt1080: number, out: { height: number }): number =>
   widthAt1080 <= 0 ? 0 : Math.max(1, Math.round((widthAt1080 * out.height) / 1080));
-
-function roundedPath(ctx: Ctx, x: number, y: number, w: number, h: number, r: number): void {
-  const rr = Math.max(0, Math.min(r, w / 2, h / 2));
-  ctx.beginPath();
-  ctx.moveTo(x + rr, y);
-  ctx.lineTo(x + w - rr, y);
-  ctx.arcTo(x + w, y, x + w, y + rr, rr);
-  ctx.lineTo(x + w, y + h - rr);
-  ctx.arcTo(x + w, y + h, x + w - rr, y + h, rr);
-  ctx.lineTo(x + rr, y + h);
-  ctx.arcTo(x, y + h, x, y + h - rr, rr);
-  ctx.lineTo(x, y + rr);
-  ctx.arcTo(x, y, x + rr, y, rr);
-  ctx.closePath();
-}
 
 /** The camera after screen and cursor: never zoomed, cover cropped into its box, clipped to its
  *  mask, border inside the box along the mask. */
@@ -127,4 +125,22 @@ export function drawClicks(ctx: Ctx, clicks: ClickDraw[], colors?: ClickColors):
     }
     ctx.restore();
   }
+}
+
+/** The backdrop over the whole output and the framed screen's shadow (an ink copy of the frame, under the
+ *  picture, so only its shadow shows). */
+function drawBackdropAndFrame(ctx: Ctx, bg: BackgroundDraw, out: { width: number; height: number }, colors?: ClickColors): void {
+  const c = { ...BACKDROP_FALLBACK, ...colors };
+  paintBackdrop(ctx, bg.style, out, c);
+  if (!bg.shadow) return;
+  const { x, y, w, h } = bg.frame;
+  ctx.save();
+  ctx.globalAlpha = bg.shadow.alpha;
+  ctx.shadowColor = c.ink;
+  ctx.shadowBlur = bg.shadow.blur;
+  ctx.shadowOffsetY = bg.shadow.offsetY;
+  ctx.fillStyle = c.ink;
+  roundedPath(ctx, x, y, w, h, bg.radius);
+  ctx.fill();
+  ctx.restore();
 }
