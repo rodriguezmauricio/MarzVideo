@@ -59,6 +59,11 @@ Windows-first screen recorder + non-destructive editor (Tauri 2, Rust, React/TS)
   caption style per export preset (Ink, Paper, Accent band, Plain; S/M/L; top/middle/bottom; word highlight), `.vtt`
   beside every export next to the `.srt`. Code: `apps/desktop/src/captions`, `packages/autoedit/src/captions.ts`,
   `packages/compositor/src/captions.ts`.
+- **Built (branch `claude/live-drawing-d842df`, not merged):** live drawing (design `docs/superpowers/specs/2026-11-19-live-drawing-design.md`,
+  plan `docs/superpowers/plans/2026-11-19-live-drawing.md`). Ctrl+Shift+D (or Draw on the recording bar) while recording: pen, highlight,
+  arrow, box, oval, text, erase, clear, four token colours, on the capture-excluded overlay. Strokes go to `events.jsonl` (`draw` lines) and
+  become `edits.drawings` strokes on first open; Drawing lane, select/move/resize on the preview, Drawing inspector, drawn by the compositor
+  in preview and both exports. Checked: real take "Drawing test" with simulated input, `screen.mp4` frames without the drawing, both exports with it.
 - **Not checked by hand yet:** the owner checks in `docs/spikes/2026-11-17-owner-checks.md` (clean 3-minute run,
   flash and beep sync, clicks, static screen, mic unplug, 60 Hz, real hotkeys), plus: open New recording once and
   look at the overlay, play an export in Windows Media Player, upload one export of each preset privately and
