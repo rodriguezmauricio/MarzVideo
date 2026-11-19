@@ -65,6 +65,7 @@ Windows-first screen recorder + non-destructive editor (Tauri 2, Rust, React/TS)
   slot; captions in the Reels/TikTok safe area) or fits with bars. Vertical preview (V) with an Aim view, Vertical lane with Frame
   blocks (F) that win over the automatic aim, Vertical block in the Project panel, "Follow the action" row in the export panel.
   Optional `edits.vertical`. Code: `packages/timeline/src/reframe.ts`, `packages/compositor/src/vertical.ts`, `apps/desktop/src/vertical`.
+  App exports on copies "Vertical test" (camera) and "Vertical test clicks" in `Videos/Marz Recorder/Exports/Vertical test`, with frame sheets.
 - **Not checked by hand yet:** the owner checks in `docs/spikes/2026-11-17-owner-checks.md` (clean 3-minute run,
   flash and beep sync, clicks, static screen, mic unplug, 60 Hz, real hotkeys), plus: open New recording once and
   look at the overlay, play an export in Windows Media Player, upload one export of each preset privately and
