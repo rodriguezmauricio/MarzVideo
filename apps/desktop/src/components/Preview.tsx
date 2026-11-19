@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef } from "react";
-import { canvasMeasure, captionLayout, cameraLayerFor, cameraMediaUs, drawCaptions, drawFrame, frameAt, layoutAt, strokesAt, type CaptionStyle, type VisibleStroke } from "@marz/compositor";
+import { canvasMeasure, captionLayout, cameraLayerFor, cameraMediaUs, drawCaptions, drawFrame, frameAt, layoutAt, srcScaleFor, strokesAt, type CaptionStyle, type VisibleStroke } from "@marz/compositor";
 import { keptSegments, outputDurationUs, outputToSource, sourceToOutput, strokeAtPoint, trackGain } from "@marz/timeline";
-import { audioEdits, captionStyleFor, drawingStrokes, type Project } from "@marz/format";
+import { audioEdits, captionStyleFor, drawingStrokes, usesProxies, type Project } from "@marz/format";
 import { addHold, updateHold } from "@marz/timeline";
 import { VERTICAL_SIZE, type Box } from "@marz/compositor";
 import { drawVertical } from "../vertical/drawVertical";
@@ -36,6 +36,11 @@ const AUDIO_DRIFT_S = 0.04;
  *  on a decoder that has to start at a keyframe, so seeking for small gaps never settles). */
 const CAMERA_SEEK_S = 0.25;
 const CAMERA_LOCK_S = 0.012;
+
+/** Proxy pictures are smaller than the source: the crop scales with them. The raw file draws as before. */
+function pictureScale(p: Project, video: HTMLVideoElement): number {
+  return usesProxies(useEditorStore.getState().archive) ? srcScaleFor(video.videoWidth, p.source.width) : 1;
+}
 
 export function Preview() {
   const project = useEditorStore((s) => s.project)!;
@@ -141,7 +146,7 @@ export function Preview() {
     }
     const camera = camVideo && camVideo.readyState >= 2 ? { source: camVideo, size: { width: camVideo.videoWidth, height: camVideo.videoHeight } } : null;
     const drawings = { items: visibleStrokes(p, srcUs, strokeId), colors: tokenColors(), family: strokeFamily() };
-    const { crop } = drawVertical(ctx, { project: p, events, srcUs, screen: video, camera, colors: tokenColors(), captions, drawings });
+    const { crop } = drawVertical(ctx, { project: p, events, srcUs, screen: video, camera, colors: tokenColors(), captions, drawings, srcScale: pictureScale(p, video) });
     lastCrop.current = crop;
     const aim = aimCanvasRef.current;
     const actx = aim?.getContext("2d");
@@ -188,7 +193,7 @@ export function Preview() {
         : null;
     const { strokeId } = live.current;
     const drawings = editing ? null : { items: visibleStrokes(p, srcUs, strokeId), colors: tokenColors(), family: strokeFamily() };
-    drawFrame(ctx, video, frameAt(shown, events, srcUs, lay?.screen), p.output, camera, tokenColors(), drawings);
+    drawFrame(ctx, video, frameAt(shown, events, srcUs, lay?.screen), p.output, camera, tokenColors(), drawings, pictureScale(p, video));
     // Captions: the same layout and drawing as the export (DESIGN-SYSTEM.md "Captions in the video").
     const { blocks: bl, look: lk, segs: sg } = live.current;
     const tOut = bl.length ? sourceToOutput(sg, srcUs) : null;

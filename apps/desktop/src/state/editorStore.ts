@@ -1,10 +1,11 @@
 import { create } from "zustand";
-import { cameraScenes, cursorSections, drawingStrokes, parseProject, verticalEdits, serializeProject, type CaptionPresetId, type MarzEvent, type Project, type Section, type Word } from "@marz/format";
+import { cameraScenes, cursorSections, EMPTY_ARCHIVE_STATE, parseArchiveState, type ArchiveState, drawingStrokes, parseProject, verticalEdits, serializeProject, type CaptionPresetId, type MarzEvent, type Project, type Section, type Word } from "@marz/format";
 import type { Levels } from "@marz/autoedit";
 import type { AiStatus } from "../ai/runAiPass";
 import { History, importLiveDrawings, importLiveLayouts, type Command } from "@marz/timeline";
 import { createAutosave, type SaveStatus } from "../storage/autosave";
 import type { ProjectStorage } from "../storage/types";
+import { withMedia } from "../storage/withMedia";
 import { loadEventsOrEmpty } from "./loadEvents";
 
 export type Selection = { kind: "zoom" | "cut" | "word" | "layout" | "cursor" | "drawing" | "frame"; id: string } | null;
@@ -40,7 +41,14 @@ export const flushAutosave = (): Promise<boolean> => autosave?.flush() ?? Promis
 type EditorState = {
   status: "idle" | "loading" | "ready" | "error";
   error: string | null;
+  /** Media URLs follow `archive.json` (proxies once the raw files are removed). */
   storage: ProjectStorage | null;
+  /** The folder's own storage, without the proxy mapping. */
+  baseStorage: ProjectStorage | null;
+  /** `archive.json`: archive record, proxies, removed raw files. */
+  archive: ArchiveState;
+  /** New archive state (after a restore): media URLs switch at once. */
+  setArchive: (archive: ArchiveState) => void;
   project: Project | null;
   events: MarzEvent[];
   history: History | null;
@@ -91,6 +99,12 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   status: "idle",
   error: null,
   storage: null,
+  baseStorage: null,
+  archive: EMPTY_ARCHIVE_STATE,
+  setArchive: (archive) => {
+    const base = get().baseStorage;
+    set({ archive, storage: base ? withMedia(base, archive) : get().storage });
+  },
   project: null,
   events: [],
   history: null,
@@ -132,6 +146,8 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     try {
       const read = parseProject(JSON.parse(await storage.readText("project.json")));
       const { events, warning } = await loadEventsOrEmpty(() => storage.readText("events.jsonl"));
+      // Optional: no archive.json (or an unreadable one) means the raw files are here.
+      const archive = await storage.readText("archive.json").then((t) => parseArchiveState(JSON.parse(t)), () => EMPTY_ARCHIVE_STATE);
       // Layout hotkeys pressed while recording become Live layout blocks the first time the take
       // opens (not an undo step; saved with the next autosave). Live drawing strokes too.
       const project = importLiveDrawings(events)(importLiveLayouts(events)(read));
@@ -161,7 +177,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         set({ project: p, selection: stillThere ? sel : null, ...(clearDone && !ai.running ? { ai: { ...ai, status: null } } : {}) });
         autosave?.schedule();
       });
-      set({ status: "ready", storage, project, events, warning, saveStatus: "saved", history, playheadUs: 0, playing: false, selection: null, words: [], sections: [], levels: null, ai: IDLE_AI });
+      set({ status: "ready", storage: withMedia(storage, archive), baseStorage: storage, archive, project, events, warning, saveStatus: "saved", history, playheadUs: 0, playing: false, selection: null, words: [], sections: [], levels: null, ai: IDLE_AI });
       if (project !== read) autosave.schedule();
     } catch (err) {
       set({ status: "error", error: err instanceof Error ? err.message : String(err) });

@@ -4,7 +4,8 @@ import { WarningBar } from "../components/WarningBar";
 import { useAppStore } from "../state/appStore";
 import { pickStorage } from "../storage/pickStorage";
 import { bannerText, folderName, toRows, type ProjectRow, type RowView } from "./projectRows";
-import { projectsApi } from "./projectsApi";
+import { projectsApi, type StorageApi } from "./projectsApi";
+import { storageBar, type ArchiveSettings, type StorageButtonId, type StorageStep, type StorageView } from "./storageBar";
 
 const NOT_A_PROJECT = "This folder is not a Marz project. Pick a folder that ends in .marz.";
 const message = (err: unknown) => (err instanceof Error ? err.message : String(err));
@@ -35,19 +36,145 @@ function Thumb({ dir, load }: { dir: string; load?: (dir: string) => Promise<str
   );
 }
 
-function Row({ row, onOpen, thumb }: { row: RowView; onOpen: () => void; thumb?: (dir: string) => Promise<string> }) {
+function Row({
+  row,
+  onOpen,
+  thumb,
+  storageOpen,
+  onStorage,
+}: {
+  row: RowView;
+  onOpen: () => void;
+  thumb?: (dir: string) => Promise<string>;
+  storageOpen: boolean;
+  onStorage: () => void;
+}) {
   return (
-    <button type="button" className="h-row" onClick={onOpen}>
-      <span className="h-idx">{row.index}</span>
-      <Thumb dir={row.dir} load={thumb} />
-      <span className="h-name">{row.name}</span>
-      <span className="h-len">{row.length}</span>
-      <span className="h-meta">{row.meta}</span>
-      <span className="h-open">
+    <div className="h-row">
+      <button type="button" className="h-row-main" onClick={onOpen}>
+        <span className="h-idx">{row.index}</span>
+        <Thumb dir={row.dir} load={thumb} />
+        <span className="h-name">{row.name}</span>
+        <span className="h-len">{row.length}</span>
+        <span className="h-meta">
+          {row.badge && <i className={`badge ${row.badge === "Archived" ? "badge-manual" : "badge-line"} h-badge`}>{row.badge}</i>}
+          <span className="h-meta-text">{row.meta}</span>
+        </span>
+      </button>
+      <button type="button" className={`h-store${storageOpen ? " on" : ""}`} aria-expanded={storageOpen} onClick={onStorage}>
+        <Icon name="archive" size={13} />
+        Storage
+      </button>
+      <button type="button" className="h-open" onClick={onOpen}>
         Open
         <Icon name="down" size={13} turn={-90} />
+      </button>
+    </div>
+  );
+}
+
+const ERROR_LEAD: Record<"archive" | "remove" | "restore" | "folder", string> = {
+  archive: "Could not archive.",
+  remove: "Could not remove the raw files.",
+  restore: "Could not restore.",
+  folder: "Could not set the archive folder.",
+};
+
+/** The storage bar under a row (DESIGN-SYSTEM.md Home, "Storage"): archive, remove raw files, restore. */
+function StorageBar({
+  row,
+  api,
+  settings,
+  onSettings,
+  onClose,
+  onChanged,
+  onBusy,
+}: {
+  row: RowView;
+  api: StorageApi;
+  settings: ArchiveSettings;
+  onSettings: (s: ArchiveSettings) => void;
+  onClose: () => void;
+  onChanged: () => void;
+  onBusy: (busy: boolean) => void;
+}) {
+  const [view, setView] = useState<StorageView | null>(null);
+  const [busy, setBusy] = useState<{ step: StorageStep; pct: number } | null>(null);
+  const [asking, setAsking] = useState(false);
+  const [error, setError] = useState<{ lead: string; text: string } | null>(null);
+
+  useEffect(() => {
+    let live = true;
+    api.view(row.dir).then(
+      (v) => live && setView(v),
+      (e) => live && setError({ lead: ERROR_LEAD.archive, text: message(e) }),
+    );
+    return () => {
+      live = false;
+    };
+  }, [api, row.dir]);
+
+  useEffect(() => api.onProgress((p) => p.dir === row.dir && setBusy({ step: p.step, pct: p.pct })), [api, row.dir]);
+  useEffect(() => onBusy(busy !== null), [busy, onBusy]);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !busy) onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [busy, onClose]);
+
+  const run = async (kind: keyof typeof ERROR_LEAD, first: StorageStep, job: () => Promise<StorageView>) => {
+    setError(null);
+    setAsking(false);
+    setBusy({ step: first, pct: 0 });
+    try {
+      setView(await job());
+    } catch (e) {
+      setError({ lead: ERROR_LEAD[kind], text: message(e) });
+      api.view(row.dir).then(setView, () => undefined);
+    } finally {
+      setBusy(null);
+      onChanged();
+    }
+  };
+
+  const folder = async (job: () => Promise<unknown>) => {
+    try {
+      setError(null);
+      await job();
+      onSettings(await api.settings());
+    } catch (e) {
+      setError({ lead: ERROR_LEAD.folder, text: message(e) });
+    }
+  };
+
+  const press = (id: StorageButtonId) => {
+    if (id === "close") onClose();
+    else if (id === "keep") setAsking(false);
+    else if (id === "remove") {
+      setError(null);
+      setAsking(true);
+    } else if (id === "useSuggested") void folder(api.useSuggested);
+    else if (id === "pick") void folder(api.pickDest);
+    else if (id === "archive") void run("archive", "copying", () => api.archive(row.dir));
+    else if (id === "confirmRemove") void run("remove", "proxies", () => api.removeRaw(row.dir));
+    else if (id === "restore") void run("restore", "restoring", () => api.restore(row.dir));
+  };
+
+  if (!view) return <div className="h-banner h-storebar" role="status" />;
+  const bar = storageBar({ name: row.name, settings, view, busy, asking, error });
+  return (
+    <div className="h-banner h-storebar" role="status">
+      <span className="h-banner-text">
+        <b>{bar.lead}</b> <span className="faint">{bar.rest}</span>
       </span>
-    </button>
+      {bar.buttons.map((b) => (
+        <button key={b.id} type="button" className={`h-btn ${b.accent ? "h-btn-accent" : "h-btn-line"}`} onClick={() => press(b.id)}>
+          {b.label}
+        </button>
+      ))}
+    </div>
   );
 }
 
@@ -110,6 +237,15 @@ export function Home() {
   const openProject = useAppStore((s) => s.openProject);
   const [raw, setRaw] = useState<ProjectRow[] | null>(null);
   const [warning, setWarning] = useState<string | null>(null);
+  /** The row whose storage bar is open (one at a time), the archive folder setting, a running step. */
+  const [storageFor, setStorageFor] = useState<string | null>(null);
+  const [settings, setSettings] = useState<ArchiveSettings | null>(null);
+  const [storageBusy, setStorageBusy] = useState(false);
+  const toggleStorage = (key: string) => {
+    if (storageBusy) return;
+    setStorageFor((cur) => (cur === key ? null : key));
+    if (!settings) api.storage.settings().then(setSettings, (err) => setWarning(`Could not read the archive settings. ${message(err)}`));
+  };
 
   const refresh = useCallback(async () => {
     try {
@@ -234,9 +370,33 @@ export function Home() {
             <span>Last edited, newest first</span>
           </div>
           <div className="h-rows">
-            {rows.map((r) => (
-              <Row key={r.dir + r.index} row={r} thumb={api.thumb} onOpen={() => openProject(r.dir)} />
-            ))}
+            {rows.map((r) => {
+              const key = r.dir + r.index;
+              const open = storageFor === key;
+              return (
+                <div key={key}>
+                  <Row
+                    row={r}
+                    thumb={api.thumb}
+                    storageOpen={open}
+                    onStorage={() => toggleStorage(key)}
+                    // A storage step on this project must finish before it opens.
+                    onOpen={() => !(open && storageBusy) && openProject(r.dir)}
+                  />
+                  {open && settings && (
+                    <StorageBar
+                      row={r}
+                      api={api.storage}
+                      settings={settings}
+                      onSettings={setSettings}
+                      onClose={() => setStorageFor(null)}
+                      onChanged={() => void refresh()}
+                      onBusy={setStorageBusy}
+                    />
+                  )}
+                </div>
+              );
+            })}
           </div>
         </>
       )}

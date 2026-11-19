@@ -76,7 +76,9 @@ MyRecording.marz/
   mic.wav          48 kHz PCM
   system.wav       optional (2026-11-18): the computer's sound, 48 kHz stereo PCM, starts at t0
   camera.mp4       optional (2026-11-18): the webcam, fragmented MP4, H.264, 30 fps constant
-  proxies/         optional, later
+  proxies/         optional (2026-11-19): 720p copies of screen.mp4 and camera.mp4, used when the raw files are removed
+  archive.json     optional (2026-11-19): archive manifest (path, size, SHA-256 per file), proxies, removed raw files;
+                   written only by the app, never by the editor's autosave. See 2026-11-19-archive-proxies-design.md
   transcript.json  optional (M2, 2026-11-19): words from mic.wav, written only by the transcription step
   cache/           optional (2026-11-19): derived files, e.g. mic.clean.wav (noise removed); safe to delete
 ```

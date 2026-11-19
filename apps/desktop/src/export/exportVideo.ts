@@ -1,4 +1,4 @@
-import { canvasMeasure, captionLayout, cameraLayerFor, cameraMediaUs, drawCaptions, drawFrame, frameAt, layoutAt, strokesAt, verticalLayoutAt, type CaptionBlock, type CaptionLookOpts, type CaptionStyle } from "@marz/compositor";
+import { canvasMeasure, captionLayout, cameraLayerFor, cameraMediaUs, drawCaptions, drawFrame, frameAt, layoutAt, srcScaleFor, strokesAt, verticalLayoutAt, type CaptionBlock, type CaptionLookOpts, type CaptionStyle } from "@marz/compositor";
 import { cameraEdits, drawingStrokes, verticalEdits, type MarzEvent, type Project } from "@marz/format";
 import { drawVertical } from "../vertical/drawVertical";
 import { keptSegments } from "@marz/timeline";
@@ -21,6 +21,8 @@ export interface ExportOptions {
   project: Project;
   events: MarzEvent[];
   storage: ProjectStorage;
+  /** The screen plays from its proxy (raw files removed): the crop scales to the smaller picture. */
+  proxies?: boolean;
   sink: ExportSink;
   preset: ExportPreset;
   /** The project folder, passed to the muxer job (FFmpeg reads mic.wav from it). */
@@ -49,6 +51,7 @@ function abortError(): DOMException {
  *  chunks to `sink`. Resolves with the sink's report; on failure or abort the sink is cancelled. */
 export async function exportProject(opts: ExportOptions): Promise<ExportReport> {
   const { project, events, storage, sink, preset, signal, onProgress } = opts;
+  const scaleOf = (f: VideoFrame) => (opts.proxies ? srcScaleFor(f.displayWidth, project.source.width) : 1);
   const segs = keptSegments(project.durationUs, project.edits.cuts);
   const empty = refuseEmpty(segs);
   if (empty) throw new Error(empty);
@@ -136,7 +139,7 @@ export async function exportProject(opts: ExportOptions): Promise<ExportReport> 
           const camera = camFrame ? { source: camFrame, size: { width: camFrame.displayWidth, height: camFrame.displayHeight } } : null;
           const vcaps = caps && measure ? { ...caps, tOutUs: outputFrameUs(k, fps), measure } : null;
           const drawings = hasStrokes ? { items: strokesAt(project, srcUs), colors, family } : null;
-          drawVertical(encCtx, { project, events, srcUs, screen: frame, camera, colors, captions: vcaps, drawings, framing: "follow" });
+          drawVertical(encCtx, { project, events, srcUs, screen: frame, camera, colors, captions: vcaps, drawings, framing: "follow", srcScale: scaleOf(frame) });
         } finally {
           frame.close();
           camFrame?.close();
@@ -148,7 +151,7 @@ export async function exportProject(opts: ExportOptions): Promise<ExportReport> 
         try {
           const camera = camFrame ? cameraLayerFor(project, lay, out, camFrame, { width: camFrame.displayWidth, height: camFrame.displayHeight }, colors) : null;
           const drawings = hasStrokes ? { items: strokesAt(project, srcUs), colors, family } : null;
-          drawFrame(compCtx, frame, frameAt(project, events, srcUs, lay.screen), out, camera, colors, drawings);
+          drawFrame(compCtx, frame, frameAt(project, events, srcUs, lay.screen), out, camera, colors, drawings, scaleOf(frame));
         } finally {
           frame.close();
           camFrame?.close();

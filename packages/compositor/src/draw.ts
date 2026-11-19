@@ -26,9 +26,16 @@ export type CameraLayer = {
   border?: { width: number; color: string };
 };
 
+/** How many picture pixels one source pixel is: the picture's width over `source.width`. 1 for the
+ *  raw recording; 2/3 for a 720p proxy of a 1080p take. 1 when either width is unknown. */
+export function srcScaleFor(pictureWidth: number, sourceWidth: number): number {
+  if (!(pictureWidth > 0) || !(sourceWidth > 0) || Math.abs(pictureWidth - sourceWidth) < 1) return 1;
+  return pictureWidth / sourceWidth;
+}
+
 /** Draw one frame: the cropped source scaled to `out` (into the layout's screen box, see
  *  `frameAt`), then the live drawing strokes, the click effects, the cursor, then the camera. Same code for
- *  preview and export. */
+ *  preview and export. `srcScale` maps the source-pixel crop onto a smaller picture (a proxy). */
 export function drawFrame(
   ctx: Ctx,
   source: CanvasImageSource,
@@ -37,12 +44,14 @@ export function drawFrame(
   camera?: CameraLayer | null,
   clickColors?: ClickColors,
   drawings?: DrawLayer | null,
+  srcScale = 1,
 ): void {
   const { sx, sy, sw, sh } = spec.srcRect;
+  const k = srcScale;
   const { dx, dy, dw, dh } = spec.dstRect;
   ctx.fillStyle = "#000000";
   ctx.fillRect(0, 0, out.width, out.height);
-  ctx.drawImage(source, sx, sy, sw, sh, dx, dy, dw, dh);
+  ctx.drawImage(source, sx * k, sy * k, sw * k, sh * k, dx, dy, dw, dh);
   if (drawings) drawStrokes(ctx, drawings.items, spec, drawings.colors, drawings.family);
   if (spec.clicks.length > 0) drawClicks(ctx, spec.clicks, clickColors);
   if (spec.cursor) drawCursorShape(ctx, spec.cursor.shape, spec.cursor.x, spec.cursor.y, spec.cursor.scale);

@@ -39,6 +39,8 @@ export type VerticalDrawOpts = {
   captions: VerticalCaptions | null;
   /** "follow" or "fit"; the project's setting when left out. */
   framing?: "follow" | "fit";
+  /** Picture pixels per source pixel (a proxy is smaller than the source). 1 when left out. */
+  srcScale?: number;
 };
 
 /** Draw one 1080 x 1920 vertical frame on `ctx` (canvas of VERTICAL_SIZE). Follow the action: the aimed
@@ -58,7 +60,7 @@ export function drawVertical(ctx: Ctx, o: VerticalDrawOpts): { crop: Box | null 
     ctx.scale(rect.w / src.width, rect.h / src.height);
     const lay = layoutAt(o.project, o.srcUs, src);
     const cam = o.camera && lay.camera ? cameraLayerFor(o.project, lay, src, o.camera.source, o.camera.size, o.colors) : null;
-    drawFrame(ctx, o.screen, frameAt(o.project, o.events, o.srcUs, lay.screen), src, cam, o.colors, o.drawings ?? null);
+    drawFrame(ctx, o.screen, frameAt(o.project, o.events, o.srcUs, lay.screen), src, cam, o.colors, o.drawings ?? null, o.srcScale ?? 1);
     ctx.restore();
     if (o.captions) {
       const c = o.captions;
@@ -69,7 +71,7 @@ export function drawVertical(ctx: Ctx, o: VerticalDrawOpts): { crop: Box | null 
   }
   const { spec, layout, crop } = verticalFrameAt(o.project, o.events, aimPathFor(o.project, o.events), o.srcUs, out);
   const cam = o.camera && layout.camera ? cameraLayerFor(o.project, layout, out, o.camera.source, o.camera.size, o.colors) : null;
-  drawFrame(ctx, o.screen, spec, out, cam, o.colors, o.drawings ?? null);
+  drawFrame(ctx, o.screen, spec, out, cam, o.colors, o.drawings ?? null, o.srcScale ?? 1);
   if (o.captions) {
     const c = o.captions;
     const full = { x: 0, y: 0, w: out.width, h: out.height };

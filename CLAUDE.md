@@ -78,6 +78,14 @@ Windows-first screen recorder + non-destructive editor (Tauri 2, Rust, React/TS)
   click effects per section, click effects Ripple, Pulse, Ring with token colour and size, in preview and export.
   Code: `packages/format/src/cursor.ts`, `packages/timeline/src/cursor.ts`, `packages/compositor/src/cursor.ts` and `cursorShapes.ts`,
   `crates/capture/src/win/cursor.rs`, `apps/desktop/src/components/CursorPanel.tsx`.
+- **Built on branch `claude/archive-proxies-f1eb23` (2026-11-19, not merged):** archive and proxies (design
+  `docs/superpowers/specs/2026-11-19-archive-proxies-design.md`, plan `docs/superpowers/plans/2026-11-19-archive-proxies.md`).
+  Home row Storage bar: archive copies the whole `.marz` folder to a remembered folder (Google Drive for desktop suggested),
+  checked by size and SHA-256 per file; "Remove raw files" makes 720p proxies in `proxies/`, re-checks the archive and moves
+  `screen.mp4` and `camera.mp4` to the Recycle Bin (audio stays); "Restore from archive" copies them back, checked. State in the
+  optional `archive.json` (written only by the app). Editor plays and exports from proxies (`withMedia`, `drawFrame` `srcScale`);
+  export asks first ("Restore from archive", "Export anyway"). Code: `src-tauri/src/archive.rs`, `packages/format/src/archive.ts`,
+  `apps/desktop/src/home/storageBar.ts`.
 - **Not checked by hand yet:** the owner checks in `docs/spikes/2026-11-17-owner-checks.md` (clean 3-minute run,
   flash and beep sync, clicks, static screen, mic unplug, 60 Hz, real hotkeys), plus: open New recording once and
   look at the overlay, play an export in Windows Media Player, upload one export of each preset privately and
