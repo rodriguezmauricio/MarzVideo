@@ -1,17 +1,18 @@
 import { useEffect, useRef, useState } from "react";
-import { updateCut, updateZoom } from "@marz/timeline";
+import { cameraScenes } from "@marz/format";
+import { updateCut, updateScene, updateZoom } from "@marz/timeline";
 import { MIN_US } from "../state/actions";
 import { useEditorStore, type Selection } from "../state/editorStore";
 import { Icon } from "./Icon";
 import { MicWave, ScreenThumbs } from "./Lanes";
 import { count, mmss } from "./timecode";
 import { handleWidthPx, MAX_TIMELINE_ZOOM, pxToUs, snapUs, timelineWidthPx, usToPx } from "./timelineMath";
-import { cutCapLabel, zoomLabels } from "./zoomLabels";
+import { cutCapLabel, LAYOUT_LABEL, zoomLabels } from "./zoomLabels";
 
 /** Roughly how wide a 10px mono label is, to hide labels that would not fit (micro type). */
 const labelPx = (text: string, ai: boolean) => text.length * 7 + (ai ? 26 : 0) + 8;
 
-type Kind = "zoom" | "cut";
+type Kind = "zoom" | "cut" | "layout";
 type Mode = "move" | "start" | "end";
 type Range = { startUs: number; endUs: number };
 type Drag = { kind: Kind; id: string; mode: Mode; startX: number; orig: Range };
@@ -64,6 +65,7 @@ export function Timeline({ expanded, onToggleLanes }: { expanded: boolean; onTog
   }, []);
 
   const D = project.durationUs;
+  const scenes = cameraScenes(project);
   const width = timelineWidthPx(viewport, zoomFactor);
   const pps = width / (D / 1e6);
   const x = (us: number) => usToPx(us, pps);
@@ -102,6 +104,7 @@ export function Timeline({ expanded, onToggleLanes }: { expanded: boolean; onTog
     const t = [0, D, playheadUs];
     for (const z of project.edits.zooms) if (!(skip.kind === "zoom" && skip.id === z.id)) t.push(z.startUs, z.endUs);
     for (const c of project.edits.cuts) if (!(skip.kind === "cut" && skip.id === c.id)) t.push(c.startUs, c.endUs);
+    for (const sc of scenes) if (!(skip.kind === "layout" && skip.id === sc.id)) t.push(sc.startUs, sc.endUs);
     return t;
   };
 
@@ -143,7 +146,7 @@ export function Timeline({ expanded, onToggleLanes }: { expanded: boolean; onTog
     setDraft(null);
     if (!d || !final || (final.startUs === d.orig.startUs && final.endUs === d.orig.endUs)) return;
     const patch = { startUs: final.startUs, endUs: final.endUs };
-    apply(d.kind === "zoom" ? updateZoom(d.id, patch) : updateCut(d.id, patch));
+    apply(d.kind === "layout" ? updateScene(d.id, patch) : d.kind === "zoom" ? updateZoom(d.id, patch) : updateCut(d.id, patch));
   };
 
   const stepS = TICK_STEPS_S.find((s) => s * pps >= 70) ?? TICK_STEPS_S[TICK_STEPS_S.length - 1]!;
@@ -174,7 +177,8 @@ export function Timeline({ expanded, onToggleLanes }: { expanded: boolean; onTog
   const sys = project.tracks.system;
   const cam = project.tracks.camera;
   /** A Later lane that this recording fills: computer sound, or the camera. */
-  const real = (name: string) => (name === "System audio" && !!sys) || (name === "Camera" && !!cam) || (name === "Captions" && hasWords);
+  const real = (name: string) =>
+    (name === "System audio" && !!sys) || ((name === "Camera" || name === "Layout") && !!cam) || (name === "Captions" && hasWords);
   const nAuto = project.edits.zooms.filter((z) => z.origin === "auto").length;
   const nOwn = project.edits.zooms.length - nAuto;
   const nAi = project.edits.zooms.filter((z) => z.origin === "ai").length + project.edits.cuts.filter((c) => c.origin === "ai").length;
@@ -284,6 +288,34 @@ export function Timeline({ expanded, onToggleLanes }: { expanded: boolean; onTog
                 // The camera keeps the Camera lane's place and height, with the Screen lane's thumbnails.
                 <div key={name} className="tk" style={{ height: rows.later }}>
                   <ScreenThumbs url={storage.fileUrl(cam.file)} durationUs={D} widthPx={x(D)} pps={pps} rowH={rows.later} />
+                </div>
+              ) : name === "Layout" && cam ? (
+                // Layout scenes (DESIGN-SYSTEM.md "Layout lane"): zoom-block geometry, paper or Live accent.
+                <div key={name} className="tk" style={{ height: rows.later }}>
+                  {scenes.map((sc) => {
+                    const r = rangeOf("layout", sc.id, sc);
+                    const sel = selection?.kind === "layout" && selection.id === sc.id;
+                    const w = Math.max(4, x(r.endUs - r.startUs));
+                    const pad = rows.later > 30 ? 6 : 3;
+                    const label = LAYOUT_LABEL[sc.layout];
+                    return (
+                      <div
+                        key={sc.id}
+                        data-testid={`layout-${sc.id}`}
+                        onPointerDown={(e) => onBlockDown(e, "layout", sc.id, "move", sc)}
+                        onPointerMove={onBlockMove}
+                        onPointerUp={onBlockUp}
+                        className={`blk blk-lay${sc.origin === "live" ? " live" : ""}${sel ? " sel" : ""}`}
+                        style={{ left: x(r.startUs), width: w, top: pad, height: rows.later - 2 * pad }}
+                      >
+                        <i className="g l" />
+                        {w >= labelPx(label, false) + 16 && <span>{label}</span>}
+                        <i className="g r" />
+                        {handle("layout", sc.id, "start", sc, w)}
+                        {handle("layout", sc.id, "end", sc, w)}
+                      </div>
+                    );
+                  })}
                 </div>
               ) : name === "Captions" && hasWords ? (
                 // The transcript words, one block each (DESIGN-SYSTEM.md "Captions lane").

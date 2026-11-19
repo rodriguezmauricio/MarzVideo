@@ -1,4 +1,4 @@
-import type { Cut, Zoom } from "@marz/format";
+import type { Cut, LayoutKind, Zoom } from "@marz/format";
 
 /** Block and inspector names: auto zooms are "Suggested", the rest are numbered by start time ("Zoom 1"...). */
 export function zoomLabels(zooms: Zoom[]): Map<string, string> {
@@ -14,3 +14,6 @@ export function cutCapLabel(c: Cut): string {
   if (c.origin !== "ai") return "Cut";
   return c.reason === "silence" ? "Silence" : c.reason === "filler" ? "Um" : c.reason === "mistake" ? "Mistake" : "Cut";
 }
+
+/** Layout block and picker labels (DESIGN-SYSTEM.md "Layout lane"). */
+export const LAYOUT_LABEL: Record<LayoutKind, string> = { pip: "Corner", side: "Side", camera: "Camera", screen: "Screen" };

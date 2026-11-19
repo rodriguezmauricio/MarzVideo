@@ -83,6 +83,12 @@ const PATHS = {
       <path d="M5 11a7 7 0 0014 0M12 18v3" />
     </>
   ),
+  layout: (
+    <>
+      <rect x="3" y="5" width="18" height="14" />
+      <path d="M14 5v14" />
+    </>
+  ),
   camera: (
     <>
       <rect x="3" y="6" width="13" height="12" />

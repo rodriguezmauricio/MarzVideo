@@ -11,7 +11,7 @@ import { Toolbar } from "./components/Toolbar";
 import { WarningBar } from "./components/WarningBar";
 import { keptSegments } from "@marz/timeline";
 import { refuseEmpty } from "./export/outputFrames";
-import { addCutAtPlayhead, addZoomAtPlayhead, deleteSelection, runAutoZoom } from "./state/actions";
+import { addCutAtPlayhead, addLayoutAtPlayhead, addZoomAtPlayhead, deleteSelection, runAutoZoom } from "./state/actions";
 import { abortAiPass, answerModelAsk, loadTranscriptWords, startAiPass } from "./ai/aiActions";
 import { statusText } from "./ai/runAiPass";
 import { useAppStore } from "./state/appStore";
@@ -160,6 +160,7 @@ function Editor({ dir }: { dir: string }) {
         s.togglePlay();
       } else if (e.code === "KeyZ") addZoomAtPlayhead();
       else if (e.code === "KeyC") addCutAtPlayhead();
+      else if (e.code === "KeyL") addLayoutAtPlayhead();
       else if (e.code === "KeyA") runAutoZoom();
       else if (e.code === "KeyE" && e.shiftKey) void startAiPass();
       else if (e.code === "Delete" || e.code === "Backspace") deleteSelection();
@@ -212,7 +213,7 @@ function Editor({ dir }: { dir: string }) {
         <WarningBar text={(aiWarning ?? warning)!} />
       ) : null}
       {lanesExpanded && <Toolbar horizontal />}
-      <main className="main">
+      <main className={project?.tracks.camera ? "main has-cam" : "main"}>
         <div className="timecode" aria-hidden="true">
           {mmss(playheadUs)}
         </div>

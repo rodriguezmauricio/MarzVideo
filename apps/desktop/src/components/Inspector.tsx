@@ -1,12 +1,12 @@
 import { useEffect, useState } from "react";
-import { aiEdits, cameraEdits, captionEdits, PIP_CORNERS, PIP_SIZES, type Corner, type Cut, type Project, type Word, type Zoom } from "@marz/format";
-import { setCaptionHidden, setCaptionText, setCursorHidden, updateCamera, updateCut, updateZoom } from "@marz/timeline";
+import { aiEdits, BORDER_COLOR_NAMES, cameraBorder, cameraEdits, cameraScenes, captionEdits, LAYOUT_KINDS, PIP_CORNERS, PIP_SIZES, type BorderColor, type Corner, type Cut, type PipShape, type Project, type Scene, type Word, type Zoom } from "@marz/format";
+import { setCaptionHidden, setCaptionText, setCursorHidden, updateCamera, updateCut, updateScene, updateZoom } from "@marz/timeline";
 import { setKind, setPace } from "../ai/aiActions";
 import { deleteSelection, MIN_US } from "../state/actions";
 import { useEditorStore } from "../state/editorStore";
 import { Icon } from "./Icon";
 import { mmsst, parseTimeUs, seconds1 } from "./timecode";
-import { cutCapLabel, zoomLabels } from "./zoomLabels";
+import { cutCapLabel, LAYOUT_LABEL, zoomLabels } from "./zoomLabels";
 
 // design-check-ignore: HTMLElement.blur() drops keyboard focus; it is not a visual blur
 const leaveField = (el: HTMLInputElement) => el.blur();
@@ -168,6 +168,7 @@ const CORNER_NAMES: Record<Corner, string> = {
 function CameraBlock({ project }: { project: Project }) {
   const apply = useEditorStore((s) => s.apply);
   const cam = cameraEdits(project);
+  const border = cameraBorder(project);
   return (
     <div className="insp-cam">
       <div className="mut insp-sec">Camera</div>
@@ -206,6 +207,117 @@ function CameraBlock({ project }: { project: Project }) {
             </button>
           ))}
         </span>
+      </div>
+      <Segmented label="Shape" options={SHAPES} value={(PIP_SHAPE_SET.has(cam.pip.shape) ? cam.pip.shape : "rect") as PipShape}
+        onPick={(shape) => apply(updateCamera({ pip: { shape } }))} />
+      <Segmented label="Border" options={BORDERS} value={BORDERS.find(([w]) => w === border.width)?.[0] ?? -1}
+        onPick={(width) => apply(updateCamera({ border: { width } }))} />
+      {border.width > 0 && (
+        <div className="irow">
+          <span>Colour</span>
+          <span className="swatches" role="radiogroup" aria-label="Border colour">
+            {BORDER_COLOR_NAMES.map((c) => (
+              <button
+                key={c}
+                type="button"
+                role="radio"
+                aria-checked={border.color === c}
+                aria-label={COLOR_NAMES[c]}
+                data-tip={COLOR_NAMES[c]}
+                className={`sw-${c}${border.color === c ? " on" : ""}`}
+                onClick={() => apply(updateCamera({ border: { color: c } }))}
+              />
+            ))}
+          </span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+const SHAPES: Array<[PipShape, string]> = [
+  ["rect", "Plain"],
+  // design-check-ignore: the camera mask name (video content), not a UI radius
+  ["rounded", "Round"],
+  ["circle", "Circle"],
+  ["square", "Square"],
+];
+const PIP_SHAPE_SET = new Set<string>(SHAPES.map(([v]) => v));
+/** Border widths in pixels at 1080 output height. */
+const BORDERS: Array<[number, string]> = [
+  [0, "None"],
+  [1, "Thin"],
+  [4, "Thick"],
+];
+const COLOR_NAMES: Record<BorderColor, string> = { paper: "Paper", ink: "Ink", accent: "Accent" };
+
+/** A row with the Motion row's segmented control. */
+function Segmented<T extends string | number>(props: { label: string; options: Array<[T, string]>; value: T; onPick: (v: T) => void }) {
+  return (
+    <div className="irow">
+      <span>{props.label}</span>
+      <span className={props.options.length > 3 ? "seg seg-4" : "seg"} role="radiogroup" aria-label={`Camera ${props.label.toLowerCase()}`}>
+        {props.options.map(([v, text]) => (
+          <button
+            key={String(v)}
+            type="button"
+            role="radio"
+            aria-checked={props.value === v}
+            className={props.value === v ? "on" : ""}
+            onClick={() => props.value !== v && props.onPick(v)}
+          >
+            {text}
+          </button>
+        ))}
+      </span>
+    </div>
+  );
+}
+
+/** Layout selected: start, end, which layout, delete. */
+function LayoutInspector({ scene, durationUs }: { scene: Scene; durationUs: number }) {
+  const apply = useEditorStore((s) => s.apply);
+  const patch = (p: Partial<Pick<Scene, "startUs" | "endUs" | "layout">>) => apply(updateScene(scene.id, p));
+  const live = scene.origin === "live";
+  return (
+    <div className="insp-scroll">
+      <div className="insp-head">
+        <h2 className="insp-title">Layout</h2>
+        <span className={`badge ${live ? "badge-live" : "badge-manual"}`}>{live ? "Live" : "Manual"}</span>
+      </div>
+      <div className="cells">
+        <Cell label="Start" text={mmsst(scene.startUs)}
+          onCommit={(us) => patch({ startUs: Math.max(0, Math.min(us, scene.endUs - MIN_US)) })} />
+        <Cell label="End" text={mmsst(scene.endUs)}
+          onCommit={(us) => patch({ endUs: Math.min(durationUs, Math.max(us, scene.startUs + MIN_US)) })} />
+      </div>
+      <div className="lay-row">
+        <span>Layout</span>
+        <span className="lay-grid" role="radiogroup" aria-label="Layout">
+          {LAYOUT_KINDS.map((k) => (
+            <button
+              key={k}
+              type="button"
+              role="radio"
+              aria-checked={scene.layout === k}
+              className={scene.layout === k ? "on" : ""}
+              onClick={() => scene.layout !== k && patch({ layout: k })}
+            >
+              {LAYOUT_LABEL[k]}
+            </button>
+          ))}
+        </span>
+      </div>
+      <div className="irow irow-last">
+        <span className="mut">Length</span>
+        <span>{seconds1(scene.endUs - scene.startUs)}</span>
+      </div>
+      <p className="insp-note">Between layouts the camera sits in its corner. Switches take 0.4 s.</p>
+      <div className="btns">
+        <button type="button" className="fb fb-line" onClick={deleteSelection}>
+          <Icon name="trash" size={14} />
+          Delete layout
+        </button>
       </div>
     </div>
   );
@@ -320,6 +432,7 @@ export function Inspector({ compact = false }: { compact?: boolean }) {
   const cut = selection?.kind === "cut" ? project.edits.cuts.find((c) => c.id === selection.id) : undefined;
   const words = useEditorStore((s) => s.words);
   const word = selection?.kind === "word" ? words.find((w) => w.id === selection.id) : undefined;
+  const scene = selection?.kind === "layout" ? cameraScenes(project).find((x) => x.id === selection.id) : undefined;
 
   return (
     <aside className="insp on-paper" aria-label="Inspector">
@@ -327,6 +440,8 @@ export function Inspector({ compact = false }: { compact?: boolean }) {
         <ZoomInspector zoom={zoom} title={zoomLabels(project.edits.zooms).get(zoom.id) ?? "Zoom"} durationUs={project.durationUs} />
       ) : cut ? (
         <CutInspector cut={cut} durationUs={project.durationUs} />
+      ) : scene ? (
+        <LayoutInspector scene={scene} durationUs={project.durationUs} />
       ) : word ? (
         <WordInspector word={word} project={project} />
       ) : (
