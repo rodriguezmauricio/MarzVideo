@@ -3,3 +3,8 @@ export * from "./fillers";
 export * from "./rules";
 export * from "./build";
 export * from "./ai/types";
+export * from "./ai/schema";
+export * from "./ai/prompt";
+export * from "./ai/validate";
+export * from "./ai/chunks";
+export * from "./ai/fake";
