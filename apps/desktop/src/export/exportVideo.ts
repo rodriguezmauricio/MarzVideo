@@ -1,8 +1,9 @@
-import { canvasMeasure, captionLayout, cameraLayerFor, cameraMediaUs, drawCaptions, drawFrame, frameAt, layoutAt, type CaptionBlock, type CaptionLookOpts, type CaptionStyle } from "@marz/compositor";
-import { cameraEdits, type MarzEvent, type Project } from "@marz/format";
+import { canvasMeasure, captionLayout, cameraLayerFor, cameraMediaUs, drawCaptions, drawFrame, frameAt, layoutAt, strokesAt, type CaptionBlock, type CaptionLookOpts, type CaptionStyle } from "@marz/compositor";
+import { cameraEdits, drawingStrokes, type MarzEvent, type Project } from "@marz/format";
 import { keptSegments } from "@marz/timeline";
 import { mediaTimeUs } from "../playback/clock";
 import { tokenColors } from "../components/cameraColors";
+import { loadDrawingFont, strokeFamily } from "../drawing/drawingFont";
 import type { ProjectStorage } from "../storage/types";
 import { createFrameSource } from "./frameSource";
 import { outputFrameCount, outputFrameTimes, outputFrameUs, refuseEmpty } from "./outputFrames";
@@ -76,6 +77,10 @@ export async function exportProject(opts: ExportOptions): Promise<ExportReport> 
   const colors = tokenColors();
   const camShown = !!project.tracks.camera && cameraEdits(project).visible;
   let camSource: Awaited<ReturnType<typeof createFrameSource>> | null = null;
+  // Live drawing strokes, drawn by the same compositor call as the preview (after the screen).
+  const hasStrokes = drawingStrokes(project).length > 0;
+  const family = strokeFamily();
+  if (drawingStrokes(project).some((s) => s.tool === "text")) await loadDrawingFont();
   let encoder: VideoEncoder | null = null;
   let failure: Error | null = null;
   let wake: (() => void) | null = null;
@@ -125,7 +130,8 @@ export async function exportProject(opts: ExportOptions): Promise<ExportReport> 
       const camFrame = camSource && lay.camera ? await camSource.frameAt(cameraMediaUs(project, srcUs) + camSource.firstFrameUs) : null;
       try {
         const camera = camFrame ? cameraLayerFor(project, lay, out, camFrame, { width: camFrame.displayWidth, height: camFrame.displayHeight }, colors) : null;
-        drawFrame(compCtx, frame, frameAt(project, events, srcUs, lay.screen), out, camera);
+        const drawings = hasStrokes ? { items: strokesAt(project, srcUs), colors, family } : null;
+        drawFrame(compCtx, frame, frameAt(project, events, srcUs, lay.screen), out, camera, drawings);
       } finally {
         frame.close();
         camFrame?.close();

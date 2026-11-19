@@ -55,6 +55,25 @@ function buildEvents(durationSec: number): string {
       lines.push({ tUs: down + 80_000, type: "click", button: "left", state: "up", x, y });
     }
   }
+  // Live drawing (draw mode while recording): a pen loop and a text note near the first clicks,
+  // cleared; then an arrow, a rectangle, an ellipse and a highlighter line near the second.
+  const at = (f: number) => Math.round(durUs * f);
+  const loop = Array.from({ length: 25 }, (_, i) => {
+    const a = (i / 24) * Math.PI * 2;
+    return [Math.round(345 + 90 * Math.cos(a)), Math.round(280 + 55 * Math.sin(a))];
+  });
+  const draws: [number, string, number, object][] = [
+    [0.24, "s1", 0.22, { tool: "pen", color: "accent", width: 6, points: loop }],
+    [0.27, "s2", 0.26, { tool: "text", color: "paper", width: 6, points: [[460, 200]], text: "Click here" }],
+    [0.62, "s3", 0.61, { tool: "arrow", color: "rec", width: 6, points: [[1100, 520], [1390, 670]] }],
+    [0.64, "s4", 0.63, { tool: "rect", color: "accent", width: 6, points: [[1350, 640], [1520, 760]] }],
+    [0.67, "s5", 0.66, { tool: "ellipse", color: "paper", width: 6, points: [[820, 840], [1000, 960]] }],
+    [0.7, "s6", 0.69, { tool: "highlighter", color: "accent", width: 6, points: [[300, 980], [700, 980]] }],
+  ];
+  for (const [t, id, start, stroke] of draws) lines.push({ tUs: at(t), type: "draw", op: "add", id, startUs: at(start), stroke });
+  lines.push({ tUs: at(0.45), type: "draw", op: "clear" });
+  lines.push({ tUs: at(0.75), type: "draw", op: "remove", id: "s6" });
+  lines.push({ tUs: at(0.85), type: "draw", op: "clear" });
   lines.sort((a, b) => ((a as any).tUs ?? -1) - ((b as any).tUs ?? -1));
   return lines.map((l) => JSON.stringify(l)).join("\n") + "\n";
 }

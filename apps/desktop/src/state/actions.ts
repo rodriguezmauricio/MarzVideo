@@ -6,6 +6,7 @@ import {
   lockAspect,
   removeCut,
   removeScene,
+  removeStroke,
   removeZoom,
   replaceAutoZooms,
   suggestZooms,
@@ -67,7 +68,15 @@ export function deleteSelection(): void {
   const { selection, apply, select } = useEditorStore.getState();
   // A caption word is not deleted (hide it from captions in the inspector instead).
   if (!selection || selection.kind === "word") return;
-  apply(selection.kind === "layout" ? removeScene(selection.id) : selection.kind === "zoom" ? removeZoom(selection.id) : removeCut(selection.id));
+  apply(
+    selection.kind === "layout"
+      ? removeScene(selection.id)
+      : selection.kind === "drawing"
+        ? removeStroke(selection.id)
+        : selection.kind === "zoom"
+          ? removeZoom(selection.id)
+          : removeCut(selection.id),
+  );
   select(null);
 }
 

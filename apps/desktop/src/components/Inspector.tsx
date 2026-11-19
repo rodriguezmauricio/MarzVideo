@@ -1,7 +1,7 @@
 import { AudioBlock } from "./AudioBlock";
 import { useEffect, useState } from "react";
-import { aiEdits, BORDER_COLOR_NAMES, cameraBorder, cameraEdits, cameraScenes, captionEdits, LAYOUT_KINDS, PIP_CORNERS, PIP_SIZES, type BorderColor, type Corner, type Cut, type PipShape, type Project, type Scene, type Word, type Zoom } from "@marz/format";
-import { setCaptionHidden, setCaptionText, setCursorHidden, updateCamera, updateCut, updateScene, updateZoom } from "@marz/timeline";
+import { aiEdits, BORDER_COLOR_NAMES, drawingStrokes, STROKE_COLORS, strokeWidths, type Stroke, type StrokeColor, cameraBorder, cameraEdits, cameraScenes, captionEdits, LAYOUT_KINDS, PIP_CORNERS, PIP_SIZES, type BorderColor, type Corner, type Cut, type PipShape, type Project, type Scene, type Word, type Zoom } from "@marz/format";
+import { setCaptionHidden, setCaptionText, setCursorHidden, updateCamera, updateCut, updateScene, updateStroke, updateZoom, type StrokePatch } from "@marz/timeline";
 import { setKind, setPace } from "../ai/aiActions";
 import { CaptionsBlock } from "../captions/CaptionsBlock";
 import { setCaptionStartAt, useCaptionFacts, wordCaptionState } from "../captions/captionActions";
@@ -10,7 +10,7 @@ import { deleteSelection, MIN_US } from "../state/actions";
 import { useEditorStore } from "../state/editorStore";
 import { Icon } from "./Icon";
 import { mmsst, parseTimeUs, seconds1 } from "./timecode";
-import { cutCapLabel, LAYOUT_LABEL, zoomLabels } from "./zoomLabels";
+import { cutCapLabel, LAYOUT_LABEL, STROKE_LABEL, zoomLabels } from "./zoomLabels";
 
 // design-check-ignore: HTMLElement.blur() drops keyboard focus; it is not a visual blur
 const leaveField = (el: HTMLInputElement) => el.blur();
@@ -327,6 +327,96 @@ function LayoutInspector({ scene, durationUs }: { scene: Scene; durationUs: numb
   );
 }
 
+const STROKE_COLOR_NAMES: Record<StrokeColor, string> = { accent: "Accent", rec: "Red", paper: "Paper", ink: "Ink" };
+
+/** Drawing stroke selected: start, end, colour, width (size for text), text, delete. */
+function DrawingInspector({ stroke, project }: { stroke: Stroke; project: Project }) {
+  const apply = useEditorStore((s) => s.apply);
+  const patch = (p: StrokePatch) => apply(updateStroke(stroke.id, p));
+  const widths = strokeWidths(project.source.height);
+  const text = stroke.tool === "text";
+  const sizes: Array<[number, string]> = text
+    ? [[widths.thin, "S"], [widths.medium, "M"], [widths.thick, "L"]]
+    : [[widths.thin, "Thin"], [widths.medium, "Medium"], [widths.thick, "Thick"]];
+  return (
+    <div className="insp-scroll">
+      <div className="insp-head">
+        <h2 className="insp-title">Drawing</h2>
+        <span className={`badge ${stroke.origin === "live" ? "badge-live" : "badge-manual"}`}>{stroke.origin === "live" ? "Live" : "Manual"}</span>
+      </div>
+      <div className="mut insp-sub">{STROKE_LABEL[stroke.tool]}</div>
+      <div className="cells">
+        <Cell label="Start" text={mmsst(stroke.startUs)} onCommit={(us) => patch({ startUs: Math.max(0, Math.min(us, stroke.endUs - MIN_US)) })} />
+        <Cell label="End" text={mmsst(stroke.endUs)} onCommit={(us) => patch({ endUs: Math.min(project.durationUs, Math.max(us, stroke.startUs + MIN_US)) })} />
+      </div>
+      {text && (
+        <label className="cell cell-wide">
+          <span className="k">Text</span>
+          <input
+            key={`${stroke.id}|${stroke.text}`}
+            className="word-input"
+            type="text"
+            spellCheck={false}
+            defaultValue={stroke.text}
+            aria-label="Drawing text"
+            onBlur={(e) => {
+              const v = e.currentTarget.value.trim();
+              if (!v) e.currentTarget.value = stroke.text ?? "";
+              else if (v !== stroke.text) patch({ text: v });
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") leaveField(e.currentTarget);
+              if (e.key === "Escape") {
+                e.currentTarget.value = stroke.text ?? "";
+                leaveField(e.currentTarget);
+              }
+            }}
+          />
+        </label>
+      )}
+      <div className="irow">
+        <span>Colour</span>
+        <span className="swatches" role="radiogroup" aria-label="Drawing colour">
+          {STROKE_COLORS.map((c) => (
+            <button
+              key={c}
+              type="button"
+              role="radio"
+              aria-checked={stroke.color === c}
+              aria-label={STROKE_COLOR_NAMES[c]}
+              data-tip={STROKE_COLOR_NAMES[c]}
+              className={`sw-${c}${stroke.color === c ? " on" : ""}`}
+              onClick={() => stroke.color !== c && patch({ color: c })}
+            />
+          ))}
+        </span>
+      </div>
+      <div className="irow">
+        <span>{text ? "Size" : "Width"}</span>
+        <span className="seg" role="radiogroup" aria-label={text ? "Text size" : "Line width"}>
+          {sizes.map(([w, label]) => (
+            <button key={label} type="button" role="radio" aria-checked={stroke.width === w} className={stroke.width === w ? "on" : ""}
+              onClick={() => stroke.width !== w && patch({ width: w })}>
+              {label}
+            </button>
+          ))}
+        </span>
+      </div>
+      <div className="irow irow-last">
+        <span className="mut">Length</span>
+        <span>{seconds1(stroke.endUs - stroke.startUs)}</span>
+      </div>
+      <p className="insp-note">Drawn live. Drag it on the preview to move it, pull a corner to resize.</p>
+      <div className="btns">
+        <button type="button" className="fb fb-line" onClick={deleteSelection}>
+          <Icon name="trash" size={14} />
+          Delete drawing
+        </button>
+      </div>
+    </div>
+  );
+}
+
 type KindKey = "silences" | "fillers" | "mistakes" | "zooms" | "captions";
 const KINDS: Array<[KindKey, string]> = [
   ["silences", "Silences"],
@@ -454,6 +544,7 @@ export function Inspector({ compact = false }: { compact?: boolean }) {
   const words = useEditorStore((s) => s.words);
   const word = selection?.kind === "word" ? words.find((w) => w.id === selection.id) : undefined;
   const scene = selection?.kind === "layout" ? cameraScenes(project).find((x) => x.id === selection.id) : undefined;
+  const stroke = selection?.kind === "drawing" ? drawingStrokes(project).find((x) => x.id === selection.id) : undefined;
   const tab = useEditorStore((s) => s.inspectorTab);
   const setTab = useEditorStore((s) => s.setInspectorTab);
   const tabs = words.length > 0;
@@ -464,6 +555,8 @@ export function Inspector({ compact = false }: { compact?: boolean }) {
         <CutInspector cut={cut} durationUs={project.durationUs} />
       ) : scene ? (
         <LayoutInspector scene={scene} durationUs={project.durationUs} />
+      ) : stroke ? (
+        <DrawingInspector stroke={stroke} project={project} />
       ) : word ? (
         <WordInspector word={word} project={project} />
       ) : (

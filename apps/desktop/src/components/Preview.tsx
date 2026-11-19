@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef } from "react";
-import { canvasMeasure, captionLayout, cameraLayerFor, cameraMediaUs, drawCaptions, drawFrame, frameAt, layoutAt, type CaptionStyle } from "@marz/compositor";
-import { keptSegments, outputDurationUs, outputToSource, sourceToOutput, trackGain } from "@marz/timeline";
-import { audioEdits, captionStyleFor } from "@marz/format";
+import { canvasMeasure, captionLayout, cameraLayerFor, cameraMediaUs, drawCaptions, drawFrame, frameAt, layoutAt, strokesAt, type CaptionStyle, type VisibleStroke } from "@marz/compositor";
+import { keptSegments, outputDurationUs, outputToSource, sourceToOutput, strokeAtPoint, trackGain } from "@marz/timeline";
+import { audioEdits, captionStyleFor, drawingStrokes, type Project } from "@marz/format";
 import { ensureCleanMic, previewMicFile, useCleanMic } from "../audio/cleanMic";
 import { useAppStore } from "../state/appStore";
 import { captionBlocks, captionStyle, loadCaptionFont } from "../ai/captionStyle";
@@ -11,6 +11,21 @@ import { readFirstFrameUs } from "../playback/firstFrame";
 import { mmss } from "./timecode";
 import { tokenColors } from "./cameraColors";
 import { ZoomOverlay } from "./ZoomOverlay";
+import { DrawingOverlay, useStrokeDraft } from "../drawing/DrawingOverlay";
+import { loadDrawingFont, measureStrokeText, strokeFamily } from "../drawing/drawingFont";
+
+/** The strokes to draw at `srcUs`: the dragged draft instead of its stored stroke, and the selected
+ *  stroke at full opacity while it is being edited (paused), even outside its time. */
+function visibleStrokes(p: Project, srcUs: number, editId: string | null): VisibleStroke[] {
+  const draft = useStrokeDraft.getState().draft;
+  let items = strokesAt(p, srcUs).filter((v) => v.stroke.id !== editId);
+  const edited = editId ? drawingStrokes(p).find((s) => s.id === editId) : undefined;
+  if (edited) items = [...items, { stroke: draft?.id === edited.id ? draft : edited, alpha: 1 }];
+  return items;
+}
+
+/** Click tolerance on the preview, in output pixels. */
+const HIT_PX = 8;
 
 const AUDIO_DRIFT_S = 0.04;
 /** Camera sync while playing: a seek past this gap, else a small speed nudge (a video seek lands late
@@ -27,6 +42,9 @@ export function Preview() {
   const selectedZoom = selection?.kind === "zoom" ? project.edits.zooms.find((z) => z.id === selection.id) : undefined;
   // While a zoom is selected (and not playing) show the full frame so its area can be edited on the canvas.
   const editingZoom = selectedZoom && !playing ? selectedZoom : undefined;
+  const selectedStroke = selection?.kind === "drawing" ? drawingStrokes(project).find((s) => s.id === selection.id) : undefined;
+  const editingStroke = selectedStroke && !playing ? selectedStroke : undefined;
+  const hasStrokes = drawingStrokes(project).length > 0;
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -85,8 +103,8 @@ export function Preview() {
   const style = useRef<CaptionStyle | null>(null);
 
   // Latest values for the animation loop without restarting it.
-  const live = useRef({ project, segs, editing: false, blocks, look });
-  live.current = { project, segs, editing: !!editingZoom, blocks, look };
+  const live = useRef({ project, segs, editing: false, blocks, look, strokeId: null as string | null });
+  live.current = { project, segs, editing: !!editingZoom, blocks, look, strokeId: editingStroke?.id ?? null };
 
   const draw = () => {
     const canvas = canvasRef.current;
@@ -107,7 +125,9 @@ export function Preview() {
       lay && camVideo && camVideo.readyState >= 2
         ? cameraLayerFor(p, lay, p.output, camVideo, { width: camVideo.videoWidth, height: camVideo.videoHeight }, tokenColors())
         : null;
-    drawFrame(ctx, video, frameAt(shown, events, srcUs, lay?.screen), p.output, camera);
+    const { strokeId } = live.current;
+    const drawings = editing ? null : { items: visibleStrokes(p, srcUs, strokeId), colors: tokenColors(), family: strokeFamily() };
+    drawFrame(ctx, video, frameAt(shown, events, srcUs, lay?.screen), p.output, camera, drawings);
     // Captions: the same layout and drawing as the export (DESIGN-SYSTEM.md "Captions in the video").
     const { blocks: bl, look: lk, segs: sg } = live.current;
     const tOut = bl.length ? sourceToOutput(sg, srcUs) : null;
@@ -171,7 +191,39 @@ export function Preview() {
       }
     };
   }, [cam?.file]);
-  useEffect(draw, [project, editingZoom?.id, blocks, look]);
+  useEffect(draw, [project, editingZoom?.id, editingStroke?.id, blocks, look]);
+  // A stroke dragged on the preview is drawn where it is going.
+  useEffect(() => useStrokeDraft.subscribe(() => draw()), []);
+  // Text strokes use the display font; draw again once it loaded.
+  useEffect(() => {
+    if (!drawingStrokes(project).some((s) => s.tool === "text")) return;
+    let on = true;
+    void loadDrawingFont().then(() => on && draw());
+    return () => {
+      on = false;
+    };
+  }, [hasStrokes]);
+
+  /** A click on the picture selects the topmost stroke under it (paused, no zoom being edited). */
+  const strokeMeasure = useMemo(() => measureStrokeText(), []);
+  const onFrameDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (playing || editingZoom || !hasStrokes) return;
+    const r = e.currentTarget.getBoundingClientRect();
+    const outX = ((e.clientX - r.left) / r.width) * project.output.width;
+    const outY = ((e.clientY - r.top) / r.height) * project.output.height;
+    const { events, playheadUs } = useEditorStore.getState();
+    const spec = frameAt(project, events, playheadUs, layoutAt(project, playheadUs, project.output).screen);
+    const k = spec.dstRect.dw / spec.srcRect.sw;
+    const sx = spec.srcRect.sx + (outX - spec.dstRect.dx) / k;
+    const sy = spec.srcRect.sy + (outY - spec.dstRect.dy) / (spec.dstRect.dh / spec.srcRect.sh);
+    const shown = strokesAt(project, playheadUs).map((v) => v.stroke);
+    const hit = strokeAtPoint(shown, sx, sy, HIT_PX / k, strokeMeasure);
+    if (hit) useEditorStore.getState().select({ kind: "drawing", id: hit.id });
+    else if (selection?.kind === "drawing") useEditorStore.getState().select(null);
+  };
+  const playheadUs = useEditorStore((s) => s.playheadUs);
+  const events = useEditorStore((s) => s.events);
+  const strokeMap = editingStroke ? frameAt(project, events, playheadUs, layoutAt(project, playheadUs, project.output).screen) : null;
   // The display font loads lazily; draw again once it can be used on the canvas.
   useEffect(() => {
     if (blocks.length === 0) return;
@@ -285,6 +337,8 @@ export function Preview() {
     ? "Press Play to see the result"
     : selection?.kind === "layout"
       ? "Press Play to see the switch"
+    : selectedStroke
+      ? "Drag to move. Pull a corner to resize"
     : selectedCut
       ? "This part is skipped when you export"
       : "Full frame. Select a zoom or cut on the timeline to edit it";
@@ -292,8 +346,9 @@ export function Preview() {
   return (
     <div className="pv-wrap" style={{ "--ar": `${project.output.width} / ${project.output.height}` } as React.CSSProperties}>
       <div className="pv-frame">
-        <canvas ref={canvasRef} width={project.output.width} height={project.output.height} />
+        <canvas ref={canvasRef} width={project.output.width} height={project.output.height} onPointerDown={onFrameDown} />
         {editingZoom && <ZoomOverlay key={editingZoom.id} zoom={editingZoom} />}
+        {editingStroke && strokeMap && <DrawingOverlay key={editingStroke.id} stroke={editingStroke} map={strokeMap} out={project.output} />}
         {selectedCut && (
           <>
             <div className="pv-cut" data-testid="preview-cut" />

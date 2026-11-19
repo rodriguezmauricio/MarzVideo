@@ -108,6 +108,10 @@ input { font: inherit; color: inherit; letter-spacing: inherit; text-transform: 
   /* design-check-ignore: the 999px dimming around the zoom area is the allowed shadow */
   box-shadow: 0 0 0 999px var(--dim);
 }
+/* drawing stroke on the preview: DESIGN-SYSTEM.md "Drawing on the preview" (no dimming) */
+.do { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+.do-box { position: absolute; cursor: move; border: 2px dashed var(--accent); pointer-events: auto; }
+.do .zo-hd { pointer-events: auto; }
 .zo-hd { position: absolute; width: 12px; height: 12px; background: var(--paper); border: 2px solid var(--ink); }
 .zo-hd.nw { left: -7px; top: -7px; cursor: nwse-resize; }
 .zo-hd.ne { right: -7px; top: -7px; cursor: nesw-resize; }
@@ -221,6 +225,11 @@ input { font: inherit; color: inherit; letter-spacing: inherit; text-transform: 
 /* Layout lane blocks: DESIGN-SYSTEM.md "Layout lane". */
 .blk-lay { background: var(--paper); color: var(--ink); }
 .blk-lay.live { background: var(--accent); color: var(--accent-ink); }
+/* Drawing lane blocks: DESIGN-SYSTEM.md "Drawing lane". */
+.blk-draw { background: var(--ink); color: var(--paper); border: 1px solid var(--paper); padding-left: 18px; }
+.blk-draw .g { background: var(--paper); }
+.blk-draw .dot { position: absolute; left: 9px; top: 50%; translate: 0 -50%; width: 6px; height: 6px; border: 1px solid var(--paper); pointer-events: none; }
+.sw-rec { background: var(--rec); }
 .blk .g { position: absolute; top: 50%; translate: 0 -50%; width: 3px; height: 14px; background: var(--ink); pointer-events: none; }
 .blk-sug .g { background: var(--accent); }
 .blk .g.l { left: 4px; }
