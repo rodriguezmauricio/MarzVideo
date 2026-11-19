@@ -10,7 +10,10 @@ type AppState = {
   screen: Screen;
   /** The open project: a folder in the app, a sample name in the browser. */
   dir: string | null;
-  openProject: (dir: string) => void;
+  /** Run the AI pass once when the editor opens (a recording that was just stopped, or `?ai=1`). */
+  pendingAi: boolean;
+  openProject: (dir: string, opts?: { ai?: boolean }) => void;
+  takePendingAi: () => boolean;
   goHome: () => Promise<void>;
 };
 
@@ -22,9 +25,15 @@ function initial(): Pick<AppState, "screen" | "dir"> {
   return { screen: "editor", dir: params.get("project") ?? "demo" };
 }
 
-export const useAppStore = create<AppState>((set) => ({
+export const useAppStore = create<AppState>((set, get) => ({
   ...initial(),
-  openProject: (dir) => set({ screen: "editor", dir }),
+  pendingAi: new URLSearchParams(location.search).get("ai") === "1",
+  openProject: (dir, opts) => set({ screen: "editor", dir, pendingAi: !!opts?.ai }),
+  takePendingAi: (): boolean => {
+    const was = get().pendingAi;
+    if (was) set({ pendingAi: false });
+    return was;
+  },
   async goHome() {
     // A failed save keeps the editor open: the strip shows "Save failed. Retrying..." and the
     // edit is retried; leaving now would drop it.
@@ -39,7 +48,7 @@ export function openStoppedRecordings(): void {
   if (!isTauri()) return;
   void listen<string>("recorder://open-project", async (e) => {
     await flushAutosave();
-    useAppStore.getState().openProject(e.payload);
+    useAppStore.getState().openProject(e.payload, { ai: true });
   });
 }
 

@@ -40,6 +40,26 @@ export function readLastPreset(storage: Storage | null | undefined): ExportPrese
   }
 }
 
+const burnKey = (id: ExportPresetId) => `marz.burnCaptions.${id}`;
+
+/** "Burn captions" for a preset: remembered per preset, the preset's default the first time. */
+export function readBurn(storage: Storage | null | undefined, id: ExportPresetId, fallback: boolean): boolean {
+  try {
+    const v = storage?.getItem(burnKey(id));
+    return v === "1" ? true : v === "0" ? false : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+export function writeBurn(storage: Storage | null | undefined, id: ExportPresetId, on: boolean): void {
+  try {
+    storage?.setItem(burnKey(id), on ? "1" : "0");
+  } catch {
+    // Not remembered.
+  }
+}
+
 export function writeLastPreset(storage: Storage | null | undefined, id: ExportPresetId): void {
   try {
     storage?.setItem(LAST_KEY, id);

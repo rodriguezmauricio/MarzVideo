@@ -19,7 +19,8 @@
     "mp4box": "2.5.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
-    "zustand": "^5.1.0"
+    "zustand": "^5.1.0",
+    "@marz/autoedit": "workspace:*"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.5",

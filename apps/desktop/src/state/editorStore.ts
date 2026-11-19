@@ -1,11 +1,32 @@
 import { create } from "zustand";
-import { parseProject, serializeProject, type MarzEvent, type Project } from "@marz/format";
+import { parseProject, serializeProject, type MarzEvent, type Project, type Section, type Word } from "@marz/format";
+import type { CaptionLook, Levels } from "@marz/autoedit";
+import type { AiStatus } from "../ai/runAiPass";
 import { History, type Command } from "@marz/timeline";
 import { createAutosave, type SaveStatus } from "../storage/autosave";
 import type { ProjectStorage } from "../storage/types";
 import { loadEventsOrEmpty } from "./loadEvents";
 
-export type Selection = { kind: "zoom" | "cut"; id: string } | null;
+export type Selection = { kind: "zoom" | "cut" | "word"; id: string } | null;
+
+/** The AI pass as the editor shows it: status line, warning, the model download ask. */
+export type AiUi = {
+  running: boolean;
+  status: AiStatus | null;
+  warning: string | null;
+  ask: "model" | null;
+  downloadPct: number | null;
+};
+export const IDLE_AI: AiUi = { running: false, status: null, warning: null, ask: null, downloadPct: null };
+
+const LOOK_KEY = "marz.captionLook";
+const savedLook = (): CaptionLook => {
+  try {
+    return localStorage.getItem(LOOK_KEY) === "highlight" ? "highlight" : "subtitles";
+  } catch {
+    return "subtitles";
+  }
+};
 
 const AUTOSAVE_DELAY_MS = 2000;
 let autosave: ReturnType<typeof createAutosave> | null = null;
@@ -28,6 +49,17 @@ type EditorState = {
   warning: string | null;
   saveStatus: SaveStatus;
   selection: Selection;
+  /** Transcript words with Whisper's words over silence dropped (captions and the AI pass use them). */
+  words: Word[];
+  sections: Section[];
+  /** Mic loudness, for the rules and the pace slider (null: no mic or not read yet). */
+  levels: Levels | null;
+  /** The caption look the preview shows: the look of the export preset last picked. */
+  captionLook: CaptionLook;
+  setCaptionLook: (look: CaptionLook) => void;
+  ai: AiUi;
+  setAi: (patch: Partial<AiUi>) => void;
+  setTranscript: (words: Word[], sections: Section[], levels: Levels | null) => void;
   select: (sel: Selection) => void;
   /** Bumped by seek so the player knows a jump was requested, as opposed to a normal playback tick. */
   seekRequest: { us: number; n: number };
@@ -56,6 +88,21 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   saveStatus: "saved",
   selection: null,
   select: (selection) => set({ selection }),
+  words: [],
+  sections: [],
+  levels: null,
+  captionLook: savedLook(),
+  setCaptionLook: (captionLook) => {
+    try {
+      localStorage.setItem(LOOK_KEY, captionLook);
+    } catch {
+      /* the look is a convenience */
+    }
+    set({ captionLook });
+  },
+  ai: IDLE_AI,
+  setAi: (patch) => set({ ai: { ...get().ai, ...patch } }),
+  setTranscript: (words, sections, levels) => set({ words, sections, levels }),
   seekRequest: { us: 0, n: 0 },
 
   async load(storage) {
@@ -69,11 +116,14 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         const sel = get().selection;
         const p = history.current;
         const stillThere =
-          !sel || (sel.kind === "zoom" ? p.edits.zooms : p.edits.cuts).some((x) => x.id === sel.id);
-        set({ project: p, selection: stillThere ? sel : null });
+          !sel || sel.kind === "word" || (sel.kind === "zoom" ? p.edits.zooms : p.edits.cuts).some((x) => x.id === sel.id);
+        // The "AI edit: ..." line stays until the next edit.
+        const ai = get().ai;
+        const clearDone = ai.status?.step === "done" || ai.status?.step === "nothing";
+        set({ project: p, selection: stillThere ? sel : null, ...(clearDone && !ai.running ? { ai: { ...ai, status: null } } : {}) });
         autosave?.schedule();
       });
-      set({ status: "ready", storage, project, events, warning, saveStatus: "saved", history, playheadUs: 0, playing: false, selection: null });
+      set({ status: "ready", storage, project, events, warning, saveStatus: "saved", history, playheadUs: 0, playing: false, selection: null, words: [], sections: [], levels: null, ai: IDLE_AI });
     } catch (err) {
       set({ status: "error", error: err instanceof Error ? err.message : String(err) });
     }

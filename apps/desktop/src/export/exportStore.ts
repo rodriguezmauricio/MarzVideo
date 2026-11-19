@@ -5,7 +5,9 @@ import { isTauri } from "../platform";
 import { useAppStore } from "../state/appStore";
 import { useEditorStore } from "../state/editorStore";
 import { exportProject } from "./exportVideo";
-import { failureText, panelKey, percent, readLastPreset, writeLastPreset, type PanelState } from "./exportUi";
+import { failureText, panelKey, percent, readBurn, readLastPreset, writeBurn, writeLastPreset, type PanelState } from "./exportUi";
+import { blockSpans, captionLines, toSrt } from "@marz/autoedit";
+import { captionStyle, loadCaptionFont } from "../ai/captionStyle";
 import { createMemorySink } from "./memorySink";
 import { PRESETS, type ExportPresetId } from "./presets";
 import { asFailure, cancelLeftoverExports, createTauriSink } from "./tauriSink";
@@ -25,6 +27,9 @@ type ExportState = {
   /** The warning bar sentence after a failure. */
   failure: string | null;
   controller: AbortController | null;
+  /** "Burn captions" per preset (shown only for a project with a transcript). */
+  burn: Record<ExportPresetId, boolean>;
+  toggleBurn: (id: ExportPresetId) => void;
   togglePanel: () => void;
   closePanel: () => void;
   highlight: (id: ExportPresetId) => void;
@@ -59,6 +64,15 @@ export const useExportStore = create<ExportState>((set, get) => ({
   doneFor: null,
   failure: null,
   controller: null,
+  burn: {
+    youtube: readBurn(storage(), "youtube", PRESETS.youtube.burnCaptionsDefault),
+    vertical: readBurn(storage(), "vertical", PRESETS.vertical.burnCaptionsDefault),
+  },
+  toggleBurn(id) {
+    const on = !get().burn[id];
+    writeBurn(storage(), id, on);
+    set({ burn: { ...get().burn, [id]: on } });
+  },
 
   togglePanel() {
     const s = get();
@@ -70,6 +84,10 @@ export const useExportStore = create<ExportState>((set, get) => ({
   closePanel: () => set({ panel: { ...get().panel, open: false } }),
   highlight: (id) => set({ panel: { open: get().panel.open, highlight: id } }),
   key(code) {
+    if (get().panel.open && code === "KeyB" && useEditorStore.getState().words.length > 0) {
+      get().toggleBurn(get().panel.highlight);
+      return true;
+    }
     const next = panelKey(get().panel, code);
     if (!next) return false;
     set({ panel: { open: next.open, highlight: next.highlight } });
@@ -84,6 +102,9 @@ export const useExportStore = create<ExportState>((set, get) => ({
     const dir = useAppStore.getState().dir;
     if (!project || !files || !dir) return;
     writeLastPreset(storage(), id);
+    // The preview shows the look of the preset last picked.
+    useEditorStore.getState().setCaptionLook(PRESETS[id].captionLook);
+    const words = useEditorStore.getState().words;
     set({ last: id, panel: { open: false, highlight: id }, phase: "picking", failure: null, outPath: null, doneFor: null });
 
     let outPath: string | null;
@@ -101,6 +122,13 @@ export const useExportStore = create<ExportState>((set, get) => ({
     const controller = new AbortController();
     set({ phase: "exporting", progress: 0, controller });
     try {
+      const look = PRESETS[id].captionLook;
+      let captions = null;
+      if (words.length > 0 && get().burn[id]) {
+        const style = captionStyle();
+        await loadCaptionFont(style.family);
+        captions = { blocks: blockSpans(captionLines(project, words, look)), look, style };
+      }
       const report = await exportProject({
         project,
         events,
@@ -110,12 +138,18 @@ export const useExportStore = create<ExportState>((set, get) => ({
         projectDir: dir,
         outPath,
         signal: controller.signal,
+        captions,
         onProgress: (p) => {
           const pc = percent(p);
           if (pc !== get().progress) set({ progress: pc });
         },
       });
       if (get().controller !== controller) return;
+      // The .srt beside the MP4 whenever there is a transcript (output times, after cuts).
+      if (isTauri() && words.length > 0) {
+        const srt = toSrt(captionLines(project, words, "subtitles"));
+        if (srt) await invoke("export_write_srt", { outPath: report.outPath, text: srt }).catch((e: unknown) => console.error("[export] srt", e));
+      }
       set({ phase: "done", outPath: report.outPath, doneFor: useEditorStore.getState().project, controller: null, progress: 100 });
     } catch (e) {
       if (get().controller !== controller) return;

@@ -1873,6 +1873,7 @@ version = "0.1.0"
 dependencies = [
  "marz-capture",
  "marz-export",
+ "marz-transcribe",
  "serde",
  "serde_json",
  "tauri",

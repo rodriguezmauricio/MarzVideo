@@ -56,21 +56,21 @@ input { font: inherit; color: inherit; letter-spacing: inherit; text-transform: 
 .warn b { font-weight: 500; }
 
 /* main area: everything between the strip (and warning bar) and the timeline.
-   A size container: below 491 px of height (1440 x 900 gives 516, 492 with the warning bar) the hero timecode, the playline, the ledger
-   and the preview move up together. 285 = ledger 239 + 12 gap + 34 playline step; 206 = the playline
+   A size container: below 525 px of height (1440 x 900 gives 516, 492 with the warning bar) the hero timecode, the playline, the ledger
+   and the preview move up together. 319 = ledger 273 (eight rows since M2) + 12 gap + 34 playline step; 206 = the playline
    top at full size. Ledger rows stay 34 px. */
 .main { position: relative; flex: 1; min-height: 0; container-type: size; }
 .timecode {
-  position: absolute; left: 18px; top: max(-14px, calc((100cqh - 285px) * -14 / 206)); z-index: 1; pointer-events: none; white-space: nowrap;
+  position: absolute; left: 18px; top: max(-14px, calc((100cqh - 319px) * -14 / 206)); z-index: 1; pointer-events: none; white-space: nowrap;
   font-family: var(--font-display); font-weight: 700; text-transform: none;
-  font-size: min(250px, calc((100cqh - 285px) * 250 / 206)); line-height: 0.8; letter-spacing: -0.05em; color: var(--paper);
+  font-size: min(250px, calc((100cqh - 319px) * 250 / 206)); line-height: 0.8; letter-spacing: -0.05em; color: var(--paper);
 }
-.playline { position: absolute; left: 24px; top: min(206px, calc(100cqh - 285px)); color: var(--faint); }
+.playline { position: absolute; left: 24px; top: min(206px, calc(100cqh - 319px)); color: var(--faint); }
 .expanded .timecode { font-size: 150px; top: 14px; }
 .expanded .playline { top: 150px; }
 
 /* tool ledger: vertical list of 34px rows */
-.ledger { position: absolute; left: 24px; top: min(240px, calc(100cqh - 251px)); width: 352px; z-index: 2; border-bottom: 1px solid var(--line); }
+.ledger { position: absolute; left: 24px; top: min(240px, calc(100cqh - 285px)); width: 352px; z-index: 2; border-bottom: 1px solid var(--line); }
 .lr2 { width: 100%; height: var(--row-h); display: flex; align-items: center; justify-content: space-between; padding: 0; border-top: 1px solid var(--line); }
 .lr2 .lbl { display: flex; align-items: center; gap: 10px; }
 .lr2 .hk { color: var(--faint); }
@@ -85,7 +85,7 @@ input { font: inherit; color: inherit; letter-spacing: inherit; text-transform: 
 .ledger-h .lr2 .lbl { gap: 8px; }
 
 /* preview frame */
-.pv-wrap { position: absolute; left: 420px; top: min(106px, calc((100cqh - 285px) * 106 / 206)); right: 380px; bottom: 0; z-index: 2; container-type: size; --cap: 26px; }
+.pv-wrap { position: absolute; left: 420px; top: min(106px, calc((100cqh - 319px) * 106 / 206)); right: 380px; bottom: 0; z-index: 2; container-type: size; --cap: 26px; }
 .expanded .pv-wrap { left: 560px; top: 20px; right: auto; bottom: auto; width: min(391px, calc(100% - 940px)); height: 220px; --cap: 0px; }
 .pv-frame { position: relative; width: min(100cqw, calc((100cqh - var(--cap)) * var(--ar))); aspect-ratio: var(--ar); border: 1px solid var(--paper); overflow: hidden; background: var(--ink); }
 .pv-frame canvas { display: block; width: 100%; height: 100%; }
@@ -226,3 +226,36 @@ input { font: inherit; color: inherit; letter-spacing: inherit; text-transform: 
 
 .tl-foot { flex: none; height: var(--ruler-h); border-top: 1px solid var(--line); display: flex; align-items: center; justify-content: space-between; padding: 0 24px; color: var(--faint); }
 .tl-foot span { display: flex; align-items: center; gap: 8px; }
+
+/* M2: AI pass (DESIGN-SYSTEM.md "AI pass", "Captions lane", "Timeline" AI edits) */
+.badge-ai { background: var(--ink); color: var(--accent); border: 1px solid var(--ink); }
+.ai-tag { flex: none; height: 14px; padding: 0 3px; margin-left: 4px; border: 1px solid currentColor; display: inline-flex; align-items: center; font-size: 10px; font-weight: 500; line-height: 1; pointer-events: none; }
+.blk span.lbl-ai, .cutcap span.lbl-ai { display: flex; align-items: center; overflow: visible; }
+.warn .ask { color: var(--ink); font-weight: 500; text-decoration: underline; text-underline-offset: 2px; }
+.cap-word { position: absolute; top: 3px; bottom: 3px; z-index: 2; border: 1px solid var(--faint); color: var(--paper); font-size: 10px; display: flex; align-items: center; padding: 0 3px; overflow: hidden; white-space: nowrap; cursor: pointer; }
+.cap-word.hidden-word { border: 1px dashed var(--later); }
+.cap-word.sel { background: var(--paper); color: var(--ink); border-color: var(--paper); }
+.cap-word.sel {
+  /* design-check-ignore: the selection ring on a timeline block is the allowed shadow */
+  box-shadow: 0 0 0 2px var(--ink), 0 0 0 4px var(--paper);
+}
+.insp-scroll { overflow-y: auto; overflow-x: hidden; height: 100%; padding-bottom: 20px; margin-right: -12px; padding-right: 12px; }
+.insp-ai { margin-top: 18px; border-top: 1px solid var(--ink); }
+.insp-ai .irow { border-top: 0; border-bottom: 1px solid var(--ink); }
+.insp-ai .irow.k34 { min-height: 34px; }
+.pace { display: flex; align-items: center; gap: 6px; flex: 1; min-width: 0; margin: 0 10px; font-size: 10px; color: var(--faint-on-paper); }
+.pace input[type="range"] { appearance: none; flex: 1; min-width: 0; width: 40px; height: 12px; background: none; margin: 0; }
+.pace input[type="range"]::-webkit-slider-runnable-track { height: 1px; background: var(--ink); }
+.pace input[type="range"]::-webkit-slider-thumb { appearance: none; width: 12px; height: 12px; background: var(--ink); margin-top: -6px; border: 0; }
+.pace-val { font-weight: 500; min-width: 40px; text-align: right; }
+.insp-last { padding: 10px 0 0; font-size: 10px; color: var(--faint-on-paper); }
+.word-input { display: block; width: 100%; font-family: var(--font-display); font-weight: 700; font-size: 30px; line-height: 1; letter-spacing: -0.02em; text-transform: none; color: var(--ink); background: none; border: 0; border-bottom: 1px solid var(--ink); padding: 4px 0; outline-offset: 2px; }
+.ep-burn { width: 100%; display: flex; align-items: center; justify-content: space-between; height: 34px; padding: 0 12px; border-top: 1px solid var(--ink); }
+.ep-burn .lbl { display: flex; align-items: center; gap: 8px; font-weight: 500; }
+.badges { display: flex; gap: 6px; }
+.cell-wide { display: block; margin-top: 20px; border-top: 1px solid var(--ink); }
+.insp-scroll { scrollbar-width: thin; scrollbar-color: var(--ink) transparent; }
+.export-panel .tg { border-color: var(--ink); }
+.export-panel .tg i { background: var(--ink); }
+.export-panel .tg.on { background: var(--ink); }
+.export-panel .tg.on i { background: var(--accent); }

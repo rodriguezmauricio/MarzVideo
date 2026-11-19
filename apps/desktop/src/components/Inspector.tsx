@@ -1,10 +1,12 @@
-import { cameraEdits, PIP_CORNERS, PIP_SIZES, type Corner, type Cut, type Project, type Zoom } from "@marz/format";
-import { setCursorHidden, updateCamera, updateCut, updateZoom } from "@marz/timeline";
+import { useEffect, useState } from "react";
+import { aiEdits, cameraEdits, captionEdits, PIP_CORNERS, PIP_SIZES, type Corner, type Cut, type Project, type Word, type Zoom } from "@marz/format";
+import { setCaptionHidden, setCaptionText, setCursorHidden, updateCamera, updateCut, updateZoom } from "@marz/timeline";
+import { setKind, setPace } from "../ai/aiActions";
 import { deleteSelection, MIN_US } from "../state/actions";
 import { useEditorStore } from "../state/editorStore";
 import { Icon } from "./Icon";
 import { mmsst, parseTimeUs, seconds1 } from "./timecode";
-import { zoomLabels } from "./zoomLabels";
+import { cutCapLabel, zoomLabels } from "./zoomLabels";
 
 // design-check-ignore: HTMLElement.blur() drops keyboard focus; it is not a visual blur
 const leaveField = (el: HTMLInputElement) => el.blur();
@@ -106,7 +108,10 @@ function CutInspector({ cut, durationUs }: { cut: Cut; durationUs: number }) {
     <>
       <div className="insp-head">
         <h2 className="insp-title">Cut</h2>
-        <span className="badge badge-cut">Removed</span>
+        <span className="badges">
+          {cut.origin === "ai" && <span className="badge badge-ai">AI</span>}
+          <span className="badge badge-cut">Removed</span>
+        </span>
       </div>
       <div className="cells">
         <Cell label="Start" text={mmsst(cut.startUs)}
@@ -118,6 +123,9 @@ function CutInspector({ cut, durationUs }: { cut: Cut; durationUs: number }) {
         <span className="mut">Length</span>
         <span>{seconds1(cut.endUs - cut.startUs)}</span>
       </div>
+      {cut.origin === "ai" && (
+        <p className="insp-note">Cut by AI: {cutCapLabel(cut)}. Delete it and the next AI pass leaves this part alone.</p>
+      )}
       <p className="insp-note">The original recording is untouched. Delete the cut to bring this part back.</p>
       <div className="btns">
         <button type="button" className="fb fb-line" onClick={deleteSelection}>
@@ -129,10 +137,10 @@ function CutInspector({ cut, durationUs }: { cut: Cut; durationUs: number }) {
   );
 }
 
-function Toggle(props: { label: string; on: boolean; onChange?: (on: boolean) => void }) {
+function Toggle(props: { label: string; on: boolean; onChange?: (on: boolean) => void; compact?: boolean }) {
   const disabled = !props.onChange;
   return (
-    <div className={`irow${disabled ? " off" : ""}`}>
+    <div className={`irow${disabled ? " off" : ""}${props.compact ? " k34" : ""}`}>
       <span>{props.label}</span>
       <button
         type="button"
@@ -203,6 +211,106 @@ function CameraBlock({ project }: { project: Project }) {
   );
 }
 
+type KindKey = "silences" | "fillers" | "mistakes" | "zooms" | "captions";
+const KINDS: Array<[KindKey, string]> = [
+  ["silences", "Silences"],
+  ["fillers", "Ums"],
+  ["mistakes", "Mistakes"],
+  ["zooms", "AI zooms"],
+  ["captions", "Captions"],
+];
+
+/** AI edit block of the Project panel: pace slider, kind toggles, last run. */
+function AiBlock({ project }: { project: Project }) {
+  const ai = aiEdits(project);
+  const run = ai.lastRun;
+  const [shown, setShown] = useState(ai.paceUs);
+  useEffect(() => setShown(ai.paceUs), [ai.paceUs]);
+  const langs = run?.languages.length ? run.languages.join(", ") : "no speech";
+  return (
+    <div className="insp-ai">
+      <div className="mut insp-sec">AI edit</div>
+      <div className="irow">
+        <span>Pace</span>
+        <span className="pace">
+          Tight
+          <input
+            key={ai.paceUs}
+            type="range"
+            min={80}
+            max={600}
+            step={10}
+            defaultValue={Math.round(ai.paceUs / 1000)}
+            aria-label="Pace"
+            onChange={(e) => setShown(Number(e.currentTarget.value) * 1000)}
+            // One drag (or one key press) is one undo step: apply on release.
+            onPointerUp={(e) => setPace(Number(e.currentTarget.value) * 1000)}
+            onKeyUp={(e) => setPace(Number(e.currentTarget.value) * 1000)}
+          />
+          Loose
+        </span>
+        <span className="pace-val">{(shown / 1e6).toFixed(shown % 100_000 === 0 ? 1 : 2)} s</span>
+      </div>
+      {KINDS.map(([k, label]) => (
+        <div key={k} className="k34-wrap">
+          <Toggle label={label} on={ai.kinds[k]} onChange={(on) => setKind(k, on)} compact />
+        </div>
+      ))}
+      <div className="insp-last">
+        {run ? `Last run: ${langs}. ${run.provider === "claude-code" ? `Claude ${run.model}` : run.provider === "none" ? "No AI step" : run.model}.` : "Not run yet. Press Shift+E to edit with AI."}
+      </div>
+    </div>
+  );
+}
+
+/** A caption word: fix its text or hide it from captions (DESIGN-SYSTEM.md "Inspector"). */
+function WordInspector({ word, project }: { word: Word; project: Project }) {
+  const apply = useEditorStore((s) => s.apply);
+  const caps = captionEdits(project);
+  const text = caps.overrides[word.id] ?? word.text;
+  const fixed = caps.overrides[word.id] !== undefined && caps.overrides[word.id] !== word.text;
+  return (
+    <>
+      <h2 className="insp-title">Caption</h2>
+      <div className="mut insp-sub">{mmsst(word.startUs)}</div>
+      <label className="cell cell-wide">
+        <span className="k">Text</span>
+        <input
+          key={`${word.id}|${text}`}
+          className="word-input"
+          type="text"
+          spellCheck={false}
+          defaultValue={text}
+          aria-label="Caption text"
+          onBlur={(e) => {
+            const v = e.currentTarget.value.trim();
+            if (!v) e.currentTarget.value = text;
+            else apply(setCaptionText(word.id, v === word.text ? null : v));
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") leaveField(e.currentTarget);
+            if (e.key === "Escape") {
+              e.currentTarget.value = text;
+              leaveField(e.currentTarget);
+            }
+          }}
+        />
+      </label>
+      <div className="toggles">
+        <Toggle label="Hide from captions" on={caps.hidden.includes(word.id)} onChange={(on) => apply(setCaptionHidden(word.id, on))} />
+      </div>
+      {fixed && (
+        <div className="btns">
+          <button type="button" className="fb fb-line" onClick={() => apply(setCaptionText(word.id, null))}>
+            Use the spoken word
+          </button>
+        </div>
+      )}
+      <p className="insp-note">Fixes the caption only. The audio and the transcript stay as they are.</p>
+    </>
+  );
+}
+
 export function Inspector({ compact = false }: { compact?: boolean }) {
   const project = useEditorStore((s) => s.project)!;
   const selection = useEditorStore((s) => s.selection);
@@ -210,6 +318,8 @@ export function Inspector({ compact = false }: { compact?: boolean }) {
 
   const zoom = selection?.kind === "zoom" ? project.edits.zooms.find((z) => z.id === selection.id) : undefined;
   const cut = selection?.kind === "cut" ? project.edits.cuts.find((c) => c.id === selection.id) : undefined;
+  const words = useEditorStore((s) => s.words);
+  const word = selection?.kind === "word" ? words.find((w) => w.id === selection.id) : undefined;
 
   return (
     <aside className="insp on-paper" aria-label="Inspector">
@@ -217,8 +327,10 @@ export function Inspector({ compact = false }: { compact?: boolean }) {
         <ZoomInspector zoom={zoom} title={zoomLabels(project.edits.zooms).get(zoom.id) ?? "Zoom"} durationUs={project.durationUs} />
       ) : cut ? (
         <CutInspector cut={cut} durationUs={project.durationUs} />
+      ) : word ? (
+        <WordInspector word={word} project={project} />
       ) : (
-        <>
+        <div className="insp-scroll">
           <h2 className="insp-title">Project</h2>
           <div className="mut insp-sub">Nothing selected</div>
           <div className="toggles">
@@ -227,8 +339,9 @@ export function Inspector({ compact = false }: { compact?: boolean }) {
             <Toggle label="Click highlight" on={project.edits.clicks.effect !== "none"} />
           </div>
           {project.tracks.camera && <CameraBlock project={project} />}
+          <AiBlock project={project} />
           {!compact && <p className="insp-note">Select a zoom or a cut on the timeline to edit it.</p>}
-        </>
+        </div>
       )}
     </aside>
   );

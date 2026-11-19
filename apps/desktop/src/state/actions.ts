@@ -54,7 +54,8 @@ export function runAutoZoom(): void {
 
 export function deleteSelection(): void {
   const { selection, apply, select } = useEditorStore.getState();
-  if (!selection) return;
+  // A caption word is not deleted (hide it from captions in the inspector instead).
+  if (!selection || selection.kind === "word") return;
   apply(selection.kind === "zoom" ? removeZoom(selection.id) : removeCut(selection.id));
   select(null);
 }

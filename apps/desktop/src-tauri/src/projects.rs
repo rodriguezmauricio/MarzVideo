@@ -18,7 +18,7 @@ use tauri_plugin_dialog::DialogExt;
 const PROJECT_JSON: &str = "project.json";
 const CRASH_MARKER: &str = marz_capture::project::CRASH_MARKER;
 /// Files the editor may read. Raw media is loaded through the asset protocol, not this.
-const READABLE: [&str; 2] = [PROJECT_JSON, "events.jsonl"];
+const READABLE: [&str; 3] = [PROJECT_JSON, "events.jsonl", "transcript.json"];
 
 /// Folders the page may touch: listed from the projects folder or picked in the dialog.
 #[derive(Default)]

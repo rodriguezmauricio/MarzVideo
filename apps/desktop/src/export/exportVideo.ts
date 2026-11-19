@@ -1,4 +1,4 @@
-import { cameraLayout, cameraMediaUs, drawFrame, frameAt } from "@marz/compositor";
+import { canvasMeasure, captionLayout, cameraLayout, cameraMediaUs, drawCaptions, drawFrame, frameAt, type CaptionBlock, type CaptionLook, type CaptionStyle } from "@marz/compositor";
 import type { MarzEvent, Project } from "@marz/format";
 import { keptSegments } from "@marz/timeline";
 import { mediaTimeUs } from "../playback/clock";
@@ -25,6 +25,8 @@ export interface ExportOptions {
   outPath: string;
   signal: AbortSignal;
   onProgress(p: number): void;
+  /** Captions to burn in (null: none). Output-time blocks, drawn after the frame. */
+  captions?: { blocks: CaptionBlock[]; look: CaptionLook; style: CaptionStyle } | null;
 }
 
 /** Ink behind the vertical letterbox, read from tokens.css so the colour lives in one place. */
@@ -62,6 +64,9 @@ export async function exportProject(opts: ExportOptions): Promise<ExportReport> 
   const compCtx = direct ? encCtx : compCanvas.getContext("2d", { alpha: false })!;
   const ink = inkColor();
   encCtx.imageSmoothingQuality = "high";
+  const caps = opts.captions && opts.captions.blocks.length ? opts.captions : null;
+  const measure = caps ? canvasMeasure(encCtx, caps.style.family) : null;
+  const capsFrame = { x: rect.x, y: rect.y, w: rect.w, h: rect.h };
 
   let source: Awaited<ReturnType<typeof createFrameSource>> | null = null;
   // The camera picture-in-picture, drawn by the same compositor as the preview (null: none or hidden).
@@ -123,6 +128,10 @@ export async function exportProject(opts: ExportOptions): Promise<ExportReport> 
         encCtx.fillStyle = ink;
         encCtx.fillRect(0, 0, preset.width, preset.height);
         encCtx.drawImage(compCanvas, rect.x, rect.y, rect.w, rect.h);
+      }
+      if (caps && measure) {
+        const d = captionLayout(caps.blocks, outputFrameUs(k, fps), caps.look, { width: preset.width, height: preset.height }, capsFrame, measure);
+        if (d) drawCaptions(encCtx, d, caps.style);
       }
 
       while (encoder.encodeQueueSize >= MAX_ENCODE_QUEUE && !failure) await new Promise<void>((r) => (wake = r));

@@ -23,6 +23,9 @@ importers:
 
   apps/desktop:
     dependencies:
+      '@marz/autoedit':
+        specifier: workspace:*
+        version: link:../../packages/autoedit
       '@marz/compositor':
         specifier: workspace:*
         version: link:../../packages/compositor
