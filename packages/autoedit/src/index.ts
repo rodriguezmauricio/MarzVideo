@@ -8,3 +8,5 @@ export * from "./ai/prompt";
 export * from "./ai/validate";
 export * from "./ai/chunks";
 export * from "./ai/fake";
+export * from "./captions";
+export * from "./srt";
