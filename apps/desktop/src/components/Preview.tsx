@@ -178,7 +178,8 @@ export function Preview() {
       return;
     }
     const { events } = useEditorStore.getState();
-    const shown = editing ? { ...p, edits: { ...p.edits, zooms: [] } } : p;
+    // While a zoom is edited the background is left out too, so the zoom area maps to the whole frame.
+    const shown = editing ? { ...p, edits: { ...p.edits, zooms: [], background: undefined } } : p;
     // While a zoom is edited the frame is the screen alone, so the zoom area overlay lines up.
     const lay = editing ? null : layoutAt(p, srcUs, p.output);
     const camVideo = camRef.current;

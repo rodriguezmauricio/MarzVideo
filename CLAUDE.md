@@ -78,6 +78,12 @@ Windows-first screen recorder + non-destructive editor (Tauri 2, Rust, React/TS)
   click effects per section, click effects Ripple, Pulse, Ring with token colour and size, in preview and export.
   Code: `packages/format/src/cursor.ts`, `packages/timeline/src/cursor.ts`, `packages/compositor/src/cursor.ts` and `cursorShapes.ts`,
   `crates/capture/src/win/cursor.rs`, `apps/desktop/src/components/CursorPanel.tsx`.
+- **Built on branch `claude/background-frame-25db9c` (2026-11-19, not merged):** background and frame (design
+  `docs/superpowers/specs/2026-11-19-background-frame-design.md`, plan `docs/superpowers/plans/2026-11-19-background-frame.md`).
+  Optional `edits.background` (style off, ink, paper, glow, grid; margin S/M/L; corners; shadow). Off by default. The screen is
+  framed inside the layout's screen box; zooms happen inside the frame; vertical Follow frames the aimed window, Fit keeps ink bars.
+  Background block in the Project panel. Code: `packages/format/src/background.ts`, `packages/timeline/src/background.ts`,
+  `packages/compositor/src/background.ts` (used by `frameAt` and `drawFrame`), `apps/desktop/src/components/BackgroundBlock.tsx`.
 - **Not checked by hand yet:** the owner checks in `docs/spikes/2026-11-17-owner-checks.md` (clean 3-minute run,
   flash and beep sync, clicks, static screen, mic unplug, 60 Hz, real hotkeys), plus: open New recording once and
   look at the overlay, play an export in Windows Media Player, upload one export of each preset privately and

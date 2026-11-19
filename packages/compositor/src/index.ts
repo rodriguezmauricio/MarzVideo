@@ -7,3 +7,5 @@ export * from "./vertical";
 export * from "./drawings";
 export * from "./cursor";
 export * from "./cursorShapes";
+export * from "./background";
+export * from "./path";
