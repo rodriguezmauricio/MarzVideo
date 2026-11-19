@@ -425,10 +425,6 @@ pub async fn export_cancel_all(app: AppHandle) -> Result<(), String> {
     tauri::async_runtime::spawn_blocking(move || app.state::<Exports>().cancel_all()).await.map_err(|e| e.to_string())
 }
 
-/// The `.srt` beside an MP4: same name, `.srt` extension.
-pub fn srt_path(mp4: &Path) -> PathBuf {
-    mp4.with_extension("srt")
-}
 
 /// Write `text` through `<name>.srt.part` and a rename (the export's `.part` rule).
 pub fn write_srt_atomic(mp4: &Path, text: &str) -> std::io::Result<PathBuf> {
