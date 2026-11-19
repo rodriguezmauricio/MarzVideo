@@ -116,6 +116,15 @@ describe("runAiPass", () => {
     expect(cuts.every((c) => c.reason === "silence" && c.origin === "ai")).toBe(true);
   });
 
+  test("a rerun without an AI answer keeps the zooms as they were", async () => {
+    const d = deps();
+    d.history.apply((p) => ({ ...p, edits: { ...p.edits, zooms: [{ id: "ai-zoom-k1", startUs: S, endUs: 3 * S, rect: { x: 0, y: 0, w: 0.5, h: 0.5 }, easeInUs: 1, easeOutUs: 1, easing: "linear", origin: "ai", candidateId: "k1" }] } }));
+    const failing: AiProvider = { name: "x", model: "y", editPass: async () => { throw new AiProviderError("usageLimit", "x"); } };
+    const out = await runAiPass({ ...d, provider: failing });
+    expect(out.warnings).toEqual(["Claude usage limit reached. Rerun later."]);
+    expect(d.history.current.edits.zooms.map((z) => z.id)).toEqual(["ai-zoom-k1"]);
+  });
+
   test("closing the project aborts the pass", async () => {
     const ac = new AbortController();
     const d = deps({ signal: ac.signal, provider: new FakeProvider(50) });

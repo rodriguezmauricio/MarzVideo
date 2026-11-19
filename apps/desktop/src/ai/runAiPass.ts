@@ -152,9 +152,17 @@ export async function runAiPass(deps: AiPassDeps): Promise<AiOutcome> {
     ai = v && !("refused" in v) ? v : null;
   }
   const next = buildAiEdits({ project: current, words, levels, candidates, ai, fallbackSpans });
-  if (aiFailed && !ai) next.zooms = current.edits.zooms.filter((z) => z.origin === "ai" || z.origin === "auto");
+  // No AI answer (it failed, or there were no words to send): zooms stay as they were.
+  if (!ai) next.zooms = current.edits.zooms.filter((z) => z.origin === "ai" || z.origin === "auto");
 
-  const languages = [...new Set((transcript?.sections ?? []).map((s) => s.language))];
+  // Languages of sections with real speech (a near silent section with one "Mm-hmm." is not a language).
+  const languages = [
+    ...new Set(
+      (transcript?.sections ?? [])
+        .filter((s) => words.filter((w) => w.startUs >= s.startUs && w.startUs < s.endUs).length >= 5)
+        .map((s) => s.language),
+    ),
+  ];
   const before = history.current;
   history.apply(
     applyAiPass(
