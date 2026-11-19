@@ -1,9 +1,10 @@
 import { execFile } from "node:child_process";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, stat, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { promisify } from "node:util";
-import { parseProject, serializeProject, type Project } from "@marz/format";
+import { parseProject, serializeProject, serializeTranscript, type Project } from "@marz/format";
+import { sampleTranscript, speechWav } from "./sampleSpeech";
 
 const run = promisify(execFile);
 
@@ -69,7 +70,7 @@ export const CAMERA_OFFSET_US = 41_000;
 
 /** `camera` adds a synthetic 1280 x 720 30 fps `camera.mp4` (a moving test pattern) as `tracks.camera`. */
 export async function makeSample(outDir: string, opts: { durationSec?: number; syncOffsetMs?: number; camera?: boolean } = {}): Promise<void> {
-  const durationSec = opts.durationSec ?? 20;
+  const durationSec = opts.durationSec ?? 30;
   const sync = opts.syncOffsetMs !== undefined;
   await mkdir(outDir, { recursive: true });
 
@@ -84,18 +85,25 @@ export async function makeSample(outDir: string, opts: { durationSec?: number; s
     join(outDir, "screen.mp4"),
   ]);
 
-  // 440 Hz tone plus a 1.5 kHz beep at the start of every second, so sync is audible.
-  // In sync mode the beep starts (syncOffset - micOffset) after the flash, in file time.
-  const u = `(t-(${((opts.syncOffsetMs ?? 0) / 1000 - MIC_OFFSET_US / 1_000_000).toFixed(6)}))`;
-  const expr = sync
-    ? `0.01*sin(2*PI*440*t)+0.6*sin(2*PI*1000*${u})*gte(${u},3)*lt(mod(${u},3),0.1)`
-    : "0.1*sin(2*PI*440*t)+0.6*sin(2*PI*1500*t)*lt(mod(t,1),0.05)";
-  await run("ffmpeg", [
-    "-y", "-v", "error",
-    "-f", "lavfi", "-i", `aevalsrc='${expr}':s=48000:d=${durationSec}`,
-    "-c:a", "pcm_s16le", "-ar", "48000", "-ac", "1",
-    join(outDir, "mic.wav"),
-  ]);
+  const durationUs = durationSec * 1_000_000;
+  if (sync) {
+    // A quiet 440 Hz bed and a 1 kHz beep (syncOffset - micOffset) after each flash, in file time.
+    const u = `(t-(${((opts.syncOffsetMs ?? 0) / 1000 - MIC_OFFSET_US / 1_000_000).toFixed(6)}))`;
+    const expr = `0.01*sin(2*PI*440*t)+0.6*sin(2*PI*1000*${u})*gte(${u},3)*lt(mod(${u},3),0.1)`;
+    await run("ffmpeg", [
+      "-y", "-v", "error",
+      "-f", "lavfi", "-i", `aevalsrc='${expr}':s=48000:d=${durationSec}`,
+      "-c:a", "pcm_s16le", "-ar", "48000", "-ac", "1",
+      join(outDir, "mic.wav"),
+    ]);
+  } else {
+    // A scripted take: voiced tones where the sample transcript has words, near silence elsewhere.
+    const words = sampleTranscript(durationUs, { bytes: 0, modifiedAt: "" }).words;
+    await writeFile(join(outDir, "mic.wav"), speechWav(durationUs, words, MIC_OFFSET_US));
+    const st = await stat(join(outDir, "mic.wav"));
+    const transcript = sampleTranscript(durationUs, { bytes: st.size, modifiedAt: st.mtime.toISOString() });
+    await writeFile(join(outDir, "transcript.json"), serializeTranscript(transcript));
+  }
 
   await writeFile(join(outDir, "events.jsonl"), buildEvents(durationSec));
 

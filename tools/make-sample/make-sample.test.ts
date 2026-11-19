@@ -1,9 +1,9 @@
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, test } from "vitest";
-import { parseEvents, parseProject } from "@marz/format";
+import { parseEvents, parseProject, parseTranscript } from "@marz/format";
 import { makeSample } from "./make-sample";
 
 const probe = (file: string, args: string[]) =>
@@ -34,4 +34,19 @@ test("adds a synthetic camera track when asked", async () => {
   const project = parseProject(JSON.parse(readFileSync(join(dir, "project.json"), "utf8")));
   expect(project.tracks.camera).toEqual({ file: "camera.mp4", offsetUs: 41_000, width: 1280, height: 720, fps: 30 });
   expect(probe(join(dir, "camera.mp4"), ["-select_streams", "v:0", "-show_entries", "stream=width,height"])).toBe("1280,720");
+}, 60_000);
+
+test("writes a transcript that parses and fits the duration", async () => {
+  const dir = join(mkdtempSync(join(tmpdir(), "marz-sample-")), "talk.marz");
+  await makeSample(dir, { durationSec: 30 });
+  const t = parseTranscript(JSON.parse(readFileSync(join(dir, "transcript.json"), "utf8")));
+  expect(t.words.length).toBeGreaterThanOrEqual(40);
+  expect(t.words.at(-1)!.endUs).toBeLessThanOrEqual(30_000_000);
+  expect(t.sections.map((s) => s.language)).toEqual(["pt", "en"]);
+  const texts = t.words.map((w) => w.text);
+  for (const w of ["umm", "é", "Tipo,", "uh"]) expect(texts).toContain(w);
+  const gaps = t.words.slice(1).map((w, i) => w.startUs - t.words[i]!.endUs);
+  expect(Math.max(...gaps)).toBeGreaterThanOrEqual(2_000_000);
+  const st = statSync(join(dir, "mic.wav"));
+  expect(t.mic.bytes).toBe(st.size);
 }, 60_000);
