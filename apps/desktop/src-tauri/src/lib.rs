@@ -60,6 +60,7 @@ pub fn run() {
             export::export_cancel_all,
             export::show_in_folder,
             export::export_write_srt,
+            export::export_write_vtt,
             ai::ai_edit_pass,
             ai::ai_cancel,
             transcribe::transcribe,

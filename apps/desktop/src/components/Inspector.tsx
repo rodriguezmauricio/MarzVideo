@@ -3,6 +3,9 @@ import { useEffect, useState } from "react";
 import { aiEdits, BORDER_COLOR_NAMES, cameraBorder, cameraEdits, cameraScenes, captionEdits, LAYOUT_KINDS, PIP_CORNERS, PIP_SIZES, type BorderColor, type Corner, type Cut, type PipShape, type Project, type Scene, type Word, type Zoom } from "@marz/format";
 import { setCaptionHidden, setCaptionText, setCursorHidden, updateCamera, updateCut, updateScene, updateZoom } from "@marz/timeline";
 import { setKind, setPace } from "../ai/aiActions";
+import { CaptionsBlock } from "../captions/CaptionsBlock";
+import { setCaptionStartAt, useCaptionFacts, wordCaptionState } from "../captions/captionActions";
+import { TranscriptPanel } from "../captions/TranscriptPanel";
 import { deleteSelection, MIN_US } from "../state/actions";
 import { useEditorStore } from "../state/editorStore";
 import { Icon } from "./Icon";
@@ -382,6 +385,7 @@ function WordInspector({ word, project }: { word: Word; project: Project }) {
   const caps = captionEdits(project);
   const text = caps.overrides[word.id] ?? word.text;
   const fixed = caps.overrides[word.id] !== undefined && caps.overrides[word.id] !== word.text;
+  const st = wordCaptionState(useCaptionFacts(), word.id);
   return (
     <>
       <h2 className="insp-title">Caption</h2>
@@ -412,11 +416,27 @@ function WordInspector({ word, project }: { word: Word; project: Project }) {
       <div className="toggles">
         <Toggle label="Hide from captions" on={caps.hidden.includes(word.id)} onChange={(on) => apply(setCaptionHidden(word.id, on))} />
       </div>
-      {fixed && (
+      {(fixed || st.shown) && (
         <div className="btns">
-          <button type="button" className="fb fb-line" onClick={() => apply(setCaptionText(word.id, null))}>
-            Use the spoken word
-          </button>
+          {fixed && (
+            <button type="button" className="fb fb-line" onClick={() => apply(setCaptionText(word.id, null))}>
+              Use the spoken word
+            </button>
+          )}
+          {st.shown && !st.start && (
+            <button type="button" className="fb fb-line" data-tip="Start a new caption at this word / S" onClick={() => setCaptionStartAt(word.id, true)}>
+              <Icon name="split" size={14} />
+              Split here
+              <span className="fb-key">S</span>
+            </button>
+          )}
+          {st.shown && st.start && !st.first && (
+            <button type="button" className="fb fb-line" data-tip="Glue this caption onto the one before / J" onClick={() => setCaptionStartAt(word.id, false)}>
+              <Icon name="join" size={14} />
+              Join with previous
+              <span className="fb-key">J</span>
+            </button>
+          )}
         </div>
       )}
       <p className="insp-note">Fixes the caption only. The audio and the transcript stay as they are.</p>
@@ -434,10 +454,11 @@ export function Inspector({ compact = false }: { compact?: boolean }) {
   const words = useEditorStore((s) => s.words);
   const word = selection?.kind === "word" ? words.find((w) => w.id === selection.id) : undefined;
   const scene = selection?.kind === "layout" ? cameraScenes(project).find((x) => x.id === selection.id) : undefined;
+  const tab = useEditorStore((s) => s.inspectorTab);
+  const setTab = useEditorStore((s) => s.setInspectorTab);
+  const tabs = words.length > 0;
 
-  return (
-    <aside className="insp on-paper" aria-label="Inspector">
-      {zoom ? (
+  const edit = zoom ? (
         <ZoomInspector zoom={zoom} title={zoomLabels(project.edits.zooms).get(zoom.id) ?? "Zoom"} durationUs={project.durationUs} />
       ) : cut ? (
         <CutInspector cut={cut} durationUs={project.durationUs} />
@@ -456,10 +477,36 @@ export function Inspector({ compact = false }: { compact?: boolean }) {
           </div>
           {project.tracks.camera && <CameraBlock project={project} />}
           <AudioBlock project={project} />
+          {words.length > 0 && <CaptionsBlock project={project} />}
           <AiBlock project={project} />
           {!compact && <p className="insp-note">Select a zoom or a cut on the timeline to edit it.</p>}
         </div>
-      )}
+      );
+
+  if (!tabs)
+    return (
+      <aside className="insp on-paper" aria-label="Inspector">
+        {edit}
+      </aside>
+    );
+  return (
+    <aside className="insp insp-tabbed on-paper" aria-label="Inspector">
+      {/* Edit and Transcript tabs (DESIGN-SYSTEM.md Inspector, "Tabs"). */}
+      <div className="insp-tabs" role="tablist" aria-label="Inspector view">
+        {(
+          [
+            ["edit", "Edit", "cursor"],
+            ["transcript", "Transcript", "captions"],
+          ] as const
+        ).map(([id, label, icon]) => (
+          <button key={id} type="button" role="tab" aria-selected={tab === id} className={tab === id ? "on" : ""} data-tip={`${label} / T`} onClick={() => setTab(id)}>
+            <Icon name={icon} size={14} />
+            {label}
+            <span className="tab-key">T</span>
+          </button>
+        ))}
+      </div>
+      <div className="insp-body">{tab === "transcript" ? <TranscriptPanel /> : edit}</div>
     </aside>
   );
 }

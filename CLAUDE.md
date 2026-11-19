@@ -53,6 +53,12 @@ Windows-first screen recorder + non-destructive editor (Tauri 2, Rust, React/TS)
   fullscreen, screen only) on the Layout lane (L adds, drag, trim, delete, undo); 0.4 s eased switches drawn by
   `packages/compositor/src/layout.ts` in preview and export; live hotkeys Ctrl+Shift+1..4 logged as `layout` events
   and turned into Live blocks when the take first opens (`importLiveLayouts`).
+- **Done (branch `claude/captions-editor-2649be`, not merged yet):** captions editor (design
+  `docs/superpowers/specs/2026-11-19-captions-editor-design.md`, plan `docs/superpowers/plans/2026-11-19-captions-editor.md`).
+  Inspector Edit / Transcript tabs (T), click a word to jump, fix it in place, Split here (S), Join with previous (J),
+  caption style per export preset (Ink, Paper, Accent band, Plain; S/M/L; top/middle/bottom; word highlight), `.vtt`
+  beside every export next to the `.srt`. Code: `apps/desktop/src/captions`, `packages/autoedit/src/captions.ts`,
+  `packages/compositor/src/captions.ts`.
 - **Not checked by hand yet:** the owner checks in `docs/spikes/2026-11-17-owner-checks.md` (clean 3-minute run,
   flash and beep sync, clicks, static screen, mic unplug, 60 Hz, real hotkeys), plus: open New recording once and
   look at the overlay, play an export in Windows Media Player, upload one export of each preset privately and

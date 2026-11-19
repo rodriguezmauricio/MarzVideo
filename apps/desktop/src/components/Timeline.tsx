@@ -8,6 +8,7 @@ import { MicWave, ScreenThumbs } from "./Lanes";
 import { count, mmss } from "./timecode";
 import { handleWidthPx, MAX_TIMELINE_ZOOM, pxToUs, snapUs, timelineWidthPx, usToPx } from "./timelineMath";
 import { cutCapLabel, LAYOUT_LABEL, zoomLabels } from "./zoomLabels";
+import { useCaptionFacts } from "../captions/captionActions";
 
 /** Roughly how wide a 10px mono label is, to hide labels that would not fit (micro type). */
 const labelPx = (text: string, ai: boolean) => text.length * 7 + (ai ? 26 : 0) + 8;
@@ -186,6 +187,7 @@ export function Timeline({ expanded, onToggleLanes }: { expanded: boolean; onTog
   const hasWords = words.length > 0;
   const overrides = project.edits.captions?.overrides ?? {};
   const hiddenWords = new Set(project.edits.captions?.hidden ?? []);
+  const capStarts = useCaptionFacts().starts;
 
   return (
     <section className="tl" aria-label="Timeline">
@@ -329,7 +331,7 @@ export function Timeline({ expanded, onToggleLanes }: { expanded: boolean; onTog
                       <div
                         key={wd.id}
                         data-testid={`word-${wd.id}`}
-                        className={`cap-word${hiddenWords.has(wd.id) ? " hidden-word" : ""}${sel ? " sel" : ""}`}
+                        className={`cap-word${hiddenWords.has(wd.id) ? " hidden-word" : ""}${capStarts.has(wd.id) ? " cap-start" : ""}${sel ? " sel" : ""}`}
                         style={{ left, width: wpx }}
                         title={text}
                         onPointerDown={(e) => {

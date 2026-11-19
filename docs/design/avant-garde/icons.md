@@ -45,4 +45,6 @@ Template:
 | `close` | `<path d="M6 6l12 12M18 6L6 18"/>` |
 | `ai` | `<path d="M12 3l2.2 6.8L21 12l-6.8 2.2L12 21l-2.2-6.8L3 12l6.8-2.2z"/>` (Edit with AI) |
 | `captions` | `<rect x="3" y="6" width="18" height="12"/><path d="M7 14h4M13 14h4M7 10h10"/>` (Burn captions, caption inspector) |
+| `split` | `<path d="M12 3v18M3 8h5v8H3M21 8h-5v8h5"/>` (Split here, captions) |
+| `join` | `<rect x="3" y="8" width="18" height="8"/><path d="M9 12h6"/>` (Join with previous, captions) |
 | `redo` | `<path d="M15 14l5-5-5-5"/><path d="M20 9H10a6 6 0 000 12h4"/>` |

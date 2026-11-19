@@ -1,4 +1,4 @@
-import { canvasMeasure, captionLayout, cameraLayerFor, cameraMediaUs, drawCaptions, drawFrame, frameAt, layoutAt, type CaptionBlock, type CaptionLook, type CaptionStyle } from "@marz/compositor";
+import { canvasMeasure, captionLayout, cameraLayerFor, cameraMediaUs, drawCaptions, drawFrame, frameAt, layoutAt, type CaptionBlock, type CaptionLookOpts, type CaptionStyle } from "@marz/compositor";
 import { cameraEdits, type MarzEvent, type Project } from "@marz/format";
 import { keptSegments } from "@marz/timeline";
 import { mediaTimeUs } from "../playback/clock";
@@ -29,7 +29,7 @@ export interface ExportOptions {
   /** Read the noise-cleaned mic copy (made just before the export). */
   cleanMic?: boolean;
   /** Captions to burn in (null: none). Output-time blocks, drawn after the frame. */
-  captions?: { blocks: CaptionBlock[]; look: CaptionLook; style: CaptionStyle } | null;
+  captions?: { blocks: CaptionBlock[]; look: CaptionLookOpts; style: CaptionStyle } | null;
 }
 
 /** Ink behind the vertical letterbox, read from tokens.css so the colour lives in one place. */

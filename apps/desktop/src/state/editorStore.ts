@@ -1,6 +1,6 @@
 import { create } from "zustand";
-import { cameraScenes, parseProject, serializeProject, type MarzEvent, type Project, type Section, type Word } from "@marz/format";
-import type { CaptionLook, Levels } from "@marz/autoedit";
+import { cameraScenes, parseProject, serializeProject, type CaptionPresetId, type MarzEvent, type Project, type Section, type Word } from "@marz/format";
+import type { Levels } from "@marz/autoedit";
 import type { AiStatus } from "../ai/runAiPass";
 import { History, importLiveLayouts, type Command } from "@marz/timeline";
 import { createAutosave, type SaveStatus } from "../storage/autosave";
@@ -19,12 +19,14 @@ export type AiUi = {
 };
 export const IDLE_AI: AiUi = { running: false, status: null, warning: null, ask: null, downloadPct: null };
 
-const LOOK_KEY = "marz.captionLook";
-const savedLook = (): CaptionLook => {
+const PRESET_KEY = "marz.captionPreset";
+/** The caption preset the preview showed last (M2 stored the look: "highlight" was the vertical one). */
+const savedPreset = (): CaptionPresetId => {
   try {
-    return localStorage.getItem(LOOK_KEY) === "highlight" ? "highlight" : "subtitles";
+    const v = localStorage.getItem(PRESET_KEY) ?? localStorage.getItem("marz.captionLook");
+    return v === "vertical" || v === "highlight" ? "vertical" : "youtube";
   } catch {
-    return "subtitles";
+    return "youtube";
   }
 };
 
@@ -54,9 +56,16 @@ type EditorState = {
   sections: Section[];
   /** Mic loudness, for the rules and the pace slider (null: no mic or not read yet). */
   levels: Levels | null;
-  /** The caption look the preview shows: the look of the export preset last picked. */
-  captionLook: CaptionLook;
-  setCaptionLook: (look: CaptionLook) => void;
+  /** The export preset whose caption style the preview shows: the one last picked in the Captions
+   * block or the export panel. */
+  captionPreset: CaptionPresetId;
+  setCaptionPreset: (preset: CaptionPresetId) => void;
+  /** Which inspector tab shows (the Transcript tab exists only with a transcript). */
+  inspectorTab: "edit" | "transcript";
+  setInspectorTab: (tab: "edit" | "transcript") => void;
+  /** The word being fixed in place in the Transcript panel. */
+  transcriptEditing: string | null;
+  setTranscriptEditing: (id: string | null) => void;
   ai: AiUi;
   setAi: (patch: Partial<AiUi>) => void;
   setTranscript: (words: Word[], sections: Section[], levels: Levels | null) => void;
@@ -91,15 +100,19 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   words: [],
   sections: [],
   levels: null,
-  captionLook: savedLook(),
-  setCaptionLook: (captionLook) => {
+  captionPreset: savedPreset(),
+  setCaptionPreset: (captionPreset) => {
     try {
-      localStorage.setItem(LOOK_KEY, captionLook);
+      localStorage.setItem(PRESET_KEY, captionPreset);
     } catch {
-      /* the look is a convenience */
+      /* the preset is a convenience */
     }
-    set({ captionLook });
+    set({ captionPreset });
   },
+  inspectorTab: "edit",
+  setInspectorTab: (inspectorTab) => set({ inspectorTab }),
+  transcriptEditing: null,
+  setTranscriptEditing: (transcriptEditing) => set({ transcriptEditing }),
   ai: IDLE_AI,
   setAi: (patch) => set({ ai: { ...get().ai, ...patch } }),
   setTranscript: (words, sections, levels) => set({ words, sections, levels }),

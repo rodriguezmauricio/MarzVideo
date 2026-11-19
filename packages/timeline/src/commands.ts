@@ -1,11 +1,16 @@
 import {
   aiEdits,
-  captionEdits,
+  captionStyleFor,
   cameraBorder,
   cameraEdits,
+  DEFAULT_CAPTION_EDITS,
   type AiEdits,
   type CameraBorder,
   type AiKinds,
+  type CaptionBreak,
+  type CaptionEdits,
+  type CaptionPresetId,
+  type CaptionStyleChoice,
   type CameraEdits,
   type Cut,
   type Pip,
@@ -228,25 +233,63 @@ export function touchedRanges(before: Project, after: Project): Range[] {
 
 // ---- Captions -----------------------------------------------------------------------------------
 
+/** `edits.captions` as stored (unknown break and style values included), for writing back. */
+const rawCaptions = (p: Project): CaptionEdits => {
+  const c = p.edits.captions ?? DEFAULT_CAPTION_EDITS;
+  return { ...c, overrides: c.overrides ?? {}, hidden: c.hidden ?? [] };
+};
+const withCaptions = (p: Project, patch: Partial<CaptionEdits>): Project => {
+  const c = { ...rawCaptions(p), ...patch };
+  // An M2-shaped edit stays M2-shaped: empty optional fields are not written.
+  if (c.breaks && Object.keys(c.breaks).length === 0) delete c.breaks;
+  if (c.styles && Object.keys(c.styles).length === 0) delete c.styles;
+  return withEdits(p, { captions: c });
+};
+
 /** Fix a caption word's text (null removes the fix). One undo step; `transcript.json` is untouched. */
 export const setCaptionText =
   (wordId: string, text: string | null): Command =>
   (p) => {
-    const cur = captionEdits(p);
+    const cur = rawCaptions(p);
     const has = Object.prototype.hasOwnProperty.call(cur.overrides, wordId);
     if (text === null ? !has : cur.overrides[wordId] === text) return p;
     const overrides = { ...cur.overrides };
     if (text === null) delete overrides[wordId];
     else overrides[wordId] = text;
-    return withEdits(p, { captions: { ...cur, overrides } });
+    return withCaptions(p, { overrides });
   };
 
 /** Hide a word from captions without cutting its audio, or show it again. */
 export const setCaptionHidden =
   (wordId: string, hidden: boolean): Command =>
   (p) => {
-    const cur = captionEdits(p);
+    const cur = rawCaptions(p);
     const is = cur.hidden.includes(wordId);
     if (is === hidden) return p;
-    return withEdits(p, { captions: { ...cur, hidden: hidden ? [...cur.hidden, wordId] : cur.hidden.filter((x) => x !== wordId) } });
+    return withCaptions(p, { hidden: hidden ? [...cur.hidden, wordId] : cur.hidden.filter((x) => x !== wordId) });
+  };
+
+/** "split": a caption starts at this word. "join": glue the caption that starts here onto the one
+ * before. null: back to automatic. One undo step. */
+export const setCaptionBreak =
+  (wordId: string, kind: CaptionBreak | null): Command =>
+  (p) => {
+    const breaks = { ...(rawCaptions(p).breaks ?? {}) };
+    const has = Object.prototype.hasOwnProperty.call(breaks, wordId);
+    if (kind === null ? !has : breaks[wordId] === kind) return p;
+    if (kind === null) delete breaks[wordId];
+    else breaks[wordId] = kind;
+    return withCaptions(p, { breaks });
+  };
+
+/** Change the caption style of one export preset. One undo step; other presets are untouched. */
+export const setCaptionStyle =
+  (preset: CaptionPresetId, patch: Partial<CaptionStyleChoice>): Command =>
+  (p) => {
+    const now = captionStyleFor(p, preset);
+    if ((Object.keys(patch) as Array<keyof CaptionStyleChoice>).every((k) => patch[k] === undefined || patch[k] === now[k])) return p;
+    const styles = { ...(rawCaptions(p).styles ?? {}) };
+    const stored = styles[preset];
+    styles[preset] = { ...(stored && typeof stored === "object" ? (stored as object) : {}), ...patch };
+    return withCaptions(p, { styles });
   };

@@ -127,3 +127,12 @@ Checked in Edge (Playwright) at 1440 x 900 and 1280 x 720 on `samples/demo-camer
 - **Layout blocks** use short labels (Corner, Side, Camera, Screen) because the Layout lane is 22 px high at Fit; the inspector picker uses the same words.
 - **Shape row segmented control** has four options with 8 px side padding (the Motion row's control uses 12 px) so it fits the 308 px inspector column.
 - **Preview caption** "Press Play to see the switch" while a layout is selected.
+## Captions editor (2026-11-19)
+
+Checked in Edge (Playwright) at 1440 x 900 and 1280 x 720 on `samples/demo.marz`. No mockup exists; DESIGN-SYSTEM.md was updated first (rule 12, Inspector "Tabs", "Transcript panel", "Captions block", caption buttons, "Captions lane", "Captions in the video", icons `split` and `join`).
+
+- **Inspector tabs** take a 34 px row at the top of the inspector whenever the project has a transcript, so every panel title sits 54 px lower than in `Editor-Avant-Garde.dc.html`. Panels below the row scroll inside the inspector when they do not fit.
+- **Transcript words are mono 11 px but not uppercased**: they are content (what was said and the fixes), and uppercase would hide capitalisation fixes.
+- **Four-option segmented control** (caption Style) uses 8 px side padding instead of 12 so it fits the 308 px inspector row.
+- **Plain caption style** draws a thin ink outline (a stroke) around the letters so paper text reads on light screen content; it is not a shadow or glow.
+- **Vertical Plain captions in the 16:9 preview** use the in-frame subtitle size (the preview has no letterbox), so the preview is smaller than the vertical export, as with M2's highlight look.
