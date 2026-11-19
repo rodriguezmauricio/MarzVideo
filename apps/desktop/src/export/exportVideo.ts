@@ -25,6 +25,8 @@ export interface ExportOptions {
   outPath: string;
   signal: AbortSignal;
   onProgress(p: number): void;
+  /** Read the noise-cleaned mic copy (made just before the export). */
+  cleanMic?: boolean;
   /** Captions to burn in (null: none). Output-time blocks, drawn after the frame. */
   captions?: { blocks: CaptionBlock[]; look: CaptionLook; style: CaptionStyle } | null;
 }
@@ -92,7 +94,7 @@ export async function exportProject(opts: ExportOptions): Promise<ExportReport> 
   try {
     source = await createFrameSource(storage.fileUrl(project.tracks.screen.file));
     if (camLayout && project.tracks.camera) camSource = await createFrameSource(storage.fileUrl(project.tracks.camera.file));
-    await sink.begin(buildExportJob({ project, preset, projectDir: opts.projectDir, outPath: opts.outPath }));
+    await sink.begin(buildExportJob({ project, preset, projectDir: opts.projectDir, outPath: opts.outPath, cleanMic: opts.cleanMic }));
 
     encoder = new VideoEncoder({
       output: (chunk) => {

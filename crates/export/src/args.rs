@@ -1,5 +1,6 @@
 //! FFmpeg argument and audio filter builders.
 
+use crate::loudness::{Loudness, loudnorm_filter};
 use crate::{ExportJob, MicJob};
 use std::path::{Path, PathBuf};
 
@@ -15,14 +16,20 @@ fn millis(us: i64) -> String {
     format!("{}.{:03}", us / 1_000, us % 1_000)
 }
 
-/// The audio tracks that are used (present and not muted), mic first: (track, file path).
+/// The audio tracks that are used (present and not muted), mic first: (track, file path). A track
+/// marked `clean` reads the noise-cleaned copy.
 fn used_tracks(job: &ExportJob) -> Vec<(&MicJob, PathBuf)> {
     [job.mic.as_ref(), job.system.as_ref()]
         .into_iter()
         .flatten()
         .filter(|t| !t.muted)
-        .map(|t| (t, job.project_dir.join(&t.file)))
+        .map(|t| (t, if t.clean { crate::clean::clean_path(&job.project_dir) } else { job.project_dir.join(&t.file) }))
         .collect()
+}
+
+/// The audio files FFmpeg reads, in input order (inputs 1, 2 of the mux).
+pub fn used_inputs(job: &ExportJob) -> Vec<PathBuf> {
+    used_tracks(job).into_iter().map(|(_, p)| p).collect()
 }
 
 /// Overlap with the mic shorter than this (1 ms, 48 samples) counts as no overlap: `atrim` of such a
@@ -32,8 +39,17 @@ const MIN_OVERLAP_US: i64 = 1_000;
 /// `audio_filter` with each used track's length read from its WAV header. If a header cannot be
 /// read that length is unknown and the track is assumed long enough.
 pub fn audio_filter(job: &ExportJob) -> Option<String> {
+    audio_filter_loud(job, None)
+}
+
+/// `audio_filter` ending in the loudness tail for the measured mix `loud` (None: no tail).
+pub fn audio_filter_loud(job: &ExportJob, loud: Option<&Loudness>) -> Option<String> {
     let lens: Vec<Option<i64>> = used_tracks(job).iter().map(|(_, p)| crate::wav::wav_duration_us(p)).collect();
-    audio_graph(job, &lens)
+    let tail = match (&job.normalize, loud) {
+        (Some(n), Some(m)) => Some(loudnorm_filter(n.target_lufs, m)),
+        _ => None,
+    };
+    audio_graph(job, &lens, tail.as_deref())
 }
 
 /// `audio_filter` with the mic's length given (tests); a used system track's length is read from
@@ -43,13 +59,14 @@ pub fn audio_filter_with(job: &ExportJob, mic_len_us: Option<i64>) -> Option<Str
         .iter()
         .map(|(t, p)| if job.mic.as_ref().is_some_and(|m| std::ptr::eq(m, *t)) { mic_len_us } else { crate::wav::wav_duration_us(p) })
         .collect();
-    audio_graph(job, &lens)
+    audio_graph(job, &lens, None)
 }
 
 /// The `-filter_complex` graph that cuts each used audio track to the kept segments and mixes them,
 /// ending in the `[aout]` pad. Used tracks are inputs 1, 2 (mic first) with lengths `lens` (None:
-/// unknown). None when no track is used or there are no segments: the caller writes a silent track.
-fn audio_graph(job: &ExportJob, lens: &[Option<i64>]) -> Option<String> {
+/// unknown). `tail` (the loudness step) goes last, before `[aout]`. None when no track is used or
+/// there are no segments: the caller writes a silent track.
+fn audio_graph(job: &ExportJob, lens: &[Option<i64>], tail: Option<&str>) -> Option<String> {
     let tracks = used_tracks(job);
     let segs: Vec<_> = job.segments.iter().filter(|s| s.src_end_us > s.src_start_us).collect();
     if tracks.is_empty() || segs.is_empty() {
@@ -57,15 +74,16 @@ fn audio_graph(job: &ExportJob, lens: &[Option<i64>]) -> Option<String> {
     }
     let mut parts: Vec<String> = Vec::new();
     for (k, (t, _)) in tracks.iter().enumerate() {
-        track_chain(&mut parts, &segs, t, k, lens.get(k).copied().flatten());
+        track_chain(&mut parts, &segs, t, k, lens.get(k).copied().flatten(), job.output_duration_us);
     }
     let end = secs(job.output_duration_us);
+    let tail = tail.map(|t| format!(",{t}")).unwrap_or_default();
     if tracks.len() == 1 {
-        parts.push(format!("[t0]apad,atrim=end={end}[aout]"));
+        parts.push(format!("[t0]apad,atrim=end={end}{tail}[aout]"));
     } else {
         // Plain sum (no level drop): each track keeps the level it had alone.
         let ins: String = (0..tracks.len()).map(|k| format!("[t{k}]")).collect();
-        parts.push(format!("{ins}amix=inputs={}:duration=longest:normalize=0,apad,atrim=end={end}[aout]", tracks.len()));
+        parts.push(format!("{ins}amix=inputs={}:duration=longest:normalize=0,apad,atrim=end={end}{tail}[aout]", tracks.len()));
     }
     Some(parts.join(";"))
 }
@@ -78,7 +96,8 @@ fn audio_graph(job: &ExportJob, lens: &[Option<i64>]) -> Option<String> {
 ///   never empty, so it ends.
 /// - It lies wholly before the track starts or wholly after it ends: a generated silence of exactly
 ///   the segment length. (An `atrim` that returns nothing would hang `apad` or break timestamps.)
-fn track_chain(parts: &mut Vec<String>, segs: &[&crate::Segment], t: &MicJob, k: usize, len_us: Option<i64>) {
+/// The track's volume and fades (in output time, `dur_us` long) follow the concat.
+fn track_chain(parts: &mut Vec<String>, segs: &[&crate::Segment], t: &MicJob, k: usize, len_us: Option<i64>, dur_us: i64) {
     let input = k + 1;
     // Labels: the first track keeps the plain names (s0, a0), later ones get a track prefix.
     let pre = if k == 0 { String::new() } else { format!("k{k}") };
@@ -115,18 +134,37 @@ fn track_chain(parts: &mut Vec<String>, segs: &[&crate::Segment], t: &MicJob, k:
         }
         labels.push_str(&format!("[{pre}a{i}]"));
     }
-    parts.push(format!("{labels}concat=n={}:v=0:a=1,volume={}[t{k}]", segs.len(), t.volume));
+    parts.push(format!("{labels}concat=n={}:v=0:a=1,volume={}{}[t{k}]", segs.len(), t.volume, fades(t, dur_us)));
+}
+
+/// `afade` filters for a track's fades (linear, like the preview), each at most the output length.
+fn fades(t: &MicJob, dur_us: i64) -> String {
+    let mut f = String::new();
+    let fin = t.fade_in_us.clamp(0, dur_us);
+    if fin > 0 {
+        f.push_str(&format!(",afade=t=in:st=0:d={}", secs(fin)));
+    }
+    let fout = t.fade_out_us.clamp(0, dur_us);
+    if fout > 0 {
+        f.push_str(&format!(",afade=t=out:st={}:d={}", secs(dur_us - fout), secs(fout)));
+    }
+    f
 }
 
 /// The full FFmpeg command line (without the program). Video comes as H.264 annexb on stdin and is
 /// copied; audio is the filtered mic and computer sound, or a silent track. Output is
 /// `<out_path>.part` as MP4.
 pub fn ffmpeg_args(job: &ExportJob) -> Vec<String> {
+    ffmpeg_args_loud(job, None)
+}
+
+/// `ffmpeg_args` with the loudness tail for the measured mix `loud` (when the job asks for it).
+pub fn ffmpeg_args_loud(job: &ExportJob, loud: Option<&Loudness>) -> Vec<String> {
     let mut a: Vec<String> = Vec::new();
     let mut push = |items: &[&str]| a.extend(items.iter().map(|s| s.to_string()));
     push(&["-hide_banner", "-loglevel", "warning", "-y"]);
     push(&["-f", "h264", "-framerate", &job.fps.to_string(), "-i", "pipe:0"]);
-    match audio_filter(job) {
+    match audio_filter_loud(job, loud) {
         Some(graph) => {
             for (_, path) in used_tracks(job) {
                 push(&["-i", &path.to_string_lossy()]);
@@ -169,6 +207,7 @@ mod tests {
             mic,
             system: None,
             output_duration_us: dur_us,
+            ..Default::default()
         }
     }
 
@@ -177,7 +216,7 @@ mod tests {
     }
 
     fn mic(offset_us: i64) -> MicJob {
-        MicJob { file: "mic.wav".into(), offset_us, volume: 1.0, muted: false }
+        MicJob { file: "mic.wav".into(), offset_us, volume: 1.0, muted: false, ..Default::default() }
     }
 
     #[test]
@@ -320,7 +359,7 @@ mod tests {
     #[test]
     fn mic_and_computer_sound_are_mixed_at_full_level() {
         let mut j = job(vec![seg(1_000_000, 3_000_000, 0), seg(4_000_000, 5_000_000, 2_000_000)], Some(mic(12_400)), 3_000_000);
-        j.system = Some(MicJob { file: "system.wav".into(), offset_us: 0, volume: 1.0, muted: false });
+        j.system = Some(MicJob { file: "system.wav".into(), offset_us: 0, volume: 1.0, muted: false, ..Default::default() });
         let f = audio_filter_with(&j, Some(10_000_000)).unwrap();
         assert!(f.contains("[1:a]aresample"), "{f}");
         assert!(f.contains("[2:a]aresample"), "{f}");
@@ -339,12 +378,94 @@ mod tests {
         let mut m = mic(0);
         m.muted = true;
         let mut j = job(vec![seg(0, 1_000_000, 0)], Some(m), 1_000_000);
-        j.system = Some(MicJob { file: "system.wav".into(), offset_us: 0, volume: 0.5, muted: false });
+        j.system = Some(MicJob { file: "system.wav".into(), offset_us: 0, volume: 0.5, muted: false, ..Default::default() });
         let f = audio_filter(&j).unwrap();
         assert!(f.starts_with("[1:a]"), "{f}");
         assert!(!f.contains("amix"), "{f}");
         assert!(f.contains("volume=0.5[t0]"), "{f}");
         assert!(ffmpeg_args(&j).join(" ").contains("system.wav"));
+    }
+
+    #[test]
+    fn fades_follow_the_volume_in_output_time() {
+        let mut m = mic(0);
+        m.volume = 0.8;
+        m.fade_in_us = 500_000;
+        m.fade_out_us = 2_000_000;
+        let j = job(vec![seg(0, 3_000_000, 0), seg(4_000_000, 6_000_000, 3_000_000)], Some(m), 5_000_000);
+        let f = audio_filter_with(&j, Some(10_000_000)).unwrap();
+        assert!(f.contains("volume=0.8,afade=t=in:st=0:d=0.500000,afade=t=out:st=3.000000:d=2.000000[t0]"), "{f}");
+    }
+
+    #[test]
+    fn fades_longer_than_the_video_are_capped() {
+        let mut m = mic(0);
+        m.fade_out_us = 9_000_000;
+        let j = job(vec![seg(0, 1_000_000, 0)], Some(m), 1_000_000);
+        let f = audio_filter_with(&j, Some(10_000_000)).unwrap();
+        assert!(f.contains("afade=t=out:st=0.000000:d=1.000000[t0]"), "{f}");
+        assert!(!f.contains("t=in"), "{f}");
+    }
+
+    #[test]
+    fn each_track_gets_its_own_fades() {
+        let mut j = job(vec![seg(0, 4_000_000, 0)], Some(mic(0)), 4_000_000);
+        j.system = Some(MicJob { file: "system.wav".into(), offset_us: 0, volume: 1.0, muted: false, fade_in_us: 1_000_000, ..Default::default() });
+        let f = audio_filter_with(&j, Some(10_000_000)).unwrap();
+        assert!(f.contains("volume=1[t0]"), "mic has no fade: {f}");
+        assert!(f.contains("volume=1,afade=t=in:st=0:d=1.000000[t1]"), "{f}");
+    }
+
+    #[test]
+    fn clean_mic_reads_the_cached_copy() {
+        let mut m = mic(0);
+        m.clean = true;
+        let j = job(vec![seg(0, 1_000_000, 0)], Some(m), 1_000_000);
+        let args = ffmpeg_args(&j);
+        let want = PathBuf::from("proj").join("cache").join("mic.clean.wav").to_string_lossy().to_string();
+        assert!(args.contains(&want), "{args:?}");
+        let raw = PathBuf::from("proj").join("mic.wav").to_string_lossy().to_string();
+        assert!(!args.contains(&raw), "{args:?}");
+    }
+
+    #[test]
+    fn loudness_tail_ends_the_graph_only_when_asked_and_measured() {
+        let m = Loudness { i: -21.8, thresh: -32.4, lra: 9.6, tp: -1.7 };
+        let mut j = job(vec![seg(0, 1_000_000, 0)], Some(mic(0)), 1_000_000);
+        // Measured but not asked for: no tail.
+        assert!(!audio_filter_loud(&j, Some(&m)).unwrap().contains("loudnorm"));
+        j.normalize = Some(crate::Normalize { target_lufs: -14.0 });
+        assert!(!audio_filter_loud(&j, None).unwrap().contains("loudnorm"), "not measured: no tail");
+        let f = audio_filter_loud(&j, Some(&m)).unwrap();
+        assert!(f.ends_with("apad,atrim=end=1.000000,loudnorm=I=-14:TP=-1.5:LRA=11:measured_I=-21.80:measured_TP=-1.70:measured_LRA=9.60:measured_thresh=-32.40:offset=0:linear=true,aresample=48000[aout]"), "{f}");
+        let args = ffmpeg_args_loud(&j, Some(&m)).join(" ");
+        assert!(args.contains("loudnorm=I=-14"), "{args}");
+    }
+
+    #[test]
+    fn measure_args_run_the_same_graph_into_ebur128() {
+        let mut j = job(vec![seg(0, 1_000_000, 0)], Some(mic(0)), 1_000_000);
+        j.normalize = Some(crate::Normalize { target_lufs: -14.0 });
+        let a = crate::loudness::measure_args(&j).unwrap();
+        let s = a.join(" ");
+        assert!(s.contains(";[aout]ebur128=peak=true:framelog=quiet[m] -map [m] -f null -"), "{s}");
+        assert!(!s.contains("loudnorm"), "{s}");
+        assert!(s.contains("mic.wav"), "{s}");
+        let mut silent = j.clone();
+        silent.mic = None;
+        assert_eq!(crate::loudness::measure_args(&silent), None);
+    }
+
+    #[test]
+    fn job_reads_new_audio_fields_and_defaults_them() {
+        let json = r#"{"projectDir":"p","outPath":"o.mp4","width":1920,"height":1080,"fps":30,
+            "segments":[{"srcStartUs":0,"srcEndUs":1000000,"outStartUs":0}],
+            "mic":{"file":"mic.wav","offsetUs":0,"volume":1.0,"muted":false,"fadeInUs":500000,"clean":true},
+            "outputDurationUs":1000000,"normalize":{"targetLufs":-14}}"#;
+        let j: ExportJob = serde_json::from_str(json).unwrap();
+        let m = j.mic.unwrap();
+        assert_eq!((m.fade_in_us, m.fade_out_us, m.clean), (500_000, 0, true));
+        assert_eq!(j.normalize.unwrap().target_lufs, -14.0);
     }
 
     #[test]

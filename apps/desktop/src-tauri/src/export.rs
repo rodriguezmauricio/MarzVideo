@@ -523,6 +523,7 @@ mod tests {
             mic: None,
             system: None,
             output_duration_us: 2_000_000,
+            ..Default::default()
         }
     }
 
@@ -591,11 +592,11 @@ mod tests {
         let (dirs, picked) = sets(&dir, &out);
         for file in ["../secret.wav", "C:/x.wav", "sub/mic.wav", "..", ""] {
             let mut j = job(&dir, &out);
-            j.mic = Some(MicJob { file: file.into(), offset_us: 0, volume: 1.0, muted: false });
+            j.mic = Some(MicJob { file: file.into(), offset_us: 0, volume: 1.0, muted: false, ..Default::default() });
             assert!(validate_job(&j, &dirs, &picked).is_err(), "{file} must be refused");
         }
         let mut j = job(&dir, &out);
-        j.mic = Some(MicJob { file: "mic.wav".into(), offset_us: 12_400, volume: 1.0, muted: false });
+        j.mic = Some(MicJob { file: "mic.wav".into(), offset_us: 12_400, volume: 1.0, muted: false, ..Default::default() });
         assert_eq!(validate_job(&j, &dirs, &picked), Ok(()));
         let mut j = job(&dir, &out);
         j.width = 321;

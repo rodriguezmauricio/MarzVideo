@@ -37,16 +37,35 @@ describe("buildExportJob", () => {
         { srcStartUs: 0, srcEndUs: 500_000, outStartUs: 0 },
         { srcStartUs: 1_500_000, srcEndUs: 2_000_000, outStartUs: 500_000 },
       ],
-      mic: { file: "mic.wav", offsetUs: 12_400, volume: 0.8, muted: false },
+      mic: { file: "mic.wav", offsetUs: 12_400, volume: 0.8, muted: false, fadeInUs: 0, fadeOutUs: 0, clean: false },
       system: null,
       outputDurationUs: 1_000_000,
+      normalize: { targetLufs: -14 },
     });
+  });
+
+  it("passes fades, the cleaned mic and the loudness switch from edits.audio", () => {
+    const withAudio = {
+      ...project,
+      tracks: { ...project.tracks, system: { file: "system.wav", offsetUs: 0, volume: 0.5, muted: false } },
+      edits: { ...project.edits, audio: { normalize: false, mic: { fadeInUs: 500_000, fadeOutUs: 1_000_000 }, system: { fadeInUs: 2_000_000 } } },
+    } as Project;
+    const job = buildExportJob({ project: withAudio, preset: PRESETS.youtube, projectDir: "p", outPath: "o.mp4", cleanMic: true });
+    expect(job.mic).toMatchObject({ fadeInUs: 500_000, fadeOutUs: 1_000_000, clean: true });
+    expect(job.system).toMatchObject({ volume: 0.5, fadeInUs: 2_000_000, fadeOutUs: 0, clean: false });
+    expect(job.normalize).toBeUndefined();
+    expect(JSON.stringify(job)).not.toContain("normalize");
+  });
+
+  it("never reads the cleaned copy when noise removal is off", () => {
+    const off = { ...project, edits: { ...project.edits, audio: { denoise: false } } } as Project;
+    expect(buildExportJob({ project: off, preset: PRESETS.youtube, projectDir: "p", outPath: "o", cleanMic: true }).mic?.clean).toBe(false);
   });
 
   it("passes the computer sound track when the project has one", () => {
     const withSys = { ...project, tracks: { ...project.tracks, system: { file: "system.wav", offsetUs: 0, volume: 1, muted: false } } } as Project;
     const job = buildExportJob({ project: withSys, preset: PRESETS.youtube, projectDir: "p", outPath: "o.mp4" });
-    expect(job.system).toEqual({ file: "system.wav", offsetUs: 0, volume: 1, muted: false });
+    expect(job.system).toEqual({ file: "system.wav", offsetUs: 0, volume: 1, muted: false, fadeInUs: 0, fadeOutUs: 0, clean: false });
   });
 
   it("uses the preset size and fps, and null when there is no mic", () => {
