@@ -1,4 +1,4 @@
-//! Export muxer. The webview composites and encodes the video (H.264 annexb); this crate runs FFmpeg
+//! Export muxer. The webview composites and encodes the video (H.264 or HEVC annexb); this crate runs FFmpeg
 //! to copy that stream, add the mic audio with the cuts and offset applied, and write the MP4.
 
 pub mod args;
@@ -71,4 +71,26 @@ pub struct ExportJob {
     /// Loudness normalization of the mix (absent: none).
     #[serde(default)]
     pub normalize: Option<Normalize>,
+    /// The video stream the page sends (annexb). H.264 when absent.
+    #[serde(default)]
+    pub codec: VideoCodec,
+}
+
+/// The codec of the stream on stdin. FFmpeg copies it either way.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum VideoCodec {
+    #[default]
+    H264,
+    Hevc,
+}
+
+impl VideoCodec {
+    /// FFmpeg's raw demuxer for the stream.
+    pub fn demuxer(self) -> &'static str {
+        match self {
+            VideoCodec::H264 => "h264",
+            VideoCodec::Hevc => "hevc",
+        }
+    }
 }

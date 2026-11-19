@@ -1,6 +1,6 @@
 import { audioEdits, TARGET_LUFS, type Project } from "@marz/format";
 import { keptSegments, outputDurationUs } from "@marz/timeline";
-import type { ExportPreset } from "./presets";
+import type { Codec, ExportPreset } from "./presets";
 
 /** Same JSON as the Rust `ExportJob` in crates/export/src/lib.rs (serde camelCase). */
 export interface ExportJobDto {
@@ -16,6 +16,8 @@ export interface ExportJobDto {
   outputDurationUs: number;
   /** Bring the mix to this loudness (absent: leave it as it is). */
   normalize?: { targetLufs: number };
+  /** The stream the page sends: H.264 or HEVC annexb. */
+  codec: Codec;
 }
 
 /** Same JSON as the Rust `MicJob`. Fades are in output time. */
@@ -35,9 +37,11 @@ export interface ExportReport {
   outPath: string;
   durationUs: number;
   sizeBytes: number;
+  /** The codec the video was encoded with (set by the page: H.264 when HEVC fell back). */
+  codec?: Codec;
 }
 
-/** Where the encoded H.264 (annexb) goes: FFmpeg through Tauri in the app, memory in tests. */
+/** Where the encoded H.264 or HEVC (annexb) goes: FFmpeg through Tauri in the app, memory in tests. */
 export interface ExportSink {
   begin(job: ExportJobDto): Promise<void>;
   chunk(data: Uint8Array): Promise<void>;
@@ -77,5 +81,6 @@ export function buildExportJob(opts: { project: Project; preset: ExportPreset; p
     system: sys ? track(sys, audio.system, false) : null,
     outputDurationUs: Math.round(outputDurationUs(segs)),
     ...(audio.normalize ? { normalize: { targetLufs: TARGET_LUFS } } : {}),
+    codec: preset.codec,
   };
 }

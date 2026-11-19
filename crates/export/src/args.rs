@@ -1,7 +1,7 @@
 //! FFmpeg argument and audio filter builders.
 
 use crate::loudness::{Loudness, loudnorm_filter};
-use crate::{ExportJob, MicJob};
+use crate::{ExportJob, MicJob, VideoCodec};
 use std::path::{Path, PathBuf};
 
 /// Microseconds as seconds with 6 decimals (negative values clamp to 0).
@@ -163,7 +163,7 @@ pub fn ffmpeg_args_loud(job: &ExportJob, loud: Option<&Loudness>) -> Vec<String>
     let mut a: Vec<String> = Vec::new();
     let mut push = |items: &[&str]| a.extend(items.iter().map(|s| s.to_string()));
     push(&["-hide_banner", "-loglevel", "warning", "-y"]);
-    push(&["-f", "h264", "-framerate", &job.fps.to_string(), "-i", "pipe:0"]);
+    push(&["-f", job.codec.demuxer(), "-framerate", &job.fps.to_string(), "-i", "pipe:0"]);
     match audio_filter_loud(job, loud) {
         Some(graph) => {
             for (_, path) in used_tracks(job) {
@@ -177,6 +177,10 @@ pub fn ffmpeg_args_loud(job: &ExportJob, loud: Option<&Loudness>) -> Vec<String>
         }
     }
     push(&["-c:v", "copy", "-c:a", "aac", "-b:a", "192k", "-ar", "48000"]);
+    if job.codec == VideoCodec::Hevc {
+        // `hvc1` (parameter sets in the sample entry) is what Windows and Apple players expect in an MP4.
+        push(&["-tag:v", "hvc1"]);
+    }
     // `-t` stops both tracks at the output length; the silent source and `apad` never end on their own.
     push(&["-t", &secs(job.output_duration_us)]);
     push(&["-movflags", "+faststart", "-f", "mp4", &part_path(&job.out_path).to_string_lossy()]);
@@ -334,6 +338,25 @@ mod tests {
         let args = ffmpeg_args(&j).join(" ");
         assert!(args.contains("-f lavfi -i anullsrc=r=48000:cl=mono"), "{args}");
         assert!(args.contains("-map 1:a:0"), "{args}");
+    }
+
+    #[test]
+    fn hevc_is_read_as_hevc_and_tagged_hvc1() {
+        let mut j = job(vec![seg(0, 1_000_000, 0)], Some(mic(0)), 1_000_000);
+        j.codec = VideoCodec::Hevc;
+        let s = ffmpeg_args(&j).join(" ");
+        assert!(s.contains("-f hevc -framerate 30 -i pipe:0"), "{s}");
+        assert!(s.contains("-c:v copy"), "{s}");
+        assert!(s.contains("-tag:v hvc1"), "{s}");
+    }
+
+    #[test]
+    fn codec_defaults_to_h264_when_the_page_does_not_send_it() {
+        let j: ExportJob = serde_json::from_str(r#"{"projectDir":"p","outPath":"o.mp4","width":1920,"height":1080,"fps":30,"segments":[],"mic":null,"outputDurationUs":1}"#).unwrap();
+        assert_eq!(j.codec, VideoCodec::H264);
+        let h: ExportJob = serde_json::from_str(r#"{"projectDir":"p","outPath":"o.mp4","width":1920,"height":1080,"fps":30,"segments":[],"mic":null,"outputDurationUs":1,"codec":"hevc"}"#).unwrap();
+        assert_eq!(h.codec, VideoCodec::Hevc);
+        assert!(!ffmpeg_args(&j).join(" ").contains("hvc1"));
     }
 
     #[test]

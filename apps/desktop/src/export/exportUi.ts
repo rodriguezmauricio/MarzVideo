@@ -1,4 +1,4 @@
-import { PRESETS, type ExportPreset, type ExportPresetId } from "./presets";
+import { PRESETS, type Codec, type ExportPreset, type ExportPresetId } from "./presets";
 import { ExportFailure } from "./tauriSink";
 
 const ORDER: ExportPresetId[] = ["youtube", "vertical"];
@@ -70,7 +70,7 @@ export function writeLastPreset(storage: Storage | null | undefined, id: ExportP
 
 /** "1920 x 1080, 60 fps": the picture and the frame rate this export will use. */
 export function presetSize(preset: ExportPreset, sourceFps: number): string {
-  return `${preset.width} x ${preset.height}, ${preset.fps(sourceFps)} fps`;
+  return `${preset.width} x ${preset.height}, ${preset.fps(sourceFps)} fps${preset.codec === "hevc" ? ", HEVC" : ""}`;
 }
 
 /** Whole percent, 0 to 100. */
@@ -88,3 +88,27 @@ export function failureText(e: unknown): string {
 }
 
 export const PRESET_ORDER = ORDER.map((id) => PRESETS[id]);
+
+/** The last part of a folder path, for the panel and the done line ("D:\MarzOS\Inbox" is "Inbox"). */
+export function folderName(dir: string): string {
+  const parts = dir.split(/[\\/]+/).filter(Boolean);
+  return parts[parts.length - 1] ?? dir;
+}
+
+/** The done line's note after "Also copy to". */
+export function copyNote(dir: string, ok: boolean): string {
+  return ok ? `Copied to ${folderName(dir)}.` : `Could not copy to ${folderName(dir)}.`;
+}
+
+/** The line under the Codec row when HEVC cannot be used, or null. `general`: HEVC at all (1080p, 30 fps);
+ *  `here`: HEVC at this export's size and frame rate (undefined: not asked yet). */
+export function hevcNote(general: "unknown" | "yes" | "no", here: boolean | undefined): string | null {
+  if (general === "no") return "HEVC is not available on this computer. Exports use H.264.";
+  if (here === false) return "HEVC is not available at this size and frame rate. This export uses H.264.";
+  return null;
+}
+
+/** The done line's first words: says so when HEVC fell back to H.264. */
+export function doneLead(picked: Codec, used: Codec): string {
+  return picked === "hevc" && used !== "hevc" ? "Exported as H.264. HEVC is not available." : "Exported.";
+}

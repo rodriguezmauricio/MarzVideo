@@ -6,7 +6,9 @@ import { isTauri } from "../platform";
 import { useAppStore } from "../state/appStore";
 import { useEditorStore } from "../state/editorStore";
 import { exportProject } from "./exportVideo";
-import { failureText, panelKey, percent, readBurn, readLastPreset, writeBurn, writeLastPreset, type PanelState } from "./exportUi";
+import { copyNote, doneLead, failureText, panelKey, percent, readBurn, readLastPreset, writeBurn, writeLastPreset, type PanelState } from "./exportUi";
+import { readChoices, resolvePreset, writeChoices, type ExportChoices } from "./choices";
+import { hevcAvailable, hevcKey, hevcSupportedAt } from "./encoderConfig";
 import { captionLines, toSrt, toVtt } from "@marz/autoedit";
 import { captionBlocks, captionStyle, loadCaptionFont } from "../ai/captionStyle";
 import { cleanMicForExport } from "../audio/cleanMic";
@@ -46,6 +48,21 @@ type ExportState = {
   answerProxyAsk: (answer: "export" | "restore" | "cancel") => Promise<void>;
   cancel: () => void;
   showInFolder: () => void;
+  /** Codec, size and frame rate per preset (remembered in local storage, not in the project). */
+  choices: Record<ExportPresetId, ExportChoices>;
+  setChoice: (id: ExportPresetId, patch: Partial<ExportChoices>) => void;
+  /** Can this computer encode HEVC? Asked once, when the panel first opens. */
+  hevc: "unknown" | "yes" | "no";
+  /** HEVC at a given size and frame rate (`hevcKey`), asked when the panel shows it. */
+  hevcAt: Record<string, boolean>;
+  probeHevc: (size: { width: number; height: number }, fps: number) => void;
+  /** The "Also copy to" folder (app only), read from Rust when the panel opens. */
+  copyTo: string | null;
+  pickCopyTo: () => Promise<void>;
+  clearCopyTo: () => Promise<void>;
+  /** The done line: "Exported." or the HEVC fallback sentence, and the copy note (or null). */
+  doneLead: string;
+  doneNote: string | null;
   /** Back to idle (the editor closed). Cancels a running export. */
   reset: () => void;
 };
@@ -63,6 +80,9 @@ const FILE_SUFFIX: Record<ExportPresetId, string> = { youtube: "YouTube", vertic
 /** Exports left running by the page before a reload are cancelled on load; a new one waits for that. */
 const leftovers: Promise<void> = isTauri() ? cancelLeftoverExports() : Promise.resolve();
 
+/** HEVC questions in flight (one per size and rate). */
+const asking = new Set<string>();
+
 export const useExportStore = create<ExportState>((set, get) => ({
   panel: { open: false, highlight: "youtube" },
   last: "youtube",
@@ -73,6 +93,41 @@ export const useExportStore = create<ExportState>((set, get) => ({
   failure: null,
   controller: null,
   proxyAsk: null,
+  choices: { youtube: readChoices(storage(), "youtube"), vertical: readChoices(storage(), "vertical") },
+  setChoice(id, patch) {
+    const next = { ...get().choices[id], ...patch };
+    writeChoices(storage(), id, next);
+    set({ choices: { ...get().choices, [id]: next } });
+  },
+  hevc: "unknown",
+  hevcAt: {},
+  probeHevc(size, fps) {
+    const k = hevcKey(size, fps);
+    if (k in get().hevcAt || asking.has(k) || typeof VideoEncoder === "undefined") return;
+    asking.add(k);
+    void hevcSupportedAt(size, fps, async (c) => (await VideoEncoder.isConfigSupported(c)).supported === true)
+      .catch(() => false)
+      .then((ok) => set({ hevcAt: { ...get().hevcAt, [k]: ok } }))
+      .finally(() => asking.delete(k));
+  },
+  copyTo: null,
+  async pickCopyTo() {
+    if (!isTauri()) return;
+    try {
+      const dir = await invoke<string | null>("pick_export_copy_dest");
+      if (dir) set({ copyTo: dir });
+    } catch (e) {
+      console.error("[export] copy folder", e);
+      set({ phase: "failed", failure: `${e instanceof Error ? e.message : String(e)}`.replace(/\.?$/, ".") });
+    }
+  },
+  async clearCopyTo() {
+    if (!isTauri()) return;
+    await invoke("clear_export_copy_dest").catch((e: unknown) => console.error("[export] copy folder", e));
+    set({ copyTo: null });
+  },
+  doneLead: "Exported.",
+  doneNote: null,
   burn: {
     youtube: readBurn(storage(), "youtube", PRESETS.youtube.burnCaptionsDefault),
     vertical: readBurn(storage(), "vertical", PRESETS.vertical.burnCaptionsDefault),
@@ -89,6 +144,14 @@ export const useExportStore = create<ExportState>((set, get) => ({
     if (s.panel.open) return set({ panel: { ...s.panel, open: false } });
     const last = readLastPreset(storage());
     set({ last, panel: { open: true, highlight: last } });
+    if (s.hevc === "unknown" && typeof VideoEncoder !== "undefined")
+      void hevcAvailable(async (c) => (await VideoEncoder.isConfigSupported(c)).supported === true)
+        .catch(() => false)
+        .then((ok) => set({ hevc: ok ? "yes" : "no" }));
+    if (isTauri())
+      void invoke<string | null>("export_copy_settings")
+        .then((dir) => set({ copyTo: dir }))
+        .catch((e: unknown) => console.error("[export] copy settings", e));
   },
   closePanel: () => set({ panel: { ...get().panel, open: false } }),
   highlight: (id) => set({ panel: { open: get().panel.open, highlight: id } }),
@@ -117,7 +180,8 @@ export const useExportStore = create<ExportState>((set, get) => ({
     // The preview shows the caption style of the preset last picked.
     useEditorStore.getState().setCaptionPreset(id);
     const words = useEditorStore.getState().words;
-    set({ last: id, panel: { open: false, highlight: id }, phase: "picking", failure: null, outPath: null, doneFor: null });
+    set({ last: id, panel: { open: false, highlight: id }, phase: "picking", failure: null, outPath: null, doneFor: null, doneNote: null, doneLead: "Exported." });
+    const preset = resolvePreset(PRESETS[id], get().choices[id], project.source.fps);
 
     let outPath: string | null;
     try {
@@ -150,7 +214,7 @@ export const useExportStore = create<ExportState>((set, get) => ({
         storage: files,
         proxies,
         sink: isTauri() ? createTauriSink() : createMemorySink(),
-        preset: PRESETS[id],
+        preset,
         projectDir: dir,
         outPath,
         signal: controller.signal,
@@ -170,7 +234,21 @@ export const useExportStore = create<ExportState>((set, get) => ({
         const vtt = toVtt(lines);
         if (vtt) await invoke("export_write_vtt", { outPath: report.outPath, text: vtt }).catch((e: unknown) => console.error("[export] vtt", e));
       }
-      set({ phase: "done", outPath: report.outPath, doneFor: useEditorStore.getState().project, controller: null, progress: 100 });
+      const used = report.codec ?? preset.codec;
+      // Also copy to: the MP4, its captions and a JSON sidecar into the remembered folder (MarzOS).
+      let doneNote: string | null = null;
+      const copyTo = isTauri() ? await invoke<string | null>("export_copy_settings").catch(() => null) : null;
+      if (copyTo) {
+        const meta = { title: project.name, durationUs: Math.round(report.durationUs), preset: id, codec: used, width: preset.width, height: preset.height, fps: preset.fps(project.source.fps) };
+        try {
+          await invoke("export_copy_to", { outPath: report.outPath, meta });
+          doneNote = copyNote(copyTo, true);
+        } catch (e) {
+          console.error("[export] copy", e);
+          doneNote = copyNote(copyTo, false);
+        }
+      }
+      set({ phase: "done", outPath: report.outPath, doneFor: useEditorStore.getState().project, controller: null, progress: 100, doneLead: doneLead(preset.codec, used), doneNote });
     } catch (e) {
       if (get().controller !== controller) return;
       if (controller.signal.aborted) return set({ phase: "idle", controller: null, progress: 0 });
