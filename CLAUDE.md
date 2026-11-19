@@ -85,7 +85,8 @@ Windows-first screen recorder + non-destructive editor (Tauri 2, Rust, React/TS)
   `screen.mp4` and `camera.mp4` to the Recycle Bin (audio stays); "Restore from archive" copies them back, checked. State in the
   optional `archive.json` (written only by the app). Editor plays and exports from proxies (`withMedia`, `drawFrame` `srcScale`);
   export asks first ("Restore from archive", "Export anyway"). Code: `src-tauri/src/archive.rs`, `packages/format/src/archive.ts`,
-  `apps/desktop/src/home/storageBar.ts`.
+  `apps/desktop/src/home/storageBar.ts`. Checked in the app on copies "Archive test" (camera) and "Archive test 1080" with a scratch
+  archive folder: copies hash-identical, raw files in the Recycle Bin, proxy edit and both exports, restore hash-identical. Not checked: a real Google Drive folder.
 - **Not checked by hand yet:** the owner checks in `docs/spikes/2026-11-17-owner-checks.md` (clean 3-minute run,
   flash and beep sync, clicks, static screen, mic unplug, 60 Hz, real hotkeys), plus: open New recording once and
   look at the overlay, play an export in Windows Media Player, upload one export of each preset privately and
