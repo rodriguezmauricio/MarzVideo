@@ -10,7 +10,7 @@ import { TranscriptPanel } from "../captions/TranscriptPanel";
 import { deleteSelection, MIN_US } from "../state/actions";
 import { useEditorStore } from "../state/editorStore";
 import { Icon } from "./Icon";
-import { mmsst, parseTimeUs, seconds1 } from "./timecode";
+import { editedTimeUs, mmsst, seconds1 } from "./timecode";
 import { cutCapLabel, LAYOUT_LABEL, STROKE_LABEL, zoomLabels } from "./zoomLabels";
 import { verticalEdits } from "@marz/format";
 import { FrameInspector, frameLabels, VerticalBlock } from "../vertical/VerticalPanels";
@@ -31,7 +31,7 @@ export function Cell(props: { label: string; text: string; onCommit: (us: number
         defaultValue={props.text}
         aria-label={props.label}
         onBlur={(e) => {
-          const us = parseTimeUs(e.currentTarget.value);
+          const us = editedTimeUs(e.currentTarget.value, props.text);
           if (us === null) e.currentTarget.value = props.text;
           else props.onCommit(us);
         }}
