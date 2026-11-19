@@ -815,7 +815,7 @@ mod imp {
         with_live(app, |l| l.session.set_preset_rect(id, rect))
     }
 
-    /// Camera layout `n` (1..=4, `events::LAYOUTS`). A repeat of the current layout, and presses
+    /// Camera layout `n` (1..=5, `events::LAYOUTS`). A repeat of the current layout, and presses
     /// while paused, are not logged.
     pub fn layout(app: &AppHandle, n: u8) -> Result<(), String> {
         let Some(&name) = LAYOUTS.get(usize::from(n.saturating_sub(1))) else { return Ok(()) };

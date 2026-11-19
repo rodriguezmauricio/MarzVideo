@@ -105,6 +105,19 @@ light and the last one is repeated, as for the screen. `edits.camera` is optiona
 for timed layouts and kept as is. Preview and export draw the camera last, aspect kept, mirrored when set,
 1px paper border; zooms move the screen only. Older projects open as before; `version` stays 1.
 
+**Camera extras (added 2026-11-19, owner's pre-approval; design `2026-11-19-camera-extras-design.md`, on top of
+`2026-11-19-camera-layouts-design.md`):** all optional, `version` stays 1.
+- `edits.camera.pip.shape` gains `"star"` and `"custom"`; scene `layout` gains `"float"` (floating 9:16). Older builds draw
+  an unknown shape as `rect` and read an unknown layout as `pip`, keeping the raw value on save.
+- `edits.camera.customMask`: `{ "name", "points": [x0, y0, x1, y1, ...] }`, an imported SVG outline flattened to 3 to 512
+  points in the unit box (0..1). Numbers only: no SVG text, no file reference. A broken one is kept and ignored.
+- `edits.camera.transitions`: `[ { "from", "to", "durationUs", "easing", "morph", "path": { "c1": [u, v], "c2": [u, v] } } ]`,
+  one switch preset per layout pair (the later entry wins), used by every switch between them, live ones included.
+  `durationUs` 100000 to 3000000 (default 400000), `easing` `linear` | `easeInOutCubic` | `easeInCubic` | `easeOutCubic`,
+  `morph` `blend` | `end`, `path` optional (control points relative to the start-to-end camera centre segment). Unknown
+  easing or morph read as the default and are kept; entries this build cannot read are kept as they are.
+- `events.jsonl` `layout` lines may carry `"float"` (Ctrl+Shift+5).
+
 **AI editing (M2, added 2026-11-19, Mauricio's yes 2026-11-17; design `2026-11-17-milestone-2-ai-editing-design.md`):**
 - `transcript.json` is derived and regenerable, written by the transcription step only (`transcript.json.tmp`
   then a rename), never by the editor: `{ "version": 1, "engine", "mic": { "bytes", "modifiedAt" }, "sections":

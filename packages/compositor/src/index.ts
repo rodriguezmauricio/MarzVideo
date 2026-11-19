@@ -9,3 +9,4 @@ export * from "./cursor";
 export * from "./cursorShapes";
 export * from "./background";
 export * from "./path";
+export * from "./masks";

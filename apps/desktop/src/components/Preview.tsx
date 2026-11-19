@@ -16,6 +16,7 @@ import { screenErrorText } from "../playback/screenError";
 import { mmss } from "./timecode";
 import { tokenColors } from "./cameraColors";
 import { ZoomOverlay } from "./ZoomOverlay";
+import { PathOverlay, usePathEditing } from "../camera/PathOverlay";
 import { DrawingOverlay, useStrokeDraft } from "../drawing/DrawingOverlay";
 import { loadDrawingFont, measureStrokeText, strokeFamily } from "../drawing/drawingFont";
 
@@ -49,6 +50,7 @@ export function Preview() {
   const selectedStroke = selection?.kind === "drawing" ? drawingStrokes(project).find((s) => s.id === selection.id) : undefined;
   const editingStroke = selectedStroke && !playing ? selectedStroke : undefined;
   const hasStrokes = drawingStrokes(project).length > 0;
+  const editingPath = usePathEditing();
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -435,7 +437,7 @@ export function Preview() {
     : selectedZoom
     ? "Press Play to see the result"
     : selection?.kind === "layout"
-      ? "Press Play to see the switch"
+      ? editingPath && !vertical ? "Drag the squares to bend the switch path" : "Press Play to see the switch"
     : selectedStroke
       ? "Drag to move. Pull a corner to resize"
     : selectedCut
@@ -457,6 +459,7 @@ export function Preview() {
           onPointerDown={onFrameDown}
         />
         {editingZoom && !vertical && <ZoomOverlay key={editingZoom.id} zoom={editingZoom} />}
+        {editingPath && !vertical && <PathOverlay />}
         {editingStroke && strokeMap && <DrawingOverlay key={editingStroke.id} stroke={editingStroke} map={strokeMap} out={project.output} />}
         {selectedCut && (
           <>

@@ -106,6 +106,12 @@ Windows-first screen recorder + non-destructive editor (Tauri 2, Rust, React/TS)
   Checked: a real take in the app fed with synthetic speech ("Checklist test.marz": 3 topics ticked locally, 1 by Claude, 1 left
   open and flagged), encoder holds 60 fps with Whisper running beside it (`pipe-bench`). Not checked: his real mic with real
   talking, typing topics by hand, Ctrl+Shift+K pressed for real.
+- **Built on branch `claude/camera-extras-5a1c71`, not merged (2026-11-19):** camera extras (design
+  `docs/superpowers/specs/2026-11-19-camera-extras-design.md`, plan `docs/superpowers/plans/2026-11-19-camera-extras.md`).
+  Star and imported-SVG masks (one closed path, stored as points in `edits.camera.customMask`), Float layout (9:16 panel over the
+  screen, Ctrl+Shift+5), switch presets per layout pair in `edits.camera.transitions` (length, easing, morph along or at end, a bent
+  path dragged on the preview, used by live switches too). Code: `packages/compositor/src/masks.ts`, `layout.ts`,
+  `packages/timeline/src/cameraExtras.ts`, `apps/desktop/src/camera`. Side column with the screen reflowed already existed.
 - **Not checked by hand yet:** the owner checks in `docs/spikes/2026-11-17-owner-checks.md` (clean 3-minute run,
   flash and beep sync, clicks, static screen, mic unplug, 60 Hz, real hotkeys), plus: open New recording once and
   look at the overlay, play an export in Windows Media Player, upload one export of each preset privately and

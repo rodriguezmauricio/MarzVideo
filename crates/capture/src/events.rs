@@ -145,9 +145,9 @@ struct DrawClearLine {
     op: &'static str,
 }
 
-/// Camera layouts a live hotkey can switch to, in hotkey order (Ctrl+Shift+1 .. Ctrl+Shift+4):
-/// corner bubble, side column, camera fullscreen, screen only. Names as in `project.json`.
-pub const LAYOUTS: [&str; 4] = ["pip", "side", "camera", "screen"];
+/// Camera layouts a live hotkey can switch to, in hotkey order (Ctrl+Shift+1 .. Ctrl+Shift+5):
+/// corner bubble, side column, camera fullscreen, screen only, floating 9:16. Names as in `project.json`.
+pub const LAYOUTS: [&str; 5] = ["pip", "side", "camera", "screen", "float"];
 
 /// One checklist topic as the `list` line carries it.
 #[derive(Debug, Clone, PartialEq, Serialize)]

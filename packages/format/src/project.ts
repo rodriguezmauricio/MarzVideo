@@ -150,7 +150,8 @@ const AiEditsSchema = z
 const CORNERS = ["topLeft", "topRight", "bottomLeft", "bottomRight"] as const;
 
 /** The camera's picture-in-picture: corner, width as a share of the output width, gap to the edges
- * as a share of the output width. `shape` is only "rect" for now (masks come later). */
+ * as a share of the output width. `shape`: rect, rounded, circle, square, star, custom (`customMask`);
+ * anything else draws as rect. */
 const PipSchema = z
   .object({
     corner: z.enum(CORNERS),
@@ -160,7 +161,7 @@ const PipSchema = z
   })
   .passthrough();
 
-const LAYOUTS = ["pip", "side", "camera", "screen"] as const;
+const LAYOUTS = ["pip", "side", "camera", "screen", "float"] as const;
 const SCENE_ORIGINS = ["live", "manual"] as const;
 const BORDER_COLORS = ["paper", "ink", "accent"] as const;
 
@@ -189,6 +190,43 @@ const BorderSchema = z.preprocess(
   z.object({ width: z.number().min(0).max(32), color: z.enum(BORDER_COLORS) }).passthrough(),
 );
 
+const TRANSITION_EASINGS = ["linear", "easeInOutCubic", "easeInCubic", "easeOutCubic"] as const;
+const MORPHS = ["blend", "end"] as const;
+const PathPoint = z.tuple([z.number().min(-4).max(4), z.number().min(-4).max(4)]);
+
+/** A layout switch preset for one pair of layouts (camera extras design): length, easing, the curve the
+ * camera centre follows (control points relative to the start-to-end segment) and when the shape morphs.
+ * Unknown easing or morph read as the default and are kept on save. */
+const TransitionSchema = z.preprocess(
+  (v) =>
+    tolerant(v, {
+      easing: { known: TRANSITION_EASINGS, fallback: "easeInOutCubic" },
+      morph: { known: MORPHS, fallback: "blend" },
+    }),
+  z
+    .object({
+      from: z.enum(LAYOUTS),
+      to: z.enum(LAYOUTS),
+      durationUs: Us.min(100_000).max(3_000_000),
+      easing: z.enum(TRANSITION_EASINGS).default("easeInOutCubic"),
+      morph: z.enum(MORPHS).default("blend"),
+      path: z.object({ c1: PathPoint, c2: PathPoint }).passthrough().optional(),
+    })
+    .passthrough(),
+);
+
+/** An imported mask outline: flat x, y pairs in the unit box (3 to 512 points). Never SVG text. */
+const CustomMaskSchema = z
+  .object({
+    name: z.string().max(200),
+    points: z
+      .array(z.number().min(0).max(1))
+      .min(6)
+      .max(1024)
+      .refine((a) => a.length % 2 === 0),
+  })
+  .passthrough();
+
 /** `edits.camera`. Optional: missing means `DEFAULT_CAMERA_EDITS`. Scenes this build cannot read
  * stay in the list as they are (use `cameraScenes` for the valid ones). */
 const CameraEditsSchema = z
@@ -200,6 +238,10 @@ const CameraEditsSchema = z
     scenes: z.array(z.union([SceneSchema, z.unknown()])).default([]),
     /** True once the live layout presses of events.jsonl became scenes (never imported again). */
     liveImported: z.boolean().optional(),
+    /** Switch presets per layout pair. Entries this build cannot read stay as they are. */
+    transitions: z.array(z.union([TransitionSchema, z.unknown()])).optional(),
+    /** The imported mask outline (`pip.shape` "custom"). A broken one is kept and ignored. */
+    customMask: z.union([CustomMaskSchema, z.unknown()]).optional(),
   })
   .passthrough();
 
@@ -262,10 +304,16 @@ export type Scene = z.infer<typeof SceneSchema>;
 export type LayoutKind = (typeof LAYOUTS)[number];
 export type CameraBorder = z.infer<typeof BorderSchema>;
 export type BorderColor = (typeof BORDER_COLORS)[number];
-export type PipShape = "rect" | "rounded" | "circle" | "square";
-export const LAYOUT_KINDS: readonly LayoutKind[] = LAYOUTS;
+export type PipShape = "rect" | "rounded" | "circle" | "square" | "star" | "custom";
+export type Transition = z.infer<typeof TransitionSchema>;
+export type TransitionEasing = (typeof TRANSITION_EASINGS)[number];
+export type Morph = (typeof MORPHS)[number];
+export type CustomMask = z.infer<typeof CustomMaskSchema>;
+export const TRANSITION_EASING_NAMES: readonly TransitionEasing[] = TRANSITION_EASINGS;
+/** Layouts in the order the inspector shows them. */
+export const LAYOUT_KINDS: readonly LayoutKind[] = ["pip", "side", "float", "camera", "screen"];
 export const BORDER_COLOR_NAMES: readonly BorderColor[] = BORDER_COLORS;
-export const PIP_SHAPES: readonly PipShape[] = ["rect", "rounded", "circle", "square"];
+export const PIP_SHAPES: readonly PipShape[] = ["rect", "rounded", "circle", "square", "star", "custom"];
 export type CutReason = (typeof CUT_REASONS)[number];
 export type CaptionEdits = z.infer<typeof CaptionEditsSchema>;
 export type AiKinds = z.infer<typeof AiKindsSchema>;
@@ -381,6 +429,39 @@ export function cameraScenes(p: Project): Scene[] {
   return (cameraEdits(p).scenes as unknown[]).filter(isScene).sort((a, b) => a.startUs - b.startUs || a.endUs - b.endUs);
 }
 
+/** A switch as drawn: length, easing, morph and the optional path. */
+export type SwitchSpec = Pick<Transition, "durationUs" | "easing" | "morph"> & { path?: { c1: [number, number]; c2: [number, number] } };
+
+/** Today's switch: 0.4 s, ease in-out cubic, size and shape blended along the move, straight. */
+export const DEFAULT_TRANSITION: SwitchSpec = { durationUs: 400_000, easing: "easeInOutCubic", morph: "blend" };
+
+const isTransition = (t: unknown): t is Transition => {
+  const r = t as Partial<Transition> | null;
+  return !!r && typeof r === "object" && typeof r.from === "string" && (LAYOUTS as readonly string[]).includes(r.from) &&
+    typeof r.to === "string" && (LAYOUTS as readonly string[]).includes(r.to) && Number.isInteger(r.durationUs) &&
+    r.durationUs! >= 100_000 && r.durationUs! <= 3_000_000;
+};
+
+/** The switch presets this build can use, in file order. */
+export function cameraTransitions(p: Project): Transition[] {
+  return ((cameraEdits(p).transitions ?? []) as unknown[]).filter(isTransition);
+}
+
+/** The switch from layout `from` to `to`: the last preset for the pair, else the default. */
+export function transitionFor(p: Project, from: LayoutKind, to: LayoutKind): SwitchSpec {
+  const t = cameraTransitions(p).filter((x) => x.from === from && x.to === to).pop();
+  if (!t) return DEFAULT_TRANSITION;
+  const spec: SwitchSpec = { durationUs: t.durationUs, easing: t.easing, morph: t.morph };
+  if (t.path) spec.path = { c1: [t.path.c1[0], t.path.c1[1]], c2: [t.path.c2[0], t.path.c2[1]] };
+  return spec;
+}
+
+/** The imported mask outline, or null when there is none or it is broken. */
+export function customMask(p: Project): CustomMask | null {
+  const r = CustomMaskSchema.safeParse(cameraEdits(p).customMask);
+  return r.success ? { name: r.data.name, points: r.data.points } : null;
+}
+
 export function parseProject(json: unknown): Project {
   const result = ProjectSchema.safeParse(json);
   if (!result.success) {
@@ -392,7 +473,7 @@ export function parseProject(json: unknown): Project {
 
 /** Puts the raw values of tolerant fields back. A field the editor changed since it was read keeps
  * the edited value; one still at its fallback (or removed) gets the original back. */
-const FALLBACKS = new Set(["manual", "easeInOutCubic", "pip", "paper"]);
+const FALLBACKS = new Set(["manual", "easeInOutCubic", "pip", "paper", "blend"]);
 function restoreRaw(v: unknown): unknown {
   if (Array.isArray(v)) return v.map(restoreRaw);
   if (!v || typeof v !== "object") return v;
