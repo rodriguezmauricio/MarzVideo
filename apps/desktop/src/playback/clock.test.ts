@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vitest";
 import { keptSegments } from "@marz/timeline";
 import type { Project } from "@marz/format";
-import { mediaTimeUs, nextPlaybackTime, sourceTimeUs } from "./clock";
+import { audioStep, mediaTimeUs, nextPlaybackTime, sourceTimeUs } from "./clock";
 
 const D = 10_000_000;
 const cut = (id: string, startUs: number, endUs: number) => ({ id, startUs, endUs });
@@ -86,5 +86,30 @@ describe("mediaTimeUs", () => {
       for (const src of [0, 250_000, 1_234_567]) expect(sourceTimeUs(project, mediaTimeUs(project, src, first), first)).toBe(src);
     }
     expect(sourceTimeUs(project, 50_000, 50_000)).toBe(250_000);
+  });
+});
+
+describe("audioStep", () => {
+  const base = { currentS: 0, paused: true, ended: false, videoPaused: false };
+
+  test("before the track starts, a playing track pauses at its start instead of running ahead", () => {
+    expect(audioStep({ ...base, wantS: -0.3, currentS: 0.2, paused: false })).toEqual({ pause: true, seekS: 0 });
+  });
+
+  test("before the track starts, a paused track waits", () => {
+    expect(audioStep({ ...base, wantS: -0.3 })).toEqual({});
+  });
+
+  test("once the track starts it plays", () => {
+    expect(audioStep({ ...base, wantS: 0.01, currentS: 0 })).toEqual({ play: true });
+  });
+
+  test("drift over 40 ms seeks", () => {
+    expect(audioStep({ ...base, wantS: 2, currentS: 2.1, paused: false })).toEqual({ seekS: 2 });
+    expect(audioStep({ ...base, wantS: 2, currentS: 2.02, paused: false })).toEqual({});
+  });
+
+  test("an ended track is left alone", () => {
+    expect(audioStep({ ...base, wantS: 5, currentS: 3, ended: true })).toEqual({});
   });
 });

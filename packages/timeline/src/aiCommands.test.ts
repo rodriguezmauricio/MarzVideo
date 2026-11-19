@@ -142,6 +142,13 @@ describe("applyAiPass", () => {
     expect(p.edits.zooms.map((z) => z.id).sort()).toEqual(["ai-zoom-k1", "auto-2"]);
   });
 
+  test("replaceAutoZooms with nothing new adds no undo step (a run with no clicks, or the same result again)", () => {
+    const p = addZoom(zoom("auto-1", "auto", 5, 7))(base());
+    expect(replaceAutoZooms([zoom("auto-1", "auto", 5, 7)])(p)).toBe(p);
+    const empty = base();
+    expect(replaceAutoZooms([])(empty)).toBe(empty);
+  });
+
   test("pass with identical result adds no undo step", () => {
     const h = new History(base());
     const run = () => h.apply(applyAiPass(pass([aiCut("a", 1, 2)]), none, meta()));

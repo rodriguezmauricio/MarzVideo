@@ -11,6 +11,9 @@ export type FrameSpec = {
   cursor: CursorDraw | null;
   /** Click effects to draw under the cursor. */
   clicks: ClickDraw[];
+  /** The size `srcRect` is measured in (`project.source`). The drawn media may be smaller (a proxy):
+   *  `drawFrame` scales the crop to the media's real pixel size. */
+  sourceSize?: { width: number; height: number };
 };
 
 /** Fit a source area of size sw x sh inside the box without stretching it ("contain"). */
@@ -33,5 +36,5 @@ export function frameAt(project: Project, events: MarzEvent[], srcUs: number, sc
 
   const cursor = cursorAt(project, events, srcUs, srcRect, dstRect);
   const clicks = clickEffectsAt(project, events, srcUs, srcRect, dstRect);
-  return { srcRect, dstRect, cursor, clicks };
+  return { srcRect, dstRect, cursor, clicks, sourceSize: { width: srcW, height: srcH } };
 }

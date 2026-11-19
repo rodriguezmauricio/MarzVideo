@@ -55,6 +55,13 @@ describe("parseProject", () => {
     expect(() => parseProject({ ...example(), version: 2 })).toThrowError(FormatError);
   });
 
+  test("rejects a zero length and zero sizes", () => {
+    expect(() => parseProject({ ...example(), durationUs: 0 })).toThrowError(/durationUs/);
+    expect(() => parseProject({ ...example(), source: { width: 0, height: 1440, fps: 60 } })).toThrowError(/source\.width/);
+    expect(() => parseProject({ ...example(), output: { width: 1920, height: 0, fps: 60 } })).toThrowError(/output\.height/);
+    expect(() => parseProject({ ...example(), output: { width: 1920, height: 1080, fps: 0 } })).toThrowError(FormatError);
+  });
+
   test("rejects missing screen track", () => {
     const input = example() as any;
     delete input.tracks.screen;

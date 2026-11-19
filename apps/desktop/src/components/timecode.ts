@@ -27,3 +27,9 @@ export function parseTimeUs(text: string): number | null {
 
 /** "3 zooms", "1 cut" */
 export const count = (n: number, word: string): string => `${n} ${word}${n === 1 ? "" : "s"}`;
+
+/** The time typed in an inspector cell that shows `shown`, or null when there is nothing to commit:
+ *  the text is unchanged (leaving the field must not round the value or add an undo step) or not a time. */
+export function editedTimeUs(value: string, shown: string): number | null {
+  return value.trim() === shown.trim() ? null : parseTimeUs(value);
+}

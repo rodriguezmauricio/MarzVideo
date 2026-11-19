@@ -11,20 +11,20 @@
 - [2026-11-16] [claude] design-check flags `el.blur()` and words like "rounded" in comments. Use a `design-check-ignore` comment with a reason rather than renaming the DOM call.
 - [2026-11-16] [claude] Fonts are bundled locally (src/assets/fonts, src/styles/fonts.css), the desktop app must work offline. Both are variable fonts, so one woff2 per subset covers all weights: declare weight ranges ("500 700"), not one face per weight.
 
-## Deferred from the M1 editor review (minor, not fixed)
+## Deferred from the M1 editor review (minor; status per line)
 
-- Mic offset above 40 ms: audio starts at once then jumps back, so the first stretch is heard twice (`Preview.tsx`).
-- Inspector blur always commits and rounds to 10 ms; `updateZoom` with identical values still adds an undo step.
-- Auto zoom: end not clamped to the duration; a run with no clicks adds an undo step; re-running discards tweaked auto zooms (bare key A makes that easy); a widely spread cluster gives a near full-frame zoom; no overlap check against manual or live zooms.
-- Holding Z or C (key repeat) stacks duplicate blocks.
-- A missing or unplayable `screen.mp4` leaves a black preview with no message.
-- `parseProject` accepts `durationUs: 0` and zero sizes; an unknown `easing` or `origin` value rejects the whole project.
-- Dev server middleware has no try/catch; its `project.json` write is not atomic (dev only). The Tauri storage writes `project.json.tmp` and renames, so the atomic write is closed for the app (2026-11-17).
-- Header clock shows source length, not export length. The spec line "the timeline maps to output time" now differs from the code (playhead is in source time).
+- Fixed 2026-11-19: mic offset above 40 ms played the first stretch twice. A track whose offset is still ahead now waits at 0 and starts on time (`audioStep` in `playback/clock.ts`). Checked in Edge with a 0.5 s offset.
+- Fixed 2026-11-19: leaving an unchanged inspector time cell commits nothing (`editedTimeUs`), so no rounding and no undo step. `updateZoom` with identical values was already a no-op (`mapById`).
+- Fixed 2026-11-19, auto zoom: the end is clamped to the duration (shorter than 0.5 s is dropped); a run that changes nothing adds no undo step; a cluster needing more than 80% of the frame width gives no zoom. Already fixed earlier: a tweaked auto zoom becomes manual so a rerun keeps it (`ownsZoom`), and suggestions overlapping manual, live or AI zooms are skipped (`replaceAutoZooms`).
+- Fixed 2026-11-19: a held bare hotkey acts once (`ignoredRepeat`); held Ctrl+Z / Ctrl+Y still repeat.
+- Fixed 2026-11-19: a missing or unplayable `screen.mp4` shows a Warning bar sentence (DESIGN-SYSTEM.md Warning bar). The preview itself stays ink.
+- Fixed 2026-11-19: `parseProject` rejects `durationUs: 0` and zero source or output sizes or fps. The unknown `easing` or `origin` fallback was already in (tolerant fields, `aiFields.test.ts`).
+- Fixed 2026-11-19: the dev server middleware answers 500 on a failure and writes `project.json` through a temp file and rename; a file read error ends the response (dev only). The Tauri storage writes `project.json.tmp` and renames, so the atomic write is closed for the app (2026-11-17).
+- Kept 2026-11-19: header clock shows source length, not export length, and the playhead stays in source time (the spec line "the timeline maps to output time" differs). Not trivial: cuts show as blocks on a source-time timeline, and changing the mapping touches every lane, the AI pass and the export; it needs its own design decision.
 - Sample uses `testsrc` (built-in timestamp) instead of `testsrc2`; there is no `usePlayback.ts` (logic lives in `Preview.tsx`).
 - No committed Playwright tests: the browser checks were run by hand.
 - Closed 2026-11-17: recorder pin-downs. `durationUs` is the stop time on the QPC clock minus t0, and both tracks are padded or cut to it. Crash recovery takes the length from the screen (`screen.offsetUs` + the last packet + one frame); a shorter mic is kept and padded with silence, a mic without samples is dropped (fixed in the final review: it used to take the shorter track and cut the video to the mic). Mouse `button` is `left`, `right` or `middle` only; other buttons are not written.
-- `drawFrame` should scale by the media's real pixel size, not `project.source`, before proxies arrive.
+- Fixed 2026-11-19: `drawFrame` crops in the drawn media's real pixel size (`FrameSpec.sourceSize` from `frameAt`), so a smaller proxy draws the same picture.
 - [2026-11-18] [claude] Mauricio wants AI to run on his Claude subscription, not a paid API key: the installed Claude Code CLI works headless as `claude -p --output-format json --json-schema <schema> --tools "" --no-session-persistence --strict-mcp-config` (checked on 2.1.326). It counts against his plan's usage limits, and public users would need their own Claude Code or an API-key provider.
 
 - [2026-11-16] [claude] WGC's default minimum update interval snaps to every 3rd refresh on a 165 Hz screen, so capture gets 55 fps. Request half a frame (8.3 ms for 60 fps) and slot frames by timestamp; that holds 60 fps CFR.

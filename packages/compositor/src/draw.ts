@@ -38,7 +38,7 @@ export function drawFrame(
   clickColors?: ClickColors,
   drawings?: DrawLayer | null,
 ): void {
-  const { sx, sy, sw, sh } = spec.srcRect;
+  const { sx, sy, sw, sh } = mediaCrop(source, spec);
   const { dx, dy, dw, dh } = spec.dstRect;
   ctx.fillStyle = "#000000";
   ctx.fillRect(0, 0, out.width, out.height);
@@ -47,6 +47,25 @@ export function drawFrame(
   if (spec.clicks.length > 0) drawClicks(ctx, spec.clicks, clickColors);
   if (spec.cursor) drawCursorShape(ctx, spec.cursor.shape, spec.cursor.x, spec.cursor.y, spec.cursor.scale);
   if (camera) drawCamera(ctx, camera);
+}
+
+/** The media's own pixel size (video element, VideoFrame, bitmap or canvas), or null before it is known. */
+function mediaSize(source: CanvasImageSource): { width: number; height: number } | null {
+  const m = source as Partial<{ videoWidth: number; videoHeight: number; displayWidth: number; displayHeight: number; width: unknown; height: unknown }>;
+  const w = m.videoWidth ?? m.displayWidth ?? (typeof m.width === "number" ? m.width : 0);
+  const h = m.videoHeight ?? m.displayHeight ?? (typeof m.height === "number" ? m.height : 0);
+  return w > 0 && h > 0 ? { width: w, height: h } : null;
+}
+
+/** `spec.srcRect` (in `project.source` pixels) in the drawn media's pixels. */
+function mediaCrop(source: CanvasImageSource, spec: FrameSpec): FrameSpec["srcRect"] {
+  const r = spec.srcRect;
+  const src = spec.sourceSize;
+  const media = src ? mediaSize(source) : null;
+  if (!src || !media || (media.width === src.width && media.height === src.height)) return r;
+  const kx = media.width / src.width;
+  const ky = media.height / src.height;
+  return { sx: r.sx * kx, sy: r.sy * ky, sw: r.sw * kx, sh: r.sh * ky };
 }
 
 /** Border width in output pixels for a width given at 1080 output height (0 stays 0, else at least 1). */

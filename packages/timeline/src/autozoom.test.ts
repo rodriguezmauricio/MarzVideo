@@ -61,10 +61,26 @@ describe("suggestZooms", () => {
   });
 
   test("clicks far apart inside one cluster widen the rect to include them", () => {
-    const evs = [down(1 * S, 100, 500), down(1.5 * S, 1800, 520)];
+    const evs = [down(1 * S, 500, 500), down(1.5 * S, 1300, 520)];
     const z = suggestZooms(evs, source, A)[0]!;
-    expect(z.rect.x).toBeLessThanOrEqual(100 / 1920);
-    expect(z.rect.x + z.rect.w).toBeGreaterThanOrEqual(1800 / 1920);
+    expect(z.rect.x).toBeLessThanOrEqual(500 / 1920);
+    expect(z.rect.x + z.rect.w).toBeGreaterThanOrEqual(1300 / 1920);
+  });
+
+  test("a cluster spread over most of the screen gives no zoom (it would be nearly the full frame)", () => {
+    const evs = [down(1 * S, 100, 500), down(1.5 * S, 1800, 520)];
+    expect(suggestZooms(evs, source, A)).toEqual([]);
+  });
+
+  test("the end is clamped to the duration", () => {
+    const evs = [down(9.6 * S, 960, 540), down(9.9 * S, 960, 540)];
+    const z = suggestZooms(evs, source, A, { durationUs: 10 * S })[0]!;
+    expect(z.endUs).toBe(10 * S);
+  });
+
+  test("a cluster that ends up too short inside the duration gives no zoom", () => {
+    const evs = [down(10.5 * S, 960, 540), down(10.8 * S, 960, 540)];
+    expect(suggestZooms(evs, source, A, { durationUs: 10 * S })).toEqual([]);
   });
 
   test("every suggestion is valid: positive length, rect inside the frame, start not negative", () => {
