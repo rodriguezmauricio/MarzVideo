@@ -204,7 +204,15 @@ export type AiKinds = z.infer<typeof AiKindsSchema>;
 export type RejectedAiEdit =
   | { kind: "cut"; reason: CutReason; fromWordId: string; toWordId: string }
   | { kind: "zoom"; candidateId: string };
-export type AiEdits = Omit<z.infer<typeof AiEditsSchema>, "rejected"> & { rejected: RejectedAiEdit[] };
+/** Written out (not `Omit<z.infer<...>>`): passthrough types carry an index signature that would
+ * turn every key into `unknown` under `Omit`. */
+export type AiEdits = {
+  paceUs: number;
+  kinds: AiKinds;
+  rejected: RejectedAiEdit[];
+  lastRun?: { at: string; provider: string; model: string; languages: string[] };
+  lastResult?: unknown;
+};
 
 export const DEFAULT_AI_EDITS: AiEdits = {
   paceUs: 300_000,
