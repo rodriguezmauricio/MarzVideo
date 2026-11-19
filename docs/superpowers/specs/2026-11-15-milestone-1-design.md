@@ -112,8 +112,13 @@ for timed layouts and kept as is. Preview and export draw the camera last, aspec
   AI cuts also carry `fromWordId` and `toWordId` (the words they cover; for a silence the words on each side,
   `"^"` before the first word, `"$"` after the last), so a deleted one is remembered by what it covers.
 - Zoom `origin` gains `"ai"`, with `candidateId` (`k1..kN`, the click cluster it was picked from).
-- `edits.captions` (optional): `{ "overrides": { "w12": "Marz" }, "hidden": ["w40"] }`. Look and burn-in are export
-  choices, not stored.
+- `edits.captions` (optional): `{ "overrides": { "w12": "Marz" }, "hidden": ["w40"] }`. Burn-in is an export
+  choice, not stored.
+- Captions editor (2026-11-19), two more optional fields in `edits.captions`: `breaks` (`{ "w57": "split", "w80":
+  "join" }`: a caption always / never starts at that word) and `styles` (per export preset, `{ "youtube": { "style":
+  "inkBand" | "paperBand" | "accentBand" | "plain", "size": "S" | "M" | "L", "position": "top" | "middle" | "bottom",
+  "highlight": bool } }`, every field optional, missing = the preset default). Unknown values are ignored and kept on
+  save. Details: `2026-11-19-captions-editor-design.md`.
 - `edits.ai` (optional): `{ "paceUs": 300000, "kinds": { "silences", "fillers", "mistakes", "zooms", "captions" },
   "rejected": [ { "kind": "cut", "reason", "fromWordId", "toWordId" } | { "kind": "zoom", "candidateId" } ],
   "lastRun": { "at", "provider", "model", "languages" }, "lastResult": { "mistakes", "contextFillers", "zooms" } }`.

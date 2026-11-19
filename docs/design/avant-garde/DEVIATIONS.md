@@ -109,3 +109,13 @@ Checked in Edge (built-in browser) at 1440 x 900 and 1280 x 720 on `samples/demo
 - **The AI tag** is a 14 px outlined "AI" after the block or cap label; labels and tags are hidden on blocks and caps too narrow to hold them (most short silence cuts at Fit), which also hides the label of very short manual zooms.
 - **Caption word blocks** show no text at Fit on normal speech (words are 2 to 5 px wide); the text appears when the timeline is zoomed in.
 - **The model download ask** uses the Warning bar with two underlined text buttons (not the 34 px banner buttons) so it keeps the bar's 24 px height.
+
+## Captions editor (2026-11-19)
+
+Checked in Edge (Playwright) at 1440 x 900 and 1280 x 720 on `samples/demo.marz`. No mockup exists; DESIGN-SYSTEM.md was updated first (rule 12, Inspector "Tabs", "Transcript panel", "Captions block", caption buttons, "Captions lane", "Captions in the video", icons `split` and `join`).
+
+- **Inspector tabs** take a 34 px row at the top of the inspector whenever the project has a transcript, so every panel title sits 54 px lower than in `Editor-Avant-Garde.dc.html`. Panels below the row scroll inside the inspector when they do not fit.
+- **Transcript words are mono 11 px but not uppercased**: they are content (what was said and the fixes), and uppercase would hide capitalisation fixes.
+- **Four-option segmented control** (caption Style) uses 8 px side padding instead of 12 so it fits the 308 px inspector row.
+- **Plain caption style** draws a thin ink outline (a stroke) around the letters so paper text reads on light screen content; it is not a shadow or glow.
+- **Vertical Plain captions in the 16:9 preview** use the in-frame subtitle size (the preview has no letterbox), so the preview is smaller than the vertical export, as with M2's highlight look.
