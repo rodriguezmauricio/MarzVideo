@@ -338,7 +338,7 @@ pub fn pick_export_path(
 ) -> Result<Option<String>, ExportError> {
     let fail = |e: String| ExportError::new(NOT_WRITABLE, e);
     let dir = projects::checked(&allowed, &project_dir).map_err(|e| ExportError::new(NOT_SET_UP, e))?;
-    let exports_dir = projects::default_dir(&app).map_err(fail)?.join("Exports");
+    let exports_dir = crate::settings::exports_root(&app).map_err(fail)?;
     std::fs::create_dir_all(&exports_dir).map_err(|e| fail(e.to_string()))?;
     let mut start = exports_dir.join(export_file_name(&project_name(&dir), preset));
     let path = loop {

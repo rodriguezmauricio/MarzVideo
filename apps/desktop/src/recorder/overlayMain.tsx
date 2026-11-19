@@ -6,9 +6,11 @@ import { isFake } from "./recorderApi";
 import { Bar } from "./RecordingBar";
 import { initSetup } from "./setupInit";
 import { startTheme } from "../theme";
+import { loadHotkeys } from "../settings/hotkeyStore";
 
 startTheme();
 initSetup();
+loadHotkeys();
 // `?fake&bar` draws the bar at its design position too, for the 1440 x 900 design check.
 const withBar = isFake() && new URLSearchParams(window.location.search).has("bar");
 

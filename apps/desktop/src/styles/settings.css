@@ -1,0 +1,95 @@
+/* Settings and onboarding: DESIGN-SYSTEM.md section 6 "Settings" and "Onboarding" (1440 x 900).
+   Colours only through tokens.css variables. The left column sits where the tool ledger does
+   (x 24 to 376); the right column starts at x 400 and scrolls on its own. */
+
+.st { position: relative; width: 100%; height: 100vh; overflow: hidden; display: flex; flex-direction: column; background: var(--ink); }
+.st-main { position: relative; z-index: 2; flex: 1; min-height: 0; display: flex; }
+.st-left { position: relative; width: 352px; flex: none; margin-left: var(--margin); display: flex; flex-direction: column; }
+.st-right { flex: 1; min-width: 0; margin: 0 var(--margin) 0 24px; overflow-y: auto; scrollbar-gutter: stable; padding-bottom: 24px; }
+
+.st-title {
+  position: relative; z-index: 2; flex: none; margin: 24px 0 24px 18px; white-space: nowrap;
+  font-family: var(--font-display); font-weight: 700; text-transform: none;
+  font-size: 130px; line-height: 0.8; letter-spacing: -0.05em;
+}
+
+/* section ledger: 34px rows, 1px rules, key right in faint; the section on screen is accent */
+.st-ledger { border-bottom: 1px solid var(--line); }
+.st-led { width: 100%; height: var(--row-h); display: flex; align-items: center; gap: 10px; padding: 0 12px; border-top: 1px solid var(--line); text-align: left; }
+.st-led .hk { margin-left: auto; color: var(--faint); }
+.st-led.on { background: var(--accent); color: var(--accent-ink); border-top-color: var(--accent); }
+.st-led.on .hk { color: var(--accent-ink); }
+.st-led.later { color: var(--faint); }
+.st-led.done { color: var(--paper); }
+
+.st-btn { height: 34px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 0 16px; font-weight: 500; flex: none; border: 1px solid var(--paper); }
+.st-btn.accent { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.st-btn:disabled { color: var(--faint); border-color: var(--line); cursor: default; }
+.st-intro { margin-top: 24px; align-self: flex-start; }
+.st-text { font-weight: 500; text-decoration: underline; color: var(--faint); }
+.st-text:hover { color: var(--paper); }
+
+/* section: 34px head (the Home table header), 68px ruled rows */
+.st-sec { scroll-margin-top: 0; }
+.st-head { height: var(--row-h); display: flex; align-items: center; justify-content: space-between; gap: 24px; }
+.st-head b { font-weight: 500; }
+.st-head-r { display: flex; align-items: center; gap: 16px; color: var(--faint); }
+.st-row { min-height: 68px; display: flex; align-items: center; gap: 16px; border-top: 1px solid var(--line); }
+.st-row.short { min-height: 48px; }
+.st-label { width: 220px; flex: none; color: var(--faint); }
+.st-value { flex: 1; min-width: 0; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.st-value .faint { font-weight: 400; color: var(--faint); }
+/* paths and device names are content: shown as written, not uppercased */
+.st-path, .st-pick span { text-transform: none; }
+.st-acts { display: flex; align-items: center; gap: 8px; flex: none; }
+.st-last { margin: 0; padding: 12px 0; border-top: 1px solid var(--line); font-size: 10px; color: var(--faint); }
+.st-sec + .st-sec { margin-top: 24px; }
+
+/* the setup bar's picker, meter and toggle, on ink */
+.st-pick { position: relative; display: flex; align-items: center; gap: 8px; height: 34px; padding: 0 10px; border: 1px solid var(--line); cursor: pointer; }
+.st-pick span { max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.st-pick select { position: absolute; inset: 0; width: 100%; opacity: 0; cursor: pointer; font: inherit; }
+.st-pick select:disabled { cursor: default; }
+.st-pick:has(select:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
+.st-meter { display: flex; gap: 2px; align-items: center; }
+.st-meter i { width: 5px; background: var(--thumb-line); }
+.st-meter i.lit { background: var(--accent); }
+.st-tog { display: flex; align-items: center; gap: 10px; }
+.st-tog:disabled { color: var(--faint); cursor: default; }
+.st-tg { position: relative; width: 34px; height: 18px; border: 1px solid var(--paper); flex: none; }
+.st-tg > i { position: absolute; top: 2px; left: 2px; width: 12px; height: 12px; background: var(--paper); }
+.st-tg.on { background: var(--accent); border-color: var(--accent); }
+.st-tg.on > i { left: 18px; background: var(--ink); }
+.st-tg.off { border-color: var(--later); }
+.st-tg.off > i { background: var(--later); }
+
+/* segmented control on ink: 1px paper border, selected = accent */
+.st-seg { display: flex; border: 1px solid var(--paper); }
+.st-seg button { height: 32px; padding: 0 12px; font-weight: 500; }
+.st-seg button + button { border-left: 1px solid var(--paper); }
+.st-seg button.on { background: var(--accent); color: var(--accent-ink); }
+
+/* hotkey box: 34px, 1px line, 160px; armed = accent */
+.st-key { width: 160px; height: 34px; padding: 0 12px; border: 1px solid var(--line); font-weight: 500; text-align: left; flex: none; }
+.st-key.armed { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.st-why { display: flex; align-items: center; gap: 8px; color: var(--paper); }
+
+/* onboarding */
+.ob-step { position: absolute; left: -6px; bottom: 24px; margin: 0; font-family: var(--font-display); font-weight: 700; font-size: 250px; line-height: 0.8; letter-spacing: -0.05em; }
+.ob-ledger { margin-top: 24px; }
+.ob-ledger .num { width: 28px; color: var(--faint); }
+.ob-ledger .on .num { color: var(--accent-ink); }
+.ob-right { flex: 1; min-width: 0; margin: 0 var(--margin) 0 24px; display: flex; flex-direction: column; min-height: 0; }
+.ob-title { margin: 24px 0 0; font-family: var(--font-display); font-weight: 700; text-transform: none; font-size: 54px; line-height: 1; letter-spacing: -0.03em; }
+.ob-lede { width: 560px; max-width: 100%; margin: 16px 0 24px; line-height: 1.6; color: var(--faint); }
+.ob-rows { flex: 1; min-height: 0; overflow-y: auto; padding-bottom: 108px; }
+.ob-track { display: flex; align-items: center; gap: 16px; }
+.ob-track-name { width: 300px; flex: none; display: flex; align-items: center; gap: 12px; font-family: var(--font-display); font-weight: 700; text-transform: none; font-size: 26px; letter-spacing: -0.02em; }
+.ob-file { width: 160px; flex: none; font-weight: 500; }
+.ob-cta { position: absolute; z-index: 4; right: var(--margin); bottom: 24px; display: flex; }
+.ob-cta button { height: 60px; display: flex; align-items: center; gap: 8px; padding: 0 16px; font-weight: 500; font-size: 13px; }
+.ob-back { width: 200px; justify-content: center; border: 2px solid var(--paper); border-right: 0; }
+.ob-next { width: 300px; justify-content: space-between; background: var(--accent); color: var(--accent-ink); border: 2px solid var(--ink); }
+.ob-next .hk { font-size: 10px; }
+.ob-skip { height: 30px; padding: 0 14px; border: 1px solid var(--paper); display: flex; align-items: center; gap: 8px; }
+.ob-skip .hk { color: var(--faint); }

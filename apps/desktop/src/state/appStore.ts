@@ -4,7 +4,7 @@ import { create } from "zustand";
 import { isTauri } from "../platform";
 import { flushAutosave } from "./editorStore";
 
-export type Screen = "home" | "editor";
+export type Screen = "home" | "editor" | "settings" | "onboarding";
 
 type AppState = {
   screen: Screen;
@@ -15,12 +15,18 @@ type AppState = {
   openProject: (dir: string, opts?: { ai?: boolean }) => void;
   takePendingAi: () => boolean;
   goHome: () => Promise<void>;
+  openSettings: () => void;
+  /** The intro: on first start, or "Show the intro again" in Settings. */
+  openOnboarding: () => void;
 };
 
 /** The app opens on Home. In a plain browser `/` keeps opening the editor (`?project=demo`), and
  *  `?home=fake` (or `?home=empty`) opens Home with fake rows for the design check. */
 function initial(): Pick<AppState, "screen" | "dir"> {
   const params = new URLSearchParams(location.search);
+  // `?settings=1` and `?onboarding=1` open those pages with fake data for the design check.
+  if (params.has("settings")) return { screen: "settings", dir: null };
+  if (params.has("onboarding")) return { screen: "onboarding", dir: null };
   if (isTauri() || params.has("home")) return { screen: "home", dir: null };
   return { screen: "editor", dir: params.get("project") ?? "demo" };
 }
@@ -40,7 +46,20 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (!(await flushAutosave())) return;
     set({ screen: "home", dir: null });
   },
+  openSettings: () => set({ screen: "settings", dir: null }),
+  openOnboarding: () => set({ screen: "onboarding", dir: null }),
 }));
+
+/** In the app: the intro on the first start (settings.json `onboardingDone` false), before Home. */
+export function showOnboardingOnce(): void {
+  if (!isTauri()) return;
+  void invoke<{ onboardingDone: boolean }>("settings_get").then(
+    (v) => {
+      if (!v.onboardingDone && useAppStore.getState().screen === "home") useAppStore.getState().openOnboarding();
+    },
+    () => undefined,
+  );
+}
 
 /** In the app: a recording that was just stopped opens in the editor (Rust sends its folder,
  *  already allowed for the editor, as `recorder://open-project`). */

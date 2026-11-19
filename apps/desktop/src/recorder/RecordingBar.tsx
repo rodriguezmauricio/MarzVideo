@@ -3,6 +3,7 @@
 // Recorder-Recording.dc.html. Every button calls the same Rust function as its global hotkey.
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Icon } from "../components/Icon";
+import { hotkeyNow, useHotkeys } from "../settings/hotkeyStore";
 import { recorderApi } from "./recorderApi";
 import { useRecLive } from "./recLive";
 import { sessionPresetId, useRecorder } from "./recorderStore";
@@ -30,6 +31,7 @@ export function RecordingBar({ placed = false }: { placed?: boolean }) {
   const rec = useRecLive((l) => l.rec);
   const warning = useRecLive((l) => l.warning);
   const presets = useRecorder((s) => s.presets);
+  const keys = useHotkeys((k) => k.bindings);
   const [level, setLevel] = useState(0);
   const [tip, setTip] = useState<string | null>(null);
   // While the pointer is over the bar window, the window grows 28px upward so a tooltip fits above
@@ -118,7 +120,7 @@ export function RecordingBar({ placed = false }: { placed?: boolean }) {
               <span className={rec.paused ? "off" : undefined}>Pause</span>
               <span className={rec.paused ? undefined : "off"}>Resume</span>
             </span>
-            <Tip id="pause" text={`${rec.paused ? "Resume" : "Pause"} / Ctrl+Shift+P`} {...tipProps} />
+            <Tip id="pause" text={`${rec.paused ? "Resume" : "Pause"} / ${keys.pause}`} {...tipProps} />
           </button>
           <button
             type="button"
@@ -141,7 +143,7 @@ export function RecordingBar({ placed = false }: { placed?: boolean }) {
                 <i key={i} className={i < lit ? "lit" : undefined} style={{ height: BAR_HEIGHTS[i % 4] }} />
               ))}
             </span>
-            <Tip id="mute" text={rec.mic ? `${rec.muted ? "Unmute mic" : "Mute mic"} / Ctrl+Shift+M` : "Recording without a mic"} {...tipProps} />
+            <Tip id="mute" text={rec.mic ? `${rec.muted ? "Unmute mic" : "Mute mic"} / ${keys.mute}` : "Recording without a mic"} {...tipProps} />
           </button>
           <i className="rb-sep" />
           {presets.map((p) => {
@@ -159,14 +161,14 @@ export function RecordingBar({ placed = false }: { placed?: boolean }) {
                 <Icon name="zoomadd" size={16} />
                 <b>{p.id}</b>
                 {p.name}
-                <Tip id={id} text={`Zoom to ${p.name} / Ctrl+${p.id}`} {...tipProps} />
+                <Tip id={id} text={`Zoom to ${p.name} / ${keys[`preset${p.id}` as keyof typeof keys] ?? `Ctrl+${p.id}`}`} {...tipProps} />
               </button>
             );
           })}
           <button type="button" className="rr-b" onClick={() => void api.zoom(null).catch(() => undefined)} {...hover("out")}>
             <Icon name="zoomout" size={16} />
             Zoom out
-            <Tip id="out" text="Zoom out / Ctrl+0" {...tipProps} />
+            <Tip id="out" text={`Zoom out / ${keys.zoomOut}`} {...tipProps} />
           </button>
           <i className="rb-sep" />
           {/* Draw mode (DESIGN-SYSTEM.md "Recorder: draw mode"). Not while paused. */}
@@ -183,13 +185,13 @@ export function RecordingBar({ placed = false }: { placed?: boolean }) {
               <span className={rec.drawing ? "off" : undefined}>Draw</span>
               <span className={rec.drawing ? undefined : "off"}>Drawing</span>
             </span>
-            <Tip id="draw" text={rec.paused ? "Resume to draw" : rec.drawing ? "Stop drawing / Ctrl+Shift+D" : "Draw on screen / Ctrl+Shift+D"} {...tipProps} />
+            <Tip id="draw" text={rec.paused ? "Resume to draw" : rec.drawing ? `Stop drawing / ${keys.draw}` : `Draw on screen / ${keys.draw}`} {...tipProps} />
           </button>
           <i className="rb-sep" />
           <button type="button" className="rr-stop" disabled={stopping} onClick={stop} {...hover("stop")}>
             <Icon name="stop" size={14} />
             Stop
-            <Tip id="stop" text="Stop and open in the editor / Ctrl+Shift+R" {...tipProps} />
+            <Tip id="stop" text={`Stop and open in the editor / ${keys.recordStop}`} {...tipProps} />
           </button>
         </div>
       </div>

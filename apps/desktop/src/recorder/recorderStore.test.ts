@@ -29,6 +29,12 @@ describe("setup persistence", () => {
     expect(setupKey(MON)).not.toEqual(setupKey({ ...MON, width: 1920 }));
   });
 
+  it("starts a monitor with no saved setup on the device defaults from Settings", () => {
+    const s = memory();
+    s.setItem("marz.recorder.defaults", JSON.stringify({ micId: "usb", cameraId: "cam", cameraOn: true, systemAudio: true }));
+    expect(loadSetup(s, MON)).toEqual({ ...defaultSetup(MON), micId: "usb", cameraId: "cam", cameraOn: true, systemAudio: true });
+  });
+
   it("falls back to the default when storage throws or holds junk", () => {
     const throwing = { ...memory(), getItem: () => { throw new Error("blocked"); }, setItem: () => { throw new Error("blocked"); } } as Storage;
     expect(loadSetup(throwing, MON)).toEqual(defaultSetup(MON));

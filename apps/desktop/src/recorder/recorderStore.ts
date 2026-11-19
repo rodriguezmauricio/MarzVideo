@@ -4,6 +4,7 @@
 import { splitTopics } from "@marz/format";
 import { lockAspect } from "@marz/timeline";
 import { create } from "zustand";
+import { readDeviceDefaults } from "../settings/localSettings";
 import { OUTPUT_ASPECT, type NormRect, type PxRect } from "./regionMath";
 
 export type Mode = "full" | "region" | "exact";
@@ -67,7 +68,8 @@ const isPreset = (p: unknown): p is Preset => {
 
 /** The stored setup for monitor `m`, or the default if nothing valid is stored or storage fails. */
 export function loadSetup(storage: Storage, m: Monitor): Setup {
-  const fallback = defaultSetup(m);
+  // A monitor with no saved setup starts on the devices picked in Settings or onboarding.
+  const fallback = { ...defaultSetup(m), ...readDeviceDefaults(storage) };
   try {
     const raw = storage.getItem(setupKey(m));
     if (!raw) return fallback;

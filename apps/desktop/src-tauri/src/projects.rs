@@ -162,9 +162,9 @@ pub fn write_project_json_atomic(dir: &Path, text: &str) -> io::Result<()> {
     result
 }
 
-/// `%USERPROFILE%\Videos\Marz Recorder`, created on first use.
+/// The projects folder (Settings; `%USERPROFILE%\Videos\Marz Recorder` by default), created on first use.
 pub(crate) fn default_dir(app: &AppHandle) -> Result<PathBuf, String> {
-    let dir = app.path().video_dir().map_err(err)?.join("Marz Recorder");
+    let dir = crate::settings::projects_root(app)?;
     fs::create_dir_all(&dir).map_err(err)?;
     Ok(dir)
 }

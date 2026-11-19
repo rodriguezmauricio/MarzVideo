@@ -3,13 +3,14 @@
 // Rust's live transcription tick topics here (LiveChecklist).
 import { useEffect, useRef } from "react";
 import { Icon } from "../components/Icon";
+import { useHotkey } from "../settings/hotkeyStore";
 import { recorderApi } from "../recorder/recorderApi";
 import { useRecLive } from "../recorder/recLive";
 import { formatTimer } from "../recorder/timer";
 import { LiveChecklist } from "./liveChecklist";
 
-export function checklistFooter(note: string | null): string {
-  return note ? `${note}. Ctrl+Shift+K ticks the next.` : "Ticks when you talk. Ctrl+Shift+K ticks the next.";
+export function checklistFooter(note: string | null, key = "Ctrl+Shift+K"): string {
+  return note ? `${note}. ${key} ticks the next.` : `Ticks when you talk. ${key} ticks the next.`;
 }
 
 export function ChecklistOverlay() {
@@ -17,6 +18,7 @@ export function ChecklistOverlay() {
   const items = useRecLive((l) => l.rec.checklist);
   const note = useRecLive((l) => l.rec.checklistNote);
   const drawing = useRecLive((l) => l.rec.drawing);
+  const checkKey = useHotkey("check");
   const liveRef = useRef<LiveChecklist | null>(null);
 
   // One matcher per recording; words always meet the latest topics from Rust.
@@ -51,7 +53,7 @@ export function ChecklistOverlay() {
           {i.atUs !== null && <span className="ck-time">{formatTimer(i.atUs)}</span>}
         </div>
       ))}
-      <div className="ck-foot">{checklistFooter(note)}</div>
+      <div className="ck-foot">{checklistFooter(note, checkKey)}</div>
     </div>
   );
 }
