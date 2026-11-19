@@ -27,6 +27,7 @@ export function verticalBoxes(kind: LayoutKind, slot: CameraSlot, out: Size = VE
   switch (kind) {
     case "pip":
     case "side":
+    case "float":
       return slot === "top"
         ? { screen: { x: 0, y: slotH, w: out.width, h: out.height - slotH }, camera: { x: 0, y: 0, w: out.width, h: slotH }, radius: 0 }
         : { screen: { x: 0, y: 0, w: out.width, h: out.height - slotH }, camera: { x: 0, y: out.height - slotH, w: out.width, h: slotH }, radius: 0 };

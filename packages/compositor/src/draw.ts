@@ -6,6 +6,7 @@ import type { ClickDraw } from "./cursor";
 import { drawCursorShape } from "./cursorShapes";
 import { BACKDROP_FALLBACK, paintBackdrop, type BackgroundDraw } from "./background";
 import { roundedPath } from "./path";
+import { maskPath } from "./masks";
 
 /** Click effect colours by token name. Callers pass the `tokens.css` values they read at run time. */
 export type ClickColors = Record<ClickDraw["color"], string>;
@@ -26,6 +27,8 @@ export type CameraLayer = {
   radius?: number;
   mirror: boolean;
   border?: { width: number; color: string };
+  /** The camera's outline in its box (unit polygon, see masks.ts); wins over `radius`. */
+  mask?: number[];
 };
 
 /** Draw one frame: the cropped source scaled to `out` (into the layout's screen box, see
@@ -92,8 +95,12 @@ export function drawCamera(ctx: Ctx, cam: CameraLayer): void {
   if (w < 1 || h < 1) return;
   const r = Math.max(0, Math.min(cam.radius ?? 0, w / 2, h / 2));
   const c = coverCrop(cam.srcSize, cam.rect);
+  const mask = cam.mask && cam.mask.length >= 6 ? cam.mask : null;
   ctx.save();
-  if (r > 0) {
+  if (mask) {
+    maskPath(ctx, mask, cam.rect);
+    ctx.clip();
+  } else if (r > 0) {
     roundedPath(ctx, x, y, w, h, r);
     ctx.clip();
   }
@@ -109,7 +116,15 @@ export function drawCamera(ctx: Ctx, cam: CameraLayer): void {
   const b = cam.border ?? { width: 1, color: PIP_BORDER };
   if (b.width <= 0) return;
   ctx.save();
-  if (r > 0) {
+  if (mask) {
+    // Inside the outline: clip to it and stroke twice the width, so the inner half shows.
+    maskPath(ctx, mask, cam.rect);
+    ctx.clip();
+    maskPath(ctx, mask, cam.rect);
+    ctx.strokeStyle = b.color;
+    ctx.lineWidth = b.width * 2;
+    ctx.stroke();
+  } else if (r > 0) {
     roundedPath(ctx, x + b.width / 2, y + b.width / 2, w - b.width, h - b.width, Math.max(0, r - b.width / 2));
     ctx.strokeStyle = b.color;
     ctx.lineWidth = b.width;

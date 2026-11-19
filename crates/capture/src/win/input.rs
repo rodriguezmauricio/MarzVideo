@@ -45,7 +45,7 @@ pub enum Hotkey {
     Preset(u8),
     /// Ctrl+0
     ZoomOut,
-    /// Ctrl+Shift+1 .. Ctrl+Shift+4: camera layout n (`events::LAYOUTS[n - 1]`).
+    /// Ctrl+Shift+1 .. Ctrl+Shift+5: camera layout n (`events::LAYOUTS[n - 1]`).
     Layout(u8),
     /// Ctrl+Shift+D: enter or leave draw mode.
     Draw,
@@ -59,7 +59,7 @@ impl Hotkey {
         let mut v = vec![Hotkey::RecordStop, Hotkey::Pause, Hotkey::Mute];
         v.extend((1..=9).map(Hotkey::Preset));
         v.push(Hotkey::ZoomOut);
-        v.extend((1..=4).map(Hotkey::Layout));
+        v.extend((1..=5).map(Hotkey::Layout));
         v.push(Hotkey::Draw);
         v.push(Hotkey::Check);
         v
@@ -86,6 +86,8 @@ impl Hotkey {
             Hotkey::Mute => 3,
             Hotkey::Preset(n) => 3 + i32::from(n),
             Hotkey::ZoomOut => 13,
+            // 14..=17 for the first four (older builds), 20 for the fifth (18 and 19 are taken).
+            Hotkey::Layout(5) => 20,
             Hotkey::Layout(n) => 13 + i32::from(n),
             Hotkey::Draw => 18,
             Hotkey::Check => 19,
@@ -301,5 +303,23 @@ impl InputHandle {
             log.flush()?;
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Hotkey;
+
+    #[test]
+    fn hotkey_ids_are_unique_and_round_trip() {
+        let all = Hotkey::all();
+        let mut ids: Vec<i32> = all.iter().map(|h| h.id()).collect();
+        ids.sort_unstable();
+        ids.dedup();
+        assert_eq!(ids.len(), all.len());
+        for h in all {
+            assert_eq!(Hotkey::from_id(h.id()), Some(h));
+        }
+        assert_eq!(Hotkey::Layout(5).label(), "Ctrl+Shift+5");
     }
 }

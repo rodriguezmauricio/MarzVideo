@@ -16,6 +16,8 @@ import { Icon } from "./Icon";
 import { editedTimeUs, mmsst, seconds1 } from "./timecode";
 import { cutCapLabel, LAYOUT_LABEL, STROKE_LABEL, zoomLabels } from "./zoomLabels";
 import { verticalEdits } from "@marz/format";
+import { CameraShapeRow } from "../camera/CameraShapeRow";
+import { SwitchBlock } from "../camera/SwitchBlock";
 import { FrameInspector, frameLabels, VerticalBlock } from "../vertical/VerticalPanels";
 
 // design-check-ignore: HTMLElement.blur() drops keyboard focus; it is not a visual blur
@@ -218,8 +220,7 @@ function CameraBlock({ project }: { project: Project }) {
           ))}
         </span>
       </div>
-      <Segmented label="Shape" options={SHAPES} value={(PIP_SHAPE_SET.has(cam.pip.shape) ? cam.pip.shape : "rect") as PipShape}
-        onPick={(shape) => apply(updateCamera({ pip: { shape } }))} />
+      <CameraShapeRow project={project} />
       <Segmented label="Border" options={BORDERS} value={BORDERS.find(([w]) => w === border.width)?.[0] ?? -1}
         onPick={(width) => apply(updateCamera({ border: { width } }))} />
       {border.width > 0 && (
@@ -245,14 +246,6 @@ function CameraBlock({ project }: { project: Project }) {
   );
 }
 
-const SHAPES: Array<[PipShape, string]> = [
-  ["rect", "Plain"],
-  // design-check-ignore: the camera mask name (video content), not a UI radius
-  ["rounded", "Round"],
-  ["circle", "Circle"],
-  ["square", "Square"],
-];
-const PIP_SHAPE_SET = new Set<string>(SHAPES.map(([v]) => v));
 /** Border widths in pixels at 1080 output height. */
 const BORDERS: Array<[number, string]> = [
   [0, "None"],
@@ -304,7 +297,7 @@ function LayoutInspector({ scene, durationUs }: { scene: Scene; durationUs: numb
       </div>
       <div className="lay-row">
         <span>Layout</span>
-        <span className="lay-grid" role="radiogroup" aria-label="Layout">
+        <span className="ce-grid3" role="radiogroup" aria-label="Layout">
           {LAYOUT_KINDS.map((k) => (
             <button
               key={k}
@@ -323,7 +316,8 @@ function LayoutInspector({ scene, durationUs }: { scene: Scene; durationUs: numb
         <span className="mut">Length</span>
         <span>{seconds1(scene.endUs - scene.startUs)}</span>
       </div>
-      <p className="insp-note">Between layouts the camera sits in its corner. Switches take 0.4 s.</p>
+      <p className="insp-note">Between layouts the camera sits in its corner.</p>
+      <SwitchBlock scene={scene} />
       <div className="btns">
         <button type="button" className="fb fb-line" onClick={deleteSelection}>
           <Icon name="trash" size={14} />

@@ -43,7 +43,7 @@ describe("staticLayout", () => {
   });
 
   test("an unknown shape draws as plain", () => {
-    expect(staticLayout("pip", OUT, CAM, pip("star"))).toEqual(staticLayout("pip", OUT, CAM, pip()));
+    expect(staticLayout("pip", OUT, CAM, pip("hexagon"))).toEqual(staticLayout("pip", OUT, CAM, pip()));
   });
 
   test("side column: full height 9:16 panel on the corner's side, screen in the rest", () => {

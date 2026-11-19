@@ -16,7 +16,7 @@ export function cutCapLabel(c: Cut): string {
 }
 
 /** Layout block and picker labels (DESIGN-SYSTEM.md "Layout lane"). */
-export const LAYOUT_LABEL: Record<LayoutKind, string> = { pip: "Corner", side: "Side", camera: "Camera", screen: "Screen" };
+export const LAYOUT_LABEL: Record<LayoutKind, string> = { pip: "Corner", side: "Side", float: "Float", camera: "Camera", screen: "Screen" };
 
 /** Drawing lane and inspector names of the stroke tools. */
 export const STROKE_LABEL: Record<import("@marz/format").StrokeTool, string> = {

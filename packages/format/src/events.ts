@@ -26,7 +26,7 @@ const ClickSchema = z.object({
   y: z.number(),
 });
 const ZoomEventSchema = z.object({ ...Base, type: z.literal("zoom"), presetId: z.string(), action: z.enum(["in", "out"]) });
-const LayoutEventSchema = z.object({ ...Base, type: z.literal("layout"), layout: z.enum(["pip", "side", "camera", "screen"]) });
+const LayoutEventSchema = z.object({ ...Base, type: z.literal("layout"), layout: z.enum(["pip", "side", "camera", "screen", "float"]) });
 const DrawPoint = z.tuple([z.number(), z.number()]);
 /** Live drawing: `add` when a stroke is finished (`startUs` is the press), `remove` (eraser), `clear`. */
 const DrawEventSchema = z.discriminatedUnion("op", [
