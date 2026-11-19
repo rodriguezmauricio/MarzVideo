@@ -59,32 +59,32 @@ Windows-first screen recorder + non-destructive editor (Tauri 2, Rust, React/TS)
   caption style per export preset (Ink, Paper, Accent band, Plain; S/M/L; top/middle/bottom; word highlight), `.vtt`
   beside every export next to the `.srt`. Code: `apps/desktop/src/captions`, `packages/autoedit/src/captions.ts`,
   `packages/compositor/src/captions.ts`.
-- **Built (branch `claude/smart-vertical-4e8de8`, not merged, not checked by hand yet):** smart vertical (design
+- **Done (merged 2026-11-19, not checked by hand yet):** smart vertical (design
   `docs/superpowers/specs/2026-11-19-smart-vertical-design.md`, plan `docs/superpowers/plans/2026-11-19-smart-vertical.md`).
   The vertical export follows the action by default (a 9:16 window aimed by cursor rests, clicks and zooms; camera in a 1080 x 608
   slot; captions in the Reels/TikTok safe area) or fits with bars. Vertical preview (V) with an Aim view, Vertical lane with Frame
   blocks (F) that win over the automatic aim, Vertical block in the Project panel, "Follow the action" row in the export panel.
   Optional `edits.vertical`. Code: `packages/timeline/src/reframe.ts`, `packages/compositor/src/vertical.ts`, `apps/desktop/src/vertical`.
   App exports on copies "Vertical test" (camera) and "Vertical test clicks" in `Videos/Marz Recorder/Exports/Vertical test`, with frame sheets.
-- **Built (branch `claude/live-drawing-d842df`, not merged):** live drawing (design `docs/superpowers/specs/2026-11-19-live-drawing-design.md`,
+- **Done (merged 2026-11-19):** live drawing (design `docs/superpowers/specs/2026-11-19-live-drawing-design.md`,
   plan `docs/superpowers/plans/2026-11-19-live-drawing.md`). Ctrl+Shift+D (or Draw on the recording bar) while recording: pen, highlight,
   arrow, box, oval, text, erase, clear, four token colours, on the capture-excluded overlay. Strokes go to `events.jsonl` (`draw` lines) and
   become `edits.drawings` strokes on first open; Drawing lane, select/move/resize on the preview, Drawing inspector, drawn by the compositor
   in preview and both exports. Checked: real take "Drawing test" with simulated input, `screen.mp4` frames without the drawing, both exports with it.
-- **Built on branch `claude/cursor-clicks-08f5d3` (2026-11-19, not merged):** cursor and clicks (design
+- **Done (merged 2026-11-19, not checked by hand yet):** cursor and clicks (design
   `docs/superpowers/specs/2026-11-19-cursor-clicks-design.md`, plan `docs/superpowers/plans/2026-11-19-cursor-clicks.md`).
   `cursorShape` lines in `events.jsonl` (Windows cursor shape and size, from the 16 ms poll), `source.cursor` "layer" or "baked",
   the compositor draws the recorded shape at the recorded size (x 1, 1.5, 2), Cursor lane blocks (H) hide the cursor or switch
   click effects per section, click effects Ripple, Pulse, Ring with token colour and size, in preview and export.
   Code: `packages/format/src/cursor.ts`, `packages/timeline/src/cursor.ts`, `packages/compositor/src/cursor.ts` and `cursorShapes.ts`,
   `crates/capture/src/win/cursor.rs`, `apps/desktop/src/components/CursorPanel.tsx`.
-- **Built on branch `claude/background-frame-25db9c` (2026-11-19, not merged):** background and frame (design
+- **Done (merged 2026-11-19, not checked by hand yet):** background and frame (design
   `docs/superpowers/specs/2026-11-19-background-frame-design.md`, plan `docs/superpowers/plans/2026-11-19-background-frame.md`).
   Optional `edits.background` (style off, ink, paper, glow, grid; margin S/M/L; corners; shadow). Off by default. The screen is
   framed inside the layout's screen box; zooms happen inside the frame; vertical Follow frames the aimed window, Fit keeps ink bars.
   Background block in the Project panel. Code: `packages/format/src/background.ts`, `packages/timeline/src/background.ts`,
   `packages/compositor/src/background.ts` (used by `frameAt` and `drawFrame`), `apps/desktop/src/components/BackgroundBlock.tsx`.
-- **Built on branch `claude/archive-proxies-f1eb23` (2026-11-19, not merged):** archive and proxies (design
+- **Done (merged 2026-11-19, not checked by hand yet):** archive and proxies (design
   `docs/superpowers/specs/2026-11-19-archive-proxies-design.md`, plan `docs/superpowers/plans/2026-11-19-archive-proxies.md`).
   Home row Storage bar: archive copies the whole `.marz` folder to a remembered folder (Google Drive for desktop suggested),
   checked by size and SHA-256 per file; "Remove raw files" makes 720p proxies in `proxies/`, re-checks the archive and moves
@@ -93,7 +93,7 @@ Windows-first screen recorder + non-destructive editor (Tauri 2, Rust, React/TS)
   export asks first ("Restore from archive", "Export anyway"). Code: `src-tauri/src/archive.rs`, `packages/format/src/archive.ts`,
   `apps/desktop/src/home/storageBar.ts`. Checked in the app on copies "Archive test" (camera) and "Archive test 1080" with a scratch
   archive folder: copies hash-identical, raw files in the Recycle Bin, proxy edit and both exports, restore hash-identical. Not checked: a real Google Drive folder.
-- **Built on branch `claude/ai-checklist-b03ab4` (2026-11-19, not merged):** AI checklist (design
+- **Done (merged 2026-11-19, not checked by hand yet):** AI checklist (design
   `docs/superpowers/specs/2026-11-19-ai-checklist-design.md`, plan `docs/superpowers/plans/2026-11-19-ai-checklist.md`).
   Topics typed on the setup bar (Checklist panel), a capture-excluded overlay panel ticks them while he talks: the growing
   `mic.wav` is read in 6 s chunks (1 s overlap, silence skipped) and run through the same whisper.cpp at below-normal priority,
