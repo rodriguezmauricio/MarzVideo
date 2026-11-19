@@ -84,6 +84,15 @@ Windows-first screen recorder + non-destructive editor (Tauri 2, Rust, React/TS)
   framed inside the layout's screen box; zooms happen inside the frame; vertical Follow frames the aimed window, Fit keeps ink bars.
   Background block in the Project panel. Code: `packages/format/src/background.ts`, `packages/timeline/src/background.ts`,
   `packages/compositor/src/background.ts` (used by `frameAt` and `drawFrame`), `apps/desktop/src/components/BackgroundBlock.tsx`.
+- **Built on branch `claude/archive-proxies-f1eb23` (2026-11-19, not merged):** archive and proxies (design
+  `docs/superpowers/specs/2026-11-19-archive-proxies-design.md`, plan `docs/superpowers/plans/2026-11-19-archive-proxies.md`).
+  Home row Storage bar: archive copies the whole `.marz` folder to a remembered folder (Google Drive for desktop suggested),
+  checked by size and SHA-256 per file; "Remove raw files" makes 720p proxies in `proxies/`, re-checks the archive and moves
+  `screen.mp4` and `camera.mp4` to the Recycle Bin (audio stays); "Restore from archive" copies them back, checked. State in the
+  optional `archive.json` (written only by the app). Editor plays and exports from proxies (`withMedia`; `drawFrame` scales the crop to the media size);
+  export asks first ("Restore from archive", "Export anyway"). Code: `src-tauri/src/archive.rs`, `packages/format/src/archive.ts`,
+  `apps/desktop/src/home/storageBar.ts`. Checked in the app on copies "Archive test" (camera) and "Archive test 1080" with a scratch
+  archive folder: copies hash-identical, raw files in the Recycle Bin, proxy edit and both exports, restore hash-identical. Not checked: a real Google Drive folder.
 - **Not checked by hand yet:** the owner checks in `docs/spikes/2026-11-17-owner-checks.md` (clean 3-minute run,
   flash and beep sync, clicks, static screen, mic unplug, 60 Hz, real hotkeys), plus: open New recording once and
   look at the overlay, play an export in Windows Media Player, upload one export of each preset privately and

@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
-import { captionStyleFor, type Project } from "@marz/format";
+import { captionStyleFor, parseArchiveState, usesProxies, type Project } from "@marz/format";
+import { listen } from "@tauri-apps/api/event";
 import { create } from "zustand";
 import { isTauri } from "../platform";
 import { useAppStore } from "../state/appStore";
@@ -14,6 +15,9 @@ import { PRESETS, type ExportPresetId } from "./presets";
 import { asFailure, cancelLeftoverExports, createTauriSink } from "./tauriSink";
 
 export type ExportPhase = "idle" | "picking" | "exporting" | "done" | "failed";
+
+/** Raw files removed: the ask before an export from proxies (DESIGN-SYSTEM.md Export, "Proxy ask"). */
+export type ProxyAsk = { id: ExportPresetId; restorePct: number | null; error: string | null };
 
 type ExportState = {
   panel: PanelState;
@@ -36,7 +40,10 @@ type ExportState = {
   highlight: (id: ExportPresetId) => void;
   /** A key while the panel is open. True when the panel used it. */
   key: (code: string) => boolean;
-  start: (id: ExportPresetId) => Promise<void>;
+  start: (id: ExportPresetId, fromProxies?: boolean) => Promise<void>;
+  proxyAsk: ProxyAsk | null;
+  /** "export": export from the proxies. "restore": copy the raw files back, then export. "cancel": nothing. */
+  answerProxyAsk: (answer: "export" | "restore" | "cancel") => Promise<void>;
   cancel: () => void;
   showInFolder: () => void;
   /** Back to idle (the editor closed). Cancels a running export. */
@@ -65,6 +72,7 @@ export const useExportStore = create<ExportState>((set, get) => ({
   doneFor: null,
   failure: null,
   controller: null,
+  proxyAsk: null,
   burn: {
     youtube: readBurn(storage(), "youtube", PRESETS.youtube.burnCaptionsDefault),
     vertical: readBurn(storage(), "vertical", PRESETS.vertical.burnCaptionsDefault),
@@ -96,12 +104,15 @@ export const useExportStore = create<ExportState>((set, get) => ({
     return true;
   },
 
-  async start(id) {
+  async start(id, fromProxies = false) {
     const s = get();
     if (s.phase === "picking" || s.phase === "exporting") return;
-    const { project, events, storage: files } = useEditorStore.getState();
+    const { project, events, storage: files, archive } = useEditorStore.getState();
     const dir = useAppStore.getState().dir;
     if (!project || !files || !dir) return;
+    const proxies = usesProxies(archive);
+    if (proxies && !fromProxies) return set({ proxyAsk: { id, restorePct: null, error: null }, panel: { open: false, highlight: id } });
+    set({ proxyAsk: null });
     writeLastPreset(storage(), id);
     // The preview shows the caption style of the preset last picked.
     useEditorStore.getState().setCaptionPreset(id);
@@ -137,6 +148,7 @@ export const useExportStore = create<ExportState>((set, get) => ({
         cleanMic,
         events,
         storage: files,
+        proxies,
         sink: isTauri() ? createTauriSink() : createMemorySink(),
         preset: PRESETS[id],
         projectDir: dir,
@@ -167,6 +179,32 @@ export const useExportStore = create<ExportState>((set, get) => ({
     }
   },
 
+  async answerProxyAsk(answer) {
+    const ask = get().proxyAsk;
+    if (!ask || ask.restorePct !== null) return;
+    if (answer === "cancel") return set({ proxyAsk: null });
+    if (answer === "export") return get().start(ask.id, true);
+    const dir = useAppStore.getState().dir;
+    const base = useEditorStore.getState().baseStorage;
+    if (!dir || !base || !isTauri()) return set({ proxyAsk: { ...ask, error: "Restore needs the app." } });
+    set({ proxyAsk: { ...ask, restorePct: 0, error: null } });
+    const un = await listen<{ dir: string; step: string; pct: number }>("archive://progress", (e) => {
+      const cur = get().proxyAsk;
+      if (cur && e.payload.dir === dir && e.payload.step === "restoring") set({ proxyAsk: { ...cur, restorePct: Math.floor(e.payload.pct * 100) } });
+    });
+    try {
+      await invoke("restore_raw_files", { dir });
+      const archive = parseArchiveState(JSON.parse(await base.readText("archive.json")));
+      useEditorStore.getState().setArchive(archive);
+      set({ proxyAsk: null });
+      await get().start(ask.id);
+    } catch (e) {
+      set({ proxyAsk: { ...ask, restorePct: null, error: `Could not restore the raw files. ${e instanceof Error ? e.message : String(e)}` } });
+    } finally {
+      un();
+    }
+  },
+
   cancel() {
     // exportProject sees the abort between frames and cancels the sink (FFmpeg killed, .part removed).
     get().controller?.abort();
@@ -179,7 +217,7 @@ export const useExportStore = create<ExportState>((set, get) => ({
 
   reset() {
     get().controller?.abort();
-    set({ panel: { open: false, highlight: get().last }, phase: "idle", progress: 0, outPath: null, doneFor: null, failure: null, controller: null });
+    set({ panel: { open: false, highlight: get().last }, phase: "idle", progress: 0, outPath: null, doneFor: null, failure: null, controller: null, proxyAsk: null });
   },
 }));
 

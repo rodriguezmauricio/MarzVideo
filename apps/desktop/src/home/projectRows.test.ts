@@ -89,3 +89,8 @@ test("folder name for messages drops the path and .marz", () => {
   expect(folderName("C:\\Users\\me\\Videos\\Marz Recorder\\Pricing page.marz")).toBe("Pricing page");
   expect(folderName("D:/clips/Demo.MARZ/")).toBe("Demo");
 });
+
+test("an archived row carries its badge", () => {
+  const [a, b, c] = toRows([row({ storage: "archived" }), row({ storage: "rawRemoved", edited_at: ago(3 * HOUR) }), row({ edited_at: ago(4 * HOUR) })], NOW);
+  expect([a!.badge, b!.badge, c!.badge]).toEqual(["Archived", "Raw files removed", null]);
+});

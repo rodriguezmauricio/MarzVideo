@@ -75,7 +75,9 @@ fn cache_dir(app: &AppHandle) -> Result<PathBuf, String> {
 #[tauri::command(async)]
 pub fn project_thumb(app: AppHandle, allowed: State<'_, Allowed>, dir: String) -> Result<String, String> {
     let dir = checked(&allowed, &dir)?;
-    let screen = dir.join("screen.mp4");
+    // Raw files removed after an archive: the proxy stands in.
+    let raw = dir.join("screen.mp4");
+    let screen = if raw.is_file() { raw } else { dir.join("proxies").join("screen.mp4") };
     let meta = fs::metadata(&screen).map_err(|e| e.to_string())?;
     let modified = meta.modified().ok().and_then(|t| t.duration_since(UNIX_EPOCH).ok()).map_or(0, |d| d.as_millis());
     let out = cache_dir(&app)?.join(cache_key(&screen, meta.len(), modified));

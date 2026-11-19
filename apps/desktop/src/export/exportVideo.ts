@@ -21,6 +21,8 @@ export interface ExportOptions {
   project: Project;
   events: MarzEvent[];
   storage: ProjectStorage;
+  /** The screen plays from its proxy (raw files removed). `drawFrame` scales the crop to the media size by itself. */
+  proxies?: boolean;
   sink: ExportSink;
   preset: ExportPreset;
   /** The project folder, passed to the muxer job (FFmpeg reads mic.wav from it). */

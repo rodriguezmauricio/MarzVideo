@@ -120,6 +120,7 @@ A `screen.mp4` that is missing or cannot be played: "The screen recording is mis
 - Cancelled: back to idle. No message; no file is written and an existing file with that name is untouched.
 - Failed: the Warning bar "Export failed. <reason>. Your project is unchanged." It replaces any other warning until the next export starts. Reasons: "FFmpeg is missing. Install it or set MARZ_FFMPEG", "This folder cannot be written to. Pick another folder", "Pick a folder outside the project" (the save dialog picked a folder inside a `.marz` project, where the export could replace a raw track), "This computer cannot encode H.264 video", "FFmpeg stopped with an error", "The video could not be encoded" (anything else in the webview). The details go to the console.
 - Empty output (every part is cut): the button has no fill, a 1px line border and faint text and does nothing; tooltip "Nothing left to export. Every part is cut.". Ctrl+E does nothing.
+- Proxy ask (added 2026-11-19, archive and proxies): when the project's raw video files were removed after an archive, picking a preset does not open the save dialog yet. The Warning bar asks: bold "Raw files removed." then "This export uses the 720p proxies and looks softer.", then three ask buttons (the model download ask's buttons): "Restore from archive", "Export anyway", "Cancel". "Export anyway" goes on to the save dialog. "Restore from archive" turns the bar into bold "Restoring the raw files 42%" (no buttons), then the export goes on to the save dialog with the raw files. A failed restore: bold "Could not restore the raw files." and the reason, with the same three buttons.
 
 ### Playhead timecode (editor hero)
 `mm:ss` in display 250px, paper, at left 18px top 30px. It sits BEHIND the preview and is partly covered on purpose. Under it a faint line: "Playhead 01:03.0 / Length 02:40.0".
@@ -303,6 +304,19 @@ Ctrl+Shift+D or the Draw button on the recording bar enters it; the same key, Do
 - Discard asks first, inside the same banner: bold "Move <name> to the Recycle Bin?" + faint "You can restore it from there.", buttons Discard (1px paper border) and Keep (1px paper border). Discard never deletes; it moves the folder to the Recycle Bin.
 - Errors on Home (a folder that is not a project, a failed recover or discard) use the Warning bar under the strip: "This folder is not a Marz project. Pick a folder that ends in .marz."
 - Window sizes, Home: the hero keeps 276px; its buttons stay 24px from the right edge. Banners and the table header keep their heights; the rows scroll under the header. Empty keeps its positions; the tracks preview stays 24px from the right edge and the screen scrolls when it is shorter than the content.
+- Storage (added 2026-11-19, archive and proxies, spec section 13):
+  - Row badge: an archived project's row shows a badge (22px, mono 500) at the start of the meta, 12px before the meta text: "Archived" (Manual badge: paper fill, ink text) or "Raw files removed" (1px paper border, paper text, no fill).
+  - Storage button: each row ends with "Storage" (`archive` icon 13px, mono, faint; paper on hover and while its bar is open), 24px after the meta and 24px left of "Open". It is its own button, the rest of the row opens the project.
+  - Storage bar: a click on Storage opens a bar straight under the row, the recover banner's frame (ink, 56px, 2px paper top, 1px paper bottom, 24px side padding) without the hatched square. One bar at a time; Storage again, Close or Esc closes it. Text left (bold lead + faint rest, one line, ellipsis), buttons right (the banner buttons: 34px, 16px padding; the first is accent fill when marked so, the others 1px paper border). States:
+    - No archive folder, Google Drive found: bold "Archive to Google Drive?" faint "<G:\My Drive\Marz Recorder>. Copies the whole project and checks every file." Buttons: "Use this folder" (accent), "Pick a folder", "Close".
+    - No archive folder, no Drive: bold "Pick an archive folder." faint "Archive copies the whole project there and checks every file." Buttons: "Pick a folder" (accent), "Close".
+    - Not archived: bold "Archive <name>?" faint "Copies it to <folder> and checks every file. Nothing here changes." Buttons: "Archive" (accent), "Change folder", "Close".
+    - Working: bold "Copying 42%", "Checking the copy 80%", "Making proxies 30%", "Moving to the Recycle Bin" or "Restoring 42%", faint "Keep the app open." No buttons.
+    - Archived: bold "Archived <19 Nov>." faint "<archive folder>. Raw video here: 295 MB." Buttons: "Remove raw files", "Archive again", "Close".
+    - Remove asks first, in the same bar: bold "Move screen.mp4 and camera.mp4 (295 MB) to the Recycle Bin?" faint "The checked archive copy stays. Editing uses 720p proxies. Let Google Drive finish uploading first." Buttons: "Remove", "Keep".
+    - Raw files removed: bold "Raw files removed." faint "Editing uses 720p proxies. Originals in <archive folder>." Buttons: "Restore from archive" (accent), "Archive again", "Close".
+    - Failed: bold "Could not archive.", "Could not remove the raw files." or "Could not restore." faint the reason. Buttons of the state before.
+  - Remove never hard-deletes: the raw video files go to the Recycle Bin. Audio, events and edits stay.
 
 ### Icons
 24px viewBox, 2px stroke, `stroke-linecap: square`, `stroke-linejoin: miter`, no fill (Play, record dot and stop are solid). Size 12-16px in UI. Never use an icon library with rounded strokes. Path data for every icon is in `icons.md`; copy from there.

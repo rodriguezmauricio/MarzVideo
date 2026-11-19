@@ -51,6 +51,7 @@
 .h-head { position: relative; z-index: 2; flex: none; height: 34px; display: flex; align-items: center; justify-content: space-between; padding: 0 24px; color: var(--faint); }
 .h-rows { position: relative; z-index: 2; flex: 1; min-height: 0; overflow-y: auto; }
 .h-row { width: 100%; height: 68px; display: flex; align-items: center; padding: 0 24px; border-top: 1px solid var(--line); background: var(--ink); }
+.h-row-main { flex: 1; min-width: 0; height: 100%; display: flex; align-items: center; }
 .h-idx { width: 60px; flex: none; color: var(--faint); }
 .h-thumb { position: relative; width: 96px; height: 54px; flex: none; margin-right: 24px; overflow: hidden; border: 1px solid var(--line); background: var(--ink); }
 .h-thumb video, .h-thumb img { display: block; width: 100%; height: 100%; object-fit: cover; pointer-events: none; }
@@ -59,7 +60,13 @@
   font-family: var(--font-display); font-weight: 700; text-transform: none; font-size: 26px; letter-spacing: -0.02em;
 }
 .h-len { width: 100px; flex: none; font-weight: 500; }
-.h-meta { flex: 1; min-width: 0; color: var(--faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.h-meta { flex: 1; min-width: 0; display: flex; align-items: center; color: var(--faint); white-space: nowrap; }
+.h-meta-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+/* storage (archive and proxies): row badge, Storage button, the bar under the row */
+.h-badge { flex: none; margin-right: 12px; font-style: normal; }
+.badge-line { border: 1px solid var(--paper); color: var(--paper); }
+.h-store { display: flex; align-items: center; gap: 8px; flex: none; height: 100%; margin: 0 24px; color: var(--faint); }
+.h-store:hover, .h-store.on { color: var(--paper); }
 .h-open { display: flex; align-items: center; gap: 8px; flex: none; }
 
 /* empty: "Nothing yet." Positions are the mockup's minus the 44px strip. */

@@ -30,7 +30,7 @@ export type CameraLayer = {
 
 /** Draw one frame: the cropped source scaled to `out` (into the layout's screen box, see
  *  `frameAt`), then the live drawing strokes, the click effects, the cursor, then the camera. Same code for
- *  preview and export. */
+ *  preview and export. The crop is scaled to the media's real pixel size (a proxy is smaller). */
 export function drawFrame(
   ctx: Ctx,
   source: CanvasImageSource,

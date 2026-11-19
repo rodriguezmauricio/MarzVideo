@@ -85,6 +85,33 @@ function ModelAsk() {
   );
 }
 
+/** Raw files removed: the ask before an export from proxies (DESIGN-SYSTEM.md Export, "Proxy ask"). */
+function ProxyAskBar() {
+  const ask = useExportStore((s) => s.proxyAsk);
+  const answer = useExportStore((s) => s.answerProxyAsk);
+  if (!ask) return null;
+  if (ask.restorePct !== null)
+    return (
+      <div className="warn" role="status">
+        <Icon name="alert" size={13} />
+        <b>Restoring the raw files {ask.restorePct}%</b>
+      </div>
+    );
+  return (
+    <div className="warn" role="status">
+      <Icon name="alert" size={13} />
+      {ask.error ? <b>{ask.error}</b> : (
+        <>
+          <b>Raw files removed.</b> This export uses the 720p proxies and looks softer.
+        </>
+      )}
+      <button type="button" className="ask" onClick={() => void answer("restore")}>Restore from archive</button>
+      <button type="button" className="ask" onClick={() => void answer("export")}>Export anyway</button>
+      <button type="button" className="ask" onClick={() => void answer("cancel")}>Cancel</button>
+    </div>
+  );
+}
+
 /** Home or the editor (appStore). */
 export function App() {
   const screen = useAppStore((s) => s.screen);
@@ -123,6 +150,7 @@ function Editor({ dir }: { dir: string }) {
   const saveStatus = useEditorStore((s) => s.saveStatus);
   const exportFailure = useExportStore((s) => (s.phase === "failed" ? s.failure : null));
   const exportDone = useExportDoneLine();
+  const proxyAsk = useExportStore((s) => s.proxyAsk !== null);
   const aiWarning = useEditorStore((s) => s.ai.warning);
   const aiAsk = useEditorStore((s) => s.ai.ask);
   const aiShown = useEditorStore((s) => s.ai.status !== null || s.ai.downloadPct !== null);
@@ -233,7 +261,9 @@ function Editor({ dir }: { dir: string }) {
         </div>
         <ExportProgressLine />
       </header>
-      {exportFailure ? (
+      {proxyAsk ? (
+        <ProxyAskBar />
+      ) : exportFailure ? (
         <WarningBar text={exportFailure} />
       ) : aiAsk === "model" ? (
         <ModelAsk />

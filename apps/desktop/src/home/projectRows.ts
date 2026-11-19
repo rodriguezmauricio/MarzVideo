@@ -10,10 +10,14 @@ export type ProjectRow = {
   /** project.json modified time (the crash marker's for a recording that needs recovery), ms since the epoch. */
   edited_at: number;
   needs_recovery: boolean;
+  /** archive.json: "archived", "rawRemoved", or none. Missing from older builds. */
+  storage?: "archived" | "rawRemoved" | null;
 };
 
 /** A ruled row on Home: index "01", length "02:40", meta "3 zooms, 1 cut, edited 2 hours ago". */
-export type RowView = { dir: string; index: string; name: string; length: string; meta: string };
+export type RowView = { dir: string; index: string; name: string; length: string; meta: string; badge: string | null };
+
+const BADGES = { archived: "Archived", rawRemoved: "Raw files removed" } as const;
 
 const MIN = 60_000;
 const HOUR = 60 * MIN;
@@ -45,6 +49,7 @@ export function toRows(raw: ProjectRow[], now: Date): RowView[] {
       index: String(i + 1).padStart(2, "0"),
       name: r.name,
       length: mmss(r.duration_us),
+      badge: r.storage ? BADGES[r.storage] : null,
       meta:
         r.zooms === 0 && r.cuts === 0
           ? `No edits yet, recorded ${ago(r.edited_at, now)}`

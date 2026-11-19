@@ -28,6 +28,7 @@ Template:
 | `region` | `<path d="M4 8V4h4M16 4h4v4M20 16v4h-4M8 20H4v-4"/>` |
 | `exact` | `<rect x="3" y="8" width="18" height="8"/><path d="M7 8v3M11 8v4M15 8v3M19 8v4"/>` |
 | `mic` | `<rect x="9" y="3" width="6" height="11"/><path d="M5 11a7 7 0 0014 0M12 18v3"/>` |
+| `archive` | `<path d="M3 4h18v5H3zM5 9v11h14V9M10 13h4"/>` |
 | `micoff` | `<rect x="9" y="3" width="6" height="11"/><path d="M5 11a7 7 0 0014 0M12 18v3M4 4l16 16"/>` |
 | `speaker` | `<path d="M4 9h4l5-4v14l-5-4H4zM16.5 9.5a3.5 3.5 0 010 5M19 7a7 7 0 010 10"/>` (computer sound) |
 | `camera` | `<rect x="3" y="6" width="13" height="12"/><path d="M16 10l5-3v10l-5-3"/>` |

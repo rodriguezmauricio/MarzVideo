@@ -18,7 +18,7 @@ use tauri_plugin_dialog::DialogExt;
 const PROJECT_JSON: &str = "project.json";
 const CRASH_MARKER: &str = marz_capture::project::CRASH_MARKER;
 /// Files the editor may read. Raw media is loaded through the asset protocol, not this.
-const READABLE: [&str; 3] = [PROJECT_JSON, "events.jsonl", "transcript.json"];
+const READABLE: [&str; 4] = [PROJECT_JSON, "events.jsonl", "transcript.json", crate::archive::STATE_FILE];
 
 /// Folders the page may touch: listed from the projects folder or picked in the dialog.
 #[derive(Default)]
@@ -34,6 +34,8 @@ pub struct ProjectRow {
     pub cuts: usize,
     pub edited_at: u64,
     pub needs_recovery: bool,
+    /// "archived", "rawRemoved" or none (archive.json).
+    pub storage: Option<&'static str>,
 }
 
 /// What the folder dialog gave back.
@@ -97,6 +99,7 @@ pub fn project_row(dir: &Path, ffprobe: Option<&Path>) -> Option<ProjectRow> {
             cuts: 0,
             edited_at: mtime_ms(&dir.join(CRASH_MARKER)),
             needs_recovery: true,
+            storage: None,
         });
     }
     let file = dir.join(PROJECT_JSON);
@@ -114,6 +117,7 @@ pub fn project_row(dir: &Path, ffprobe: Option<&Path>) -> Option<ProjectRow> {
         cuts: len("cuts"),
         edited_at: mtime_ms(&file),
         needs_recovery: false,
+        storage: crate::archive::ArchiveState::read(dir).label(),
     })
 }
 
@@ -250,7 +254,7 @@ pub fn discard_project(window: WebviewWindow, allowed: State<'_, Allowed>, dir: 
 }
 
 #[cfg(windows)]
-mod recycle {
+pub(crate) mod recycle {
     use std::path::Path;
     use windows::Win32::Foundation::HWND;
     use windows::Win32::System::Com::{CLSCTX_ALL, COINIT_APARTMENTTHREADED, CoCreateInstance, CoInitializeEx, CoUninitialize};
@@ -292,7 +296,7 @@ mod recycle {
 }
 
 #[cfg(not(windows))]
-mod recycle {
+pub(crate) mod recycle {
     pub fn to_recycle_bin(_path: &std::path::Path, _owner: isize) -> Result<(), String> {
         Err("Moving to the Recycle Bin needs Windows.".into())
     }
@@ -365,6 +369,7 @@ mod tests {
         let dir = Path::new("C:/x.marz");
         assert!(readable_path(dir, "project.json").is_ok());
         assert!(readable_path(dir, "events.jsonl").is_ok());
+        assert!(readable_path(dir, "archive.json").is_ok());
         for bad in ["screen.mp4", "../secret.txt", "..\\project.json", "sub/project.json", "C:/Windows/win.ini", ""] {
             assert!(readable_path(dir, bad).is_err(), "{bad} must be rejected");
         }
