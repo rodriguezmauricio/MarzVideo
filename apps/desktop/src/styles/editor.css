@@ -156,6 +156,7 @@ input { font: inherit; color: inherit; letter-spacing: inherit; text-transform: 
 .insp-cam { margin-top: 18px; border-top: 1px solid var(--ink); }
 .insp-sec { padding: 10px 0 6px; font-family: var(--font-mono); font-size: 11px; text-transform: uppercase; }
 .insp-cam .irow { border-top: 0; border-bottom: 1px solid var(--ink); }
+.insp-cam .irow.off { color: var(--faint-on-paper); }
 .corners { display: grid; grid-template-columns: 22px 22px; gap: 2px; }
 .corners button { width: 22px; height: 22px; border: 1px solid var(--ink); }
 .corners button.on { background: var(--ink); }
@@ -224,6 +225,7 @@ input { font: inherit; color: inherit; letter-spacing: inherit; text-transform: 
 .blk-sug { border: 1px dashed var(--accent); color: var(--accent); }
 /* Layout lane blocks: DESIGN-SYSTEM.md "Layout lane". */
 .blk-lay { background: var(--paper); color: var(--ink); }
+.blk-cur { background: var(--paper); color: var(--ink); }
 .blk-lay.live { background: var(--accent); color: var(--accent-ink); }
 /* Drawing lane blocks: DESIGN-SYSTEM.md "Drawing lane". */
 .blk-draw { background: var(--ink); color: var(--paper); border: 1px solid var(--paper); padding-left: 18px; }

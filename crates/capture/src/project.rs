@@ -122,7 +122,7 @@ pub fn project_json(meta: &ProjectMeta) -> Value {
         "name": meta.name,
         "createdAt": meta.created_at,
         "durationUs": meta.duration_us,
-        "source": { "width": meta.width, "height": meta.height, "fps": meta.fps },
+        "source": { "width": meta.width, "height": meta.height, "fps": meta.fps, "cursor": "layer" },
         "tracks": tracks,
         "output": { "width": 1920, "height": 1080, "fps": meta.fps },
         "zoomPresets": meta.presets,
@@ -242,7 +242,7 @@ mod tests {
         assert_eq!(v["version"], 1);
         assert_eq!(v["id"], "6f1c2a9e-0000-4000-8000-000000000001");
         assert_eq!(v["durationUs"], 63_500_000);
-        assert_eq!(v["source"], serde_json::json!({"width": 2560, "height": 1440, "fps": 60}));
+        assert_eq!(v["source"], serde_json::json!({"width": 2560, "height": 1440, "fps": 60, "cursor": "layer"}));
         assert_eq!(v["tracks"]["screen"], serde_json::json!({"file": "screen.mp4", "offsetUs": 0}));
         assert_eq!(v["tracks"]["mic"], serde_json::json!({"file": "mic.wav", "offsetUs": 12400, "volume": 1, "muted": false}));
         assert_eq!(v["output"], serde_json::json!({"width": 1920, "height": 1080, "fps": 60}));

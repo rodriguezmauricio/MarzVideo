@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { FormatError } from "./project";
+import { CURSOR_SHAPES, type CursorShape } from "./cursor";
 
 const HeaderSchema = z.object({
   type: z.literal("header"),
@@ -10,6 +11,12 @@ const HeaderSchema = z.object({
 
 const Base = { tUs: z.number().int() };
 const CursorSchema = z.object({ ...Base, type: z.literal("cursor"), x: z.number(), y: z.number() });
+const CursorShapeSchema = z.object({
+  ...Base,
+  type: z.literal("cursorShape"),
+  shape: z.string().transform((v): CursorShape => ((CURSOR_SHAPES as readonly string[]).includes(v) ? (v as CursorShape) : "other")),
+  px: z.number().positive().default(32),
+});
 const ClickSchema = z.object({
   ...Base,
   type: z.literal("click"),
@@ -41,6 +48,7 @@ const ResumeSchema = z.object({ ...Base, type: z.literal("resume") });
 
 const KNOWN = {
   cursor: CursorSchema,
+  cursorShape: CursorShapeSchema,
   click: ClickSchema,
   zoom: ZoomEventSchema,
   layout: LayoutEventSchema,
@@ -51,13 +59,14 @@ const KNOWN = {
 
 export type EventsHeader = Omit<z.infer<typeof HeaderSchema>, "type">;
 export type CursorEvent = z.infer<typeof CursorSchema>;
+export type CursorShapeEvent = z.infer<typeof CursorShapeSchema>;
 export type ClickEvent = z.infer<typeof ClickSchema>;
 export type ZoomEvent = z.infer<typeof ZoomEventSchema>;
 export type LayoutEvent = z.infer<typeof LayoutEventSchema>;
 export type DrawEvent = z.infer<typeof DrawEventSchema>;
 export type PauseEvent = z.infer<typeof PauseSchema>;
 export type ResumeEvent = z.infer<typeof ResumeSchema>;
-export type MarzEvent = CursorEvent | ClickEvent | ZoomEvent | LayoutEvent | DrawEvent | PauseEvent | ResumeEvent;
+export type MarzEvent = CursorEvent | CursorShapeEvent | ClickEvent | ZoomEvent | LayoutEvent | DrawEvent | PauseEvent | ResumeEvent;
 
 export function parseEvents(text: string): { header: EventsHeader; events: MarzEvent[] } {
   const lines = text.split(/\r?\n/).filter((l) => l.trim() !== "");

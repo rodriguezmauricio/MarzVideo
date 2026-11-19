@@ -55,6 +55,13 @@ function buildEvents(durationSec: number): string {
       lines.push({ tUs: down + 80_000, type: "click", button: "left", state: "up", x, y });
     }
   }
+  // Cursor shapes as Windows reports them: arrow, a hand over each click cluster, a text beam near the end.
+  lines.push({ tUs: 0, type: "cursorShape", shape: "arrow", px: 32 });
+  for (const c of clusters) {
+    lines.push({ tUs: c.startUs - 200_000, type: "cursorShape", shape: "hand", px: 32 });
+    lines.push({ tUs: c.startUs + 1_000_000, type: "cursorShape", shape: "arrow", px: 32 });
+  }
+  lines.push({ tUs: Math.round(durUs * 0.85), type: "cursorShape", shape: "ibeam", px: 32 });
   // Live drawing (draw mode while recording): a pen loop and a text note near the first clicks,
   // cleared; then an arrow, a rectangle, an ellipse and a highlighter line near the second.
   const at = (f: number) => Math.round(durUs * f);

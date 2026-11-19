@@ -127,7 +127,7 @@ export function Preview() {
         : null;
     const { strokeId } = live.current;
     const drawings = editing ? null : { items: visibleStrokes(p, srcUs, strokeId), colors: tokenColors(), family: strokeFamily() };
-    drawFrame(ctx, video, frameAt(shown, events, srcUs, lay?.screen), p.output, camera, drawings);
+    drawFrame(ctx, video, frameAt(shown, events, srcUs, lay?.screen), p.output, camera, tokenColors(), drawings);
     // Captions: the same layout and drawing as the export (DESIGN-SYSTEM.md "Captions in the video").
     const { blocks: bl, look: lk, segs: sg } = live.current;
     const tOut = bl.length ? sourceToOutput(sg, srcUs) : null;

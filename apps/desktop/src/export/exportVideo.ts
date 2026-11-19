@@ -131,7 +131,7 @@ export async function exportProject(opts: ExportOptions): Promise<ExportReport> 
       try {
         const camera = camFrame ? cameraLayerFor(project, lay, out, camFrame, { width: camFrame.displayWidth, height: camFrame.displayHeight }, colors) : null;
         const drawings = hasStrokes ? { items: strokesAt(project, srcUs), colors, family } : null;
-        drawFrame(compCtx, frame, frameAt(project, events, srcUs, lay.screen), out, camera, drawings);
+        drawFrame(compCtx, frame, frameAt(project, events, srcUs, lay.screen), out, camera, colors, drawings);
       } finally {
         frame.close();
         camFrame?.close();

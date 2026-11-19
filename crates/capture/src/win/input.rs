@@ -21,6 +21,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
     WM_TIMER,
 };
 
+use super::cursor::ShapeReader;
 use super::qpc::qpc_hns;
 use super::{rec_hns, set_dpi_awareness, SharedClock, Warnings};
 use crate::events::{Button, EventLog};
@@ -210,6 +211,7 @@ fn input_thread(sh: Arc<InputShared>, hotkeys_on: bool, ready: mpsc::Sender<Resu
         };
         CTX.with(|c| *c.borrow_mut() = Some(sh.clone()));
         let timer = SetTimer(None, 0, POLL_MS, None);
+        let mut shapes = ShapeReader::new();
         let mut registered = Vec::new();
         let _ = ready.send(Ok(GetCurrentThreadId()));
         set_hotkeys(hotkeys_on, &mut registered, &sh);
@@ -219,8 +221,14 @@ fn input_thread(sh: Arc<InputShared>, hotkeys_on: bool, ready: mpsc::Sender<Resu
             match msg.message {
                 WM_TIMER => {
                     let mut p = POINT::default();
+                    let shape = shapes.read();
                     if GetCursorPos(&mut p).is_ok() {
-                        sh.with_log(|log, t| log.cursor(t, p.x, p.y));
+                        sh.with_log(|log, t| {
+                            if let Some((name, px)) = shape {
+                                log.cursor_shape(t, name, px);
+                            }
+                            log.cursor(t, p.x, p.y);
+                        });
                     }
                 }
                 WM_HOTKEY => {

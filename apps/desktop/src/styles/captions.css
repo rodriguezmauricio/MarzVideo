@@ -10,7 +10,8 @@
 .insp-tabs .tab-key { margin-left: auto; color: var(--faint-on-paper); }
 .insp-tabs button.on .tab-key { color: var(--paper); }
 .insp-body { flex: 1; min-height: 0; margin-top: 20px; overflow-y: auto; overflow-x: hidden; }
-.insp-body > .insp-scroll { height: 100%; }
+/* No negative margin here: insp-body clips x, and a focused switch would scroll the panel 12px left. */
+.insp-body > .insp-scroll { height: 100%; margin-right: 0; padding-right: 0; }
 
 /* Caption buttons: the hotkey after the label, in faint-on-paper. */
 .fb-key { color: var(--faint-on-paper); }

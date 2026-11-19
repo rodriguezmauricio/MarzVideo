@@ -3,3 +3,4 @@ export * from "./events";
 export * from "./transcript";
 export * from "./audio";
 export * from "./drawings";
+export * from "./cursor";

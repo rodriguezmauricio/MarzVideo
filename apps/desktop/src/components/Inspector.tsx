@@ -1,7 +1,8 @@
 import { AudioBlock } from "./AudioBlock";
+import { CursorBlock, CursorInspector } from "./CursorPanel";
 import { useEffect, useState } from "react";
-import { aiEdits, BORDER_COLOR_NAMES, drawingStrokes, STROKE_COLORS, strokeWidths, type Stroke, type StrokeColor, cameraBorder, cameraEdits, cameraScenes, captionEdits, LAYOUT_KINDS, PIP_CORNERS, PIP_SIZES, type BorderColor, type Corner, type Cut, type PipShape, type Project, type Scene, type Word, type Zoom } from "@marz/format";
-import { setCaptionHidden, setCaptionText, setCursorHidden, updateCamera, updateCut, updateScene, updateStroke, updateZoom, type StrokePatch } from "@marz/timeline";
+import { aiEdits, BORDER_COLOR_NAMES, cursorKind, cursorSections, drawingStrokes, STROKE_COLORS, strokeWidths, type Stroke, type StrokeColor, cameraBorder, cameraEdits, cameraScenes, captionEdits, LAYOUT_KINDS, PIP_CORNERS, PIP_SIZES, type BorderColor, type Corner, type Cut, type PipShape, type Project, type Scene, type Word, type Zoom } from "@marz/format";
+import { setCaptionHidden, setCaptionText, updateCamera, updateCut, updateScene, updateStroke, updateZoom, type StrokePatch } from "@marz/timeline";
 import { setKind, setPace } from "../ai/aiActions";
 import { CaptionsBlock } from "../captions/CaptionsBlock";
 import { setCaptionStartAt, useCaptionFacts, wordCaptionState } from "../captions/captionActions";
@@ -16,7 +17,7 @@ import { cutCapLabel, LAYOUT_LABEL, STROKE_LABEL, zoomLabels } from "./zoomLabel
 const leaveField = (el: HTMLInputElement) => el.blur();
 
 /** One 68px cell: small label, big display value. The value is editable; Enter or leaving the field commits it. */
-function Cell(props: { label: string; text: string; onCommit: (us: number) => void }) {
+export function Cell(props: { label: string; text: string; onCommit: (us: number) => void }) {
   return (
     <label className="cell">
       <span className="k">{props.label}</span>
@@ -256,17 +257,18 @@ const BORDERS: Array<[number, string]> = [
 const COLOR_NAMES: Record<BorderColor, string> = { paper: "Paper", ink: "Ink", accent: "Accent" };
 
 /** A row with the Motion row's segmented control. */
-function Segmented<T extends string | number>(props: { label: string; options: Array<[T, string]>; value: T; onPick: (v: T) => void }) {
+export function Segmented<T extends string | number>(props: { label: string; options: Array<[T, string]>; value: T; onPick: (v: T) => void; aria?: string; disabled?: boolean }) {
   return (
-    <div className="irow">
+    <div className={`irow${props.disabled ? " off" : ""}`}>
       <span>{props.label}</span>
-      <span className={props.options.length > 3 ? "seg seg-4" : "seg"} role="radiogroup" aria-label={`Camera ${props.label.toLowerCase()}`}>
+      <span className={props.options.length > 3 ? "seg seg-4" : "seg"} role="radiogroup" aria-label={props.aria ?? `Camera ${props.label.toLowerCase()}`}>
         {props.options.map(([v, text]) => (
           <button
             key={String(v)}
             type="button"
             role="radio"
             aria-checked={props.value === v}
+            disabled={props.disabled}
             className={props.value === v ? "on" : ""}
             onClick={() => props.value !== v && props.onPick(v)}
           >
@@ -545,6 +547,7 @@ export function Inspector({ compact = false }: { compact?: boolean }) {
   const word = selection?.kind === "word" ? words.find((w) => w.id === selection.id) : undefined;
   const scene = selection?.kind === "layout" ? cameraScenes(project).find((x) => x.id === selection.id) : undefined;
   const stroke = selection?.kind === "drawing" ? drawingStrokes(project).find((x) => x.id === selection.id) : undefined;
+  const curSec = selection?.kind === "cursor" ? cursorSections(project).find((x) => x.id === selection.id) : undefined;
   const tab = useEditorStore((s) => s.inspectorTab);
   const setTab = useEditorStore((s) => s.setInspectorTab);
   const tabs = words.length > 0;
@@ -557,17 +560,15 @@ export function Inspector({ compact = false }: { compact?: boolean }) {
         <LayoutInspector scene={scene} durationUs={project.durationUs} />
       ) : stroke ? (
         <DrawingInspector stroke={stroke} project={project} />
+      ) : curSec ? (
+        <CursorInspector section={curSec} durationUs={project.durationUs} baked={cursorKind(project) === "baked"} />
       ) : word ? (
         <WordInspector word={word} project={project} />
       ) : (
         <div className="insp-scroll">
           <h2 className="insp-title">Project</h2>
           <div className="mut insp-sub">Nothing selected</div>
-          <div className="toggles">
-            <Toggle label="Hide cursor" on={project.edits.cursor.hidden} onChange={(on) => apply(setCursorHidden(on))} />
-            {/* Shows the stored setting; switching click effects is not built yet (see DEVIATIONS.md). */}
-            <Toggle label="Click highlight" on={project.edits.clicks.effect !== "none"} />
-          </div>
+          <CursorBlock project={project} />
           {project.tracks.camera && <CameraBlock project={project} />}
           <AudioBlock project={project} />
           {words.length > 0 && <CaptionsBlock project={project} />}

@@ -86,7 +86,7 @@ describe("parseProject with the Rust writer fixture", () => {
   test("parses the Rust project fixture", () => {
     const url = new URL("../../../crates/capture/tests/fixtures/project-sample.json", import.meta.url);
     const p = parseProject(JSON.parse(readFileSync(url, "utf8")));
-    expect(p.source).toEqual({ width: 2560, height: 1440, fps: 60 });
+    expect(p.source).toEqual({ width: 2560, height: 1440, fps: 60, cursor: "layer" });
     expect(p.output).toEqual({ width: 1920, height: 1080, fps: 60 });
     expect(p.tracks.mic).toEqual({ file: "mic.wav", offsetUs: 12400, volume: 1, muted: false });
     expect(p.zoomPresets).toEqual([{ id: "p1", name: "Preset p1", rect: { x: 0.1, y: 0.1, w: 0.5, h: 0.5 } }]);

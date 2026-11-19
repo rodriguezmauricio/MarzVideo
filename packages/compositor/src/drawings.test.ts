@@ -110,7 +110,7 @@ describe("drawFrame with strokes", () => {
     ]);
     const spec = frameAt(p, [{ tUs: 0, type: "cursor", x: 10, y: 10 }], 2_000_000);
     const { ctx, calls } = fakeCtx();
-    drawFrame(ctx, {} as CanvasImageSource, spec, p.output, null, { items: strokesAt(p, 2_000_000), colors, family: "F" });
+    drawFrame(ctx, {} as CanvasImageSource, spec, p.output, null, undefined, { items: strokesAt(p, 2_000_000), colors, family: "F" });
     const names = calls.map((c) => c[0]);
     expect(names.indexOf("drawImage")).toBeLessThan(names.indexOf("stroke"));
     expect(calls).toContainEqual(["moveTo", 200, 200]);

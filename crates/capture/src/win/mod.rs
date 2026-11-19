@@ -24,6 +24,7 @@
 //! `SessionEvent::Warning`. A warning never stops the recording.
 
 pub mod camera;
+pub mod cursor;
 pub mod exclude;
 pub mod input;
 pub mod mic;

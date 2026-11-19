@@ -1,13 +1,16 @@
 import type { MarzEvent, Project } from "@marz/format";
 import { zoomRectAt } from "@marz/timeline";
+import { clickEffectsAt, cursorAt, type ClickDraw, type CursorDraw } from "./cursor";
 
 export type FrameSpec = {
   /** Visible part of the source frame, in source pixels. */
   srcRect: { sx: number; sy: number; sw: number; sh: number };
   /** Where the picture goes in the output, in output pixels. Letterboxed when the shown area's aspect differs from the output's. */
   dstRect: { dx: number; dy: number; dw: number; dh: number };
-  /** Cursor position in output pixels, or null when not visible. */
-  cursor: { x: number; y: number } | null;
+  /** The cursor (hotspot in output pixels, shape, scale), or null when not visible. */
+  cursor: CursorDraw | null;
+  /** Click effects to draw under the cursor. */
+  clicks: ClickDraw[];
 };
 
 /** Fit a source area of size sw x sh inside the box without stretching it ("contain"). */
@@ -16,23 +19,6 @@ function containRect(sw: number, sh: number, box: { x: number; y: number; w: num
   const dw = wider ? box.w : (box.h * sw) / sh;
   const dh = wider ? (box.w * sh) / sw : box.h;
   return { dx: box.x + (box.w - dw) / 2, dy: box.y + (box.h - dh) / 2, dw, dh };
-}
-
-/** Index of the last event with tUs <= t, or -1. Events must be sorted by tUs. */
-function lastAtOrBefore(events: MarzEvent[], tUs: number): number {
-  let lo = 0;
-  let hi = events.length - 1;
-  let found = -1;
-  while (lo <= hi) {
-    const mid = (lo + hi) >> 1;
-    if (events[mid]!.tUs <= tUs) {
-      found = mid;
-      lo = mid + 1;
-    } else {
-      hi = mid - 1;
-    }
-  }
-  return found;
 }
 
 /** Everything needed to draw the frame for source time `srcUs`. Shared by preview and export.
@@ -45,21 +31,7 @@ export function frameAt(project: Project, events: MarzEvent[], srcUs: number, sc
 
   const dstRect = containRect(srcRect.sw, srcRect.sh, screenBox ?? { x: 0, y: 0, w: project.output.width, h: project.output.height });
 
-  let cursor: FrameSpec["cursor"] = null;
-  if (!project.edits.cursor.hidden) {
-    for (let i = lastAtOrBefore(events, srcUs); i >= 0; i--) {
-      const e = events[i]!;
-      if (e.type !== "cursor") continue;
-      const inside =
-        e.x >= srcRect.sx && e.x <= srcRect.sx + srcRect.sw && e.y >= srcRect.sy && e.y <= srcRect.sy + srcRect.sh;
-      if (inside) {
-        cursor = {
-          x: dstRect.dx + ((e.x - srcRect.sx) / srcRect.sw) * dstRect.dw,
-          y: dstRect.dy + ((e.y - srcRect.sy) / srcRect.sh) * dstRect.dh,
-        };
-      }
-      break;
-    }
-  }
-  return { srcRect, dstRect, cursor };
+  const cursor = cursorAt(project, events, srcUs, srcRect, dstRect);
+  const clicks = clickEffectsAt(project, events, srcUs, srcRect, dstRect);
+  return { srcRect, dstRect, cursor, clicks };
 }

@@ -27,3 +27,7 @@ export const STROKE_LABEL: Record<import("@marz/format").StrokeTool, string> = {
   ellipse: "Ellipse",
   text: "Text",
 };
+
+/** Cursor block labels on the Cursor lane (DESIGN-SYSTEM.md "Cursor lane"). */
+export const cursorBlockLabel = (s: { hide: boolean; clicks: boolean }): string =>
+  s.hide ? (s.clicks ? "Clicks only" : "Cursor off") : s.clicks ? "Cursor on" : "No clicks";
