@@ -136,3 +136,13 @@ Checked in Edge (Playwright) at 1440 x 900 and 1280 x 720 on `samples/demo.marz`
 - **Four-option segmented control** (caption Style) uses 8 px side padding instead of 12 so it fits the 308 px inspector row.
 - **Plain caption style** draws a thin ink outline (a stroke) around the letters so paper text reads on light screen content; it is not a shadow or glow.
 - **Vertical Plain captions in the 16:9 preview** use the in-frame subtitle size (the preview has no letterbox), so the preview is smaller than the vertical export, as with M2's highlight look.
+
+## Live drawing (2026-11-19)
+
+Checked in Edge (Playwright) at 1440 x 900 and 1280 x 720 on `samples/demo.marz` (simulated live strokes) and the fake recorder (`recorder.html?fake&state=recording&draw&bar`). No mockup exists; DESIGN-SYSTEM.md was updated first (rule 12, "Drawing lane", "Drawing on the preview", "Recorder: draw mode", hotkeys, icons `pen`, `highlight`, `arrow`, `box`, `oval`, `text`, `erase`).
+
+- **Red as a stroke colour**: `rec` is one of the four drawing colours (with accent, paper and ink). Red arrows and circles are what people draw to point at things; it is content on their own screen, not interface. The UI itself still uses red only for recording and cuts (the colour swatch is the one red control).
+- **Round caps and joins on strokes**: video content, like the round camera masks; the UI stays square.
+- **Overlapping Drawing lane blocks**: strokes overlap in time (several on screen at once), so blocks overlap on the 22 px lane; labels of covered blocks are cut. The inspector names the selected one.
+- **No left grip on Drawing blocks**: the colour square takes its place; trimming the start still works from the left 8 px.
+- **Tool strip is wider than the mode picker** (about 1060 px): ten segments. It fits 1280 px wide screens; below about 1100 px CSS width it would be cut.
