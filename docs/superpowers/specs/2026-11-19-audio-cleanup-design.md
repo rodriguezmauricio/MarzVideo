@@ -101,3 +101,20 @@ value right "80%"), a "Mute" toggle row (34px), a "Fade in and out" row with the
 (Off, 0.5, 1, 2 s). Then two toggles: "Remove mic noise" and "Even loudness at export", and one
 10px faint line with the cleaning state ("Cleaning mic sound", "Mic cleaned. Preview plays it",
 "Plays the original mic in the browser"). Every change is one undo step.
+
+## Checked (2026-11-19)
+
+- Tests: format defaults and round trip, commands and undo, preview gain, export graph strings, loudness
+  parser, cleaning stamp; real FFmpeg runs: a noisy synthetic take cleaned (noise down, tone held, same
+  length, `mic.wav` byte-identical), a normalized export lands within 1.5 LU of -14 and fades in.
+- Browser (Edge, 1440 x 900): Audio block on a sample copy with computer sound; fade 1 s sets the mic element
+  to 0 at the start, mute mutes, edits saved to `project.json`.
+- Tauri app on "Audio test" (copy of his 8 min take, 38 cuts, 5:43 exported): cleaned copy made on open
+  (the preview plays it), exports of both presets: integrated -14.8 LUFS, true peak -1.2 dBFS (AAC adds about
+  0.3 dB over the -1.5 ceiling; YouTube asks for -1), audio and video lengths equal (343.12 s). His mic before
+  cleaning: -21.8 LUFS, noise floor -82.4 dBFS (10th percentile of 0.25 s windows over the whole take); after:
+  noise floor -86.5, speech level unchanged (-18.8 to -18.9 at the 90th percentile).
+- Tauri app on "Audio test system" (copy of the 19.18 take with computer sound, 2 s fades on it): computer sound
+  in the export (-12.5 dB where it plays), mix -14.3 LUFS. That take's computer sound is silent at both ends, so
+  the fades are shown by the FFmpeg test, not by this file.
+- Not done: listening (nothing was played out loud overnight).
