@@ -135,7 +135,9 @@ pub mod live {
 
     /// `alive()` false ends the thread; `clock()` is (recording time now, mic first sample time).
     pub fn run(app: AppHandle, setup: Setup, alive: impl Fn() -> bool, clock: impl Fn() -> Option<(i64, Option<i64>)>) {
-        let work = std::env::temp_dir().join(format!("marz-checklist-{}", std::process::id()));
+        // One folder per run: an old run that is still ending must not delete the next one's files.
+        let nanos = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0);
+        let work = std::env::temp_dir().join(format!("marz-checklist-{}-{nanos}", std::process::id()));
         if std::fs::create_dir_all(&work).is_err() {
             return;
         }
