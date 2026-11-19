@@ -10,7 +10,7 @@ import { loadEventsOrEmpty } from "./loadEvents";
 
 export type InspectorTab = "edit" | "transcript" | "checklist";
 
-export type Selection = { kind: "zoom" | "cut" | "word" | "layout" | "cursor" | "drawing" | "frame"; id: string } | null;
+export type Selection = { kind: "zoom" | "cut" | "word" | "layout" | "cursor" | "drawing" | "frame" | "camera"; id: string } | null;
 
 /** The AI pass as the editor shows it: status line, warning, the model download ask. */
 export type AiUi = {
@@ -164,6 +164,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         const stillThere =
           !sel ||
           sel.kind === "word" ||
+          (sel.kind === "camera" && !!p.tracks.camera) ||
           (sel.kind === "frame"
             ? verticalEdits(p).holds
             : sel.kind === "layout"

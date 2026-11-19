@@ -160,3 +160,9 @@ Checked in Edge (Playwright) at 1440 x 900 and 1280 x 720 on `samples/demo.marz`
 - **"Hide cursor here" (H) is a button in the inspector's Cursor block, not a ledger row.** A tenth ledger row does not fit above the timeline at 1440 x 900 without shrinking the giant timecode for every project (the camera's Add layout row already uses the spare room).
 - **Inspector with tabs: no negative right margin on the scroll area.** With the Transcript tab, a focused switch scrolled the clipped panel 12px left and cut off the labels. The scrollbar now sits inside the panel.
 - **Background block has no mockup** (added 2026-11-19). It follows the Vertical block pattern (rule, section label, Motion row segmented controls, a 34px toggle, last line). The Style row has five words in the 4-up control size. The video itself shows round corners, a shadow and gradients: video content, not UI chrome (DESIGN-SYSTEM.md "Background and frame in the video").
+
+## Canvas editing and the hybrid timeline (2026-11-19)
+
+- **Lanes are no longer always visible.** Product spec section 11 asks for a hybrid timeline: the editor now opens on one main track (Screen, Edits, Mic), and "Show lanes" (G) switches to the lanes view, which is the old expanded screen with every lane. The approved mockup shows the lanes in the normal screen; that state is gone (two views instead of three). DESIGN-SYSTEM.md "Timeline" was updated first. The choice is remembered per user.
+- **Blocks of different kinds share one track** in the main view, stacked in rows when they overlap in time. Manual layout and cursor blocks look the same (paper fill); their labels tell them apart ("Corner", "Cursor off").
+- **The camera bubble is selectable on the preview** (DESIGN-SYSTEM.md "Camera on the preview"): the drawing box look, no new style. A bubble dropped away from a corner sits at a free position (`edits.camera.pip.x/y`, optional).

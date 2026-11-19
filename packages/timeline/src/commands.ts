@@ -141,7 +141,13 @@ export const updateCamera =
     const cur = cameraEdits(p);
     const { border: borderPatch, pip: pipPatch, ...rest } = patch;
     const border = borderPatch ? { ...cameraBorder(p), ...borderPatch } : cur.border;
-    const next: CameraEdits = { ...cur, ...rest, pip: { ...cur.pip, ...pipPatch }, ...(border ? { border } : {}) };
+    let pip: Pip = { ...cur.pip, ...pipPatch };
+    // Picking a corner puts a bubble dragged to a free position back into that corner.
+    if (pipPatch?.corner !== undefined) {
+      const { x: _x, y: _y, ...inCorner } = pip;
+      pip = inCorner;
+    }
+    const next: CameraEdits = { ...cur, ...rest, pip, ...(border ? { border } : {}) };
     const same =
       next.visible === cur.visible &&
       next.mirror === cur.mirror &&
@@ -149,8 +155,21 @@ export const updateCamera =
       next.pip.widthFrac === cur.pip.widthFrac &&
       next.pip.marginFrac === cur.pip.marginFrac &&
       next.pip.shape === cur.pip.shape &&
+      next.pip.x === cur.pip.x &&
+      next.pip.y === cur.pip.y &&
       JSON.stringify(next.border ?? null) === JSON.stringify(cur.border ?? null);
     return same ? p : withEdits(p, { camera: next });
+  };
+
+/** Put the corner bubble where it was dragged on the preview: the whole pip as given (no `x`, `y`
+ *  means in its corner), fields this build does not know kept. One undo step; the same pip returns `p`. */
+export const placeCamera =
+  (pip: Pip): Command =>
+  (p) => {
+    const cur = cameraEdits(p);
+    const { x: _x, y: _y, ...kept } = cur.pip;
+    const next: Pip = { ...kept, ...pip };
+    return JSON.stringify(next) === JSON.stringify(cur.pip) ? p : withEdits(p, { camera: { ...cur, pip: next } });
   };
 
 // ---- AI pass ------------------------------------------------------------------------------------

@@ -16,17 +16,31 @@ const SQUARE_FRAC = 0.75;
 const isRight = (pip: Pip) => pip.corner === "topRight" || pip.corner === "bottomRight";
 const isBottom = (pip: Pip) => pip.corner === "bottomLeft" || pip.corner === "bottomRight";
 
-/** The corner bubble's box and radius for the pip's shape. */
-function bubble(out: Size, cam: Size, pip: Pip): { box: Box; radius: number } {
-  if (pip.shape === "circle" || pip.shape === "square") {
+/** A box moved to the pip's free position (`x`, `y` shares of the frame), kept inside the frame. */
+function placed(box: Box, out: Size, pip: Pip): Box {
+  if (pip.x === undefined || pip.y === undefined) return box;
+  const x = Math.min(Math.max(0, Math.round(pip.x * out.width)), Math.max(0, out.width - box.w));
+  const y = Math.min(Math.max(0, Math.round(pip.y * out.height)), Math.max(0, out.height - box.h));
+  return { ...box, x, y };
+}
+
+/** Whether a pip shape draws a square box (centre cropped). */
+export const isSquareShape = (shape: string) => shape === "circle" || shape === "square";
+
+/** The corner bubble's box and radius for the pip's shape: in its corner, or at its free position. */
+export function bubbleBox(out: Size, cam: Size, pip: Pip): { box: Box; radius: number } {
+  if (isSquareShape(pip.shape)) {
     const side = Math.round(out.width * pip.widthFrac * SQUARE_FRAC);
     const m = Math.round(out.width * pip.marginFrac);
-    const box = { x: isRight(pip) ? out.width - m - side : m, y: isBottom(pip) ? out.height - m - side : m, w: side, h: side };
+    const box = placed({ x: isRight(pip) ? out.width - m - side : m, y: isBottom(pip) ? out.height - m - side : m, w: side, h: side }, out, pip);
     return { box, radius: pip.shape === "circle" ? side / 2 : 0 };
   }
-  const box = pipRect(out, cam, pip);
+  const box = placed(pipRect(out, cam, pip), out, pip);
   return { box, radius: pip.shape === "rounded" ? Math.round(Math.min(box.w, box.h) * ROUNDED_FRAC) : 0 };
 }
+
+/** Circle and square masks: side as a share of the bubble width. */
+export const BUBBLE_SQUARE_FRAC = SQUARE_FRAC;
 
 /** Side column panel: full height, 9:16 wide, on the corner's side. */
 const sideWidth = (out: Size) => Math.round((out.height * 9) / 16);
@@ -36,7 +50,7 @@ export function staticLayout(kind: LayoutKind, out: Size, cam: Size, pip: Pip): 
   const full = { x: 0, y: 0, w: out.width, h: out.height };
   switch (kind) {
     case "pip": {
-      const b = bubble(out, cam, pip);
+      const b = bubbleBox(out, cam, pip);
       return { screen: full, camera: b.box, radius: b.radius };
     }
     case "side": {

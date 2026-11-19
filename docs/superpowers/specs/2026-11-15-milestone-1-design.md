@@ -104,6 +104,9 @@ light and the last one is repeated, as for the screen. `edits.camera` is optiona
 `widthFrac` is the camera width as a share of the output width (S 0.16, M 0.22, L 0.30); `scenes` is reserved
 for timed layouts and kept as is. Preview and export draw the camera last, aspect kept, mirrored when set,
 1px paper border; zooms move the screen only. Older projects open as before; `version` stays 1.
+Optional `pip.x`, `pip.y` (added 2026-11-19, canvas editing, design `2026-11-19-canvas-editing-design.md`): the
+bubble's left and top as shares of the output width and height after a drag on the preview; missing means the
+bubble sits in `corner` (which still picks the side column's side). Older builds ignore them and draw the corner.
 
 **AI editing (M2, added 2026-11-19, Mauricio's yes 2026-11-17; design `2026-11-17-milestone-2-ai-editing-design.md`):**
 - `transcript.json` is derived and regenerable, written by the transcription step only (`transcript.json.tmp`

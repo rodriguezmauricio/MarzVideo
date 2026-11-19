@@ -11,6 +11,7 @@ import { count, mmss } from "./timecode";
 import { handleWidthPx, MAX_TIMELINE_ZOOM, pxToUs, snapUs, timelineWidthPx, usToPx } from "./timelineMath";
 import { cursorBlockLabel, cutCapLabel, LAYOUT_LABEL, STROKE_LABEL, zoomLabels } from "./zoomLabels";
 import { useCaptionFacts } from "../captions/captionActions";
+import { MAIN_TRACK, packRows, rowGeometry } from "./mainTrack";
 
 /** Roughly how wide a 10px mono label is, to hide labels that would not fit (micro type). */
 const labelPx = (text: string, ai: boolean) => text.length * 7 + (ai ? 26 : 0) + 8;
@@ -32,6 +33,7 @@ const ROWS = {
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 
+/** `expanded`: the lanes view; otherwise the main track view (DESIGN-SYSTEM.md "Timeline", two views). */
 export function Timeline({ expanded, onToggleLanes }: { expanded: boolean; onToggleLanes: () => void }) {
   const project = useEditorStore((s) => s.project)!;
   const storage = useEditorStore((s) => s.storage)!;
@@ -211,6 +213,125 @@ export function Timeline({ expanded, onToggleLanes }: { expanded: boolean; onTog
   const hiddenWords = new Set(project.edits.captions?.hidden ?? []);
   const capStarts = useCaptionFacts().starts;
 
+  const scrub = {
+    onPointerDown: (e: React.PointerEvent<HTMLDivElement>) => {
+      select(null);
+      scrubbing.current = true;
+      e.currentTarget.setPointerCapture(e.pointerId);
+      seekFromEvent(e.clientX);
+    },
+    onPointerMove: (e: React.PointerEvent<HTMLDivElement>) => scrubbing.current && seekFromEvent(e.clientX),
+    onPointerUp: () => (scrubbing.current = false),
+  };
+
+  const cutEls = project.edits.cuts.map((c) => {
+    const r = rangeOf("cut", c.id, c);
+    const sel = selection?.kind === "cut" && selection.id === c.id;
+    const left = x(r.startUs);
+    const w = Math.max(4, x(r.endUs - r.startUs));
+    return (
+      <div key={c.id}>
+        <div className={`cutband${sel ? " sel" : ""}`} style={{ left, width: w }} />
+        <div
+          data-testid={`cut-${c.id}`}
+          onPointerDown={(e) => onBlockDown(e, "cut", c.id, "move", c)}
+          onPointerMove={onBlockMove}
+          onPointerUp={onBlockUp}
+          className="cutcap"
+          style={{ left, width: w }}
+        >
+          {w >= labelPx(cutCapLabel(c), c.origin === "ai") && (
+            <span className="lbl-ai">
+              {cutCapLabel(c)}
+              {c.origin === "ai" && <b className="ai-tag">AI</b>}
+            </span>
+          )}
+          {handle("cut", c.id, "start", c, w)}
+          {handle("cut", c.id, "end", c, w)}
+        </div>
+      </div>
+    );
+  });
+
+  // The Edits track (main track view): every editable block, stacked in rows where they overlap.
+  type MainItem = { kind: Kind; id: string; range: Range; cls: string; label: string; ai?: boolean; color?: string; onDown?: () => void };
+  const mainItems: MainItem[] = [
+    ...project.edits.zooms.map((z): MainItem => ({ kind: "zoom", id: z.id, range: z, cls: z.origin === "auto" ? "blk-sug" : "blk-zoom", label: labels.get(z.id) ?? "Zoom", ai: z.origin === "ai" })),
+    ...(cam ? scenes.map((sc): MainItem => ({ kind: "layout", id: sc.id, range: sc, cls: `blk-lay${sc.origin === "live" ? " live" : ""}`, label: LAYOUT_LABEL[sc.layout] })) : []),
+    ...curSecs.map((cs): MainItem => ({ kind: "cursor", id: cs.id, range: cs, cls: "blk-cur", label: cursorBlockLabel(cs) })),
+    ...strokes.map((st): MainItem => ({
+      kind: "drawing", id: st.id, range: st, cls: "blk-draw", label: STROKE_LABEL[st.tool], color: st.color,
+      // The playhead moves into the stroke so the preview shows it.
+      onDown: () => {
+        const ph = useEditorStore.getState().playheadUs;
+        if (ph < st.startUs || ph >= st.endUs) seek(st.startUs + Math.min(500_000, (st.endUs - st.startUs) / 2));
+      },
+    })),
+    ...(vertical ? holds.map((h): MainItem => ({ kind: "frame", id: h.id, range: h, cls: "blk-frame", label: frameLabels(holds).get(h.id) ?? "Frame" })) : []),
+  ];
+  const packed = packRows(mainItems.map((m) => ({ id: `${m.kind}:${m.id}`, startUs: m.range.startUs, endUs: m.range.endUs })));
+  const mainBody = (
+    <div className="tl-body" data-testid="main-track-view">
+      <div className="tl-gutter">
+        <div className="lb" style={{ height: rows.ruler }} />
+        <div className="lb" style={{ height: rows.screen }}>Screen</div>
+        <div className="lb" style={{ height: MAIN_TRACK }}>Edits</div>
+        <div className="lb" style={{ height: rows.mic }}>Mic</div>
+      </div>
+      <div ref={viewportRef} className="tl-scroll">
+        <div ref={trackRef} className="tl-tracks" style={{ width: width + TAIL_PX }} {...scrub}>
+          <div className="tk" style={{ height: rows.ruler }}>{ruler}</div>
+          <div className="tk" style={{ height: rows.screen }}>
+            <ScreenThumbs url={storage.fileUrl(project.tracks.screen.file)} durationUs={D}
+              widthPx={x(D)} pps={pps} rowH={rows.screen} />
+          </div>
+          <div className="tk" style={{ height: MAIN_TRACK }} data-testid="edits-track">
+            {mainItems.map((m) => {
+              const r = rangeOf(m.kind, m.id, m.range);
+              const sel = selection?.kind === m.kind && selection.id === m.id;
+              const w = Math.max(4, x(r.endUs - r.startUs));
+              const g = rowGeometry(packed.row.get(`${m.kind}:${m.id}`) ?? 0, packed.rows);
+              const draw = m.kind === "drawing";
+              return (
+                <div
+                  key={`${m.kind}:${m.id}`}
+                  data-testid={`${m.kind}-${m.id}`}
+                  onPointerDown={(e) => {
+                    onBlockDown(e, m.kind, m.id, "move", m.range);
+                    m.onDown?.();
+                  }}
+                  onPointerMove={onBlockMove}
+                  onPointerUp={onBlockUp}
+                  className={`blk ${m.cls}${sel ? " sel" : ""}`}
+                  style={{ left: x(r.startUs), width: w, top: g.top, height: g.height, zIndex: sel ? 3 : 2 }}
+                  title={m.label}
+                >
+                  {draw ? <i className={`dot sw-${m.color}`} /> : <i className="g l" />}
+                  {w >= labelPx(m.label, !!m.ai) + (draw ? 24 : 16) && (
+                    <span className="lbl-ai">
+                      {m.label}
+                      {m.ai && <b className="ai-tag">AI</b>}
+                    </span>
+                  )}
+                  <i className="g r" />
+                  {handle(m.kind, m.id, "start", m.range, w)}
+                  {handle(m.kind, m.id, "end", m.range, w)}
+                </div>
+              );
+            })}
+          </div>
+          <div className="tk" style={{ height: rows.mic }}>
+            {mic && <MicWave url={storage.fileUrl(mic.file)} offsetUs={mic.offsetUs} widthPx={x(D)} pps={pps} rowH={rows.mic} />}
+          </div>
+          {cutEls}
+          <div data-testid="playhead" className="ph" style={{ left: x(playheadUs) }}>
+            <i />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
   return (
     <section className="tl" aria-label="Timeline">
       <div className="tl-head">
@@ -223,12 +344,15 @@ export function Timeline({ expanded, onToggleLanes }: { expanded: boolean; onTog
             onClick={() => zoomBy(1.5)}>+</button>
           <button type="button" className="bx" aria-label="Fit timeline" data-tip="Fit the whole recording"
             onClick={() => setZoomFactor(1)}>Fit</button>
-          <button type="button" className="bx bx-lanes" aria-pressed={expanded} onClick={onToggleLanes}>
+          <button type="button" className="bx bx-lanes" aria-pressed={expanded} onClick={onToggleLanes}
+            data-tip={expanded ? "Main track / G" : "Show lanes / G"}>
             <Icon name="layers" size={13} />
-            {expanded ? "Hide lanes" : "Show lanes"}
+            {expanded ? "Main track" : "Show lanes"}
+            <span className="bx-key">G</span>
           </button>
         </span>
       </div>
+      {!expanded ? mainBody : (
       <div className={vertical ? "tl-body vert" : "tl-body"}>
         <div className="tl-gutter">
           <div className="lb" style={{ height: rows.ruler }} />
@@ -258,14 +382,7 @@ export function Timeline({ expanded, onToggleLanes }: { expanded: boolean; onTog
             ref={trackRef}
             className="tl-tracks"
             style={{ width: width + TAIL_PX }}
-            onPointerDown={(e) => {
-              select(null);
-              scrubbing.current = true;
-              e.currentTarget.setPointerCapture(e.pointerId);
-              seekFromEvent(e.clientX);
-            }}
-            onPointerMove={(e) => scrubbing.current && seekFromEvent(e.clientX)}
-            onPointerUp={() => (scrubbing.current = false)}
+            {...scrub}
           >
             <div className="tk" style={{ height: rows.ruler }}>{ruler}</div>
             <div className="tk" style={{ height: rows.screen }}>
@@ -469,34 +586,7 @@ export function Timeline({ expanded, onToggleLanes }: { expanded: boolean; onTog
               ),
             )}
 
-            {project.edits.cuts.map((c) => {
-              const r = rangeOf("cut", c.id, c);
-              const sel = selection?.kind === "cut" && selection.id === c.id;
-              const left = x(r.startUs);
-              const w = Math.max(4, x(r.endUs - r.startUs));
-              return (
-                <div key={c.id}>
-                  <div className={`cutband${sel ? " sel" : ""}`} style={{ left, width: w }} />
-                  <div
-                    data-testid={`cut-${c.id}`}
-                    onPointerDown={(e) => onBlockDown(e, "cut", c.id, "move", c)}
-                    onPointerMove={onBlockMove}
-                    onPointerUp={onBlockUp}
-                    className="cutcap"
-                    style={{ left, width: w }}
-                  >
-                    {w >= labelPx(cutCapLabel(c), c.origin === "ai") && (
-                      <span className="lbl-ai">
-                        {cutCapLabel(c)}
-                        {c.origin === "ai" && <b className="ai-tag">AI</b>}
-                      </span>
-                    )}
-                    {handle("cut", c.id, "start", c, w)}
-                    {handle("cut", c.id, "end", c, w)}
-                  </div>
-                </div>
-              );
-            })}
+            {cutEls}
 
             <div data-testid="playhead" className="ph" style={{ left: x(playheadUs) }}>
               <i />
@@ -504,14 +594,24 @@ export function Timeline({ expanded, onToggleLanes }: { expanded: boolean; onTog
           </div>
         </div>
       </div>
+      )}
       <div className="tl-foot">
         <span>
           {count(nOwn, "zoom")} / {count(project.edits.cuts.length, "cut")} / {nAuto} suggested
           {nAi > 0 && ` / ${nAi} by AI`}
         </span>
         <span>
-          <Icon name="lock" size={12} />
-          Dashed lanes are reserved for a later version
+          {expanded ? (
+            <>
+              <Icon name="lock" size={12} />
+              Dashed lanes are reserved for a later version
+            </>
+          ) : (
+            <>
+              <Icon name="layers" size={12} />
+              G shows every lane
+            </>
+          )}
         </span>
       </div>
     </section>

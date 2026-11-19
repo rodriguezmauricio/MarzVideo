@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef } from "react";
-import { canvasMeasure, captionLayout, cameraLayerFor, cameraMediaUs, drawCaptions, drawFrame, frameAt, layoutAt, strokesAt, type CaptionStyle, type VisibleStroke } from "@marz/compositor";
+import { canvasMeasure, captionLayout, cameraLayerFor, cameraMediaUs, drawCaptions, drawFrame, frameAt, layoutAt, staticLayout, strokesAt, type CaptionStyle, type VisibleStroke } from "@marz/compositor";
 import { keptSegments, outputDurationUs, outputToSource, sourceToOutput, strokeAtPoint, trackGain } from "@marz/timeline";
-import { audioEdits, captionStyleFor, drawingStrokes, type Project } from "@marz/format";
+import { audioEdits, cameraEdits, captionStyleFor, drawingStrokes, type Project } from "@marz/format";
 import { addHold, updateHold } from "@marz/timeline";
 import { VERTICAL_SIZE, type Box } from "@marz/compositor";
 import { drawVertical } from "../vertical/drawVertical";
@@ -16,6 +16,7 @@ import { screenErrorText } from "../playback/screenError";
 import { mmss } from "./timecode";
 import { tokenColors } from "./cameraColors";
 import { ZoomOverlay } from "./ZoomOverlay";
+import { CameraOverlay, useCameraDraft } from "./CameraOverlay";
 import { DrawingOverlay, useStrokeDraft } from "../drawing/DrawingOverlay";
 import { loadDrawingFont, measureStrokeText, strokeFamily } from "../drawing/drawingFont";
 
@@ -27,6 +28,23 @@ function visibleStrokes(p: Project, srcUs: number, editId: string | null): Visib
   const edited = editId ? drawingStrokes(p).find((s) => s.id === editId) : undefined;
   if (edited) items = [...items, { stroke: draft?.id === edited.id ? draft : edited, alpha: 1 }];
   return items;
+}
+
+/** The project with the camera bubble being dragged on the preview, if any. */
+function withCameraDraft(p: Project): Project {
+  const pip = useCameraDraft.getState().pip;
+  return pip ? { ...p, edits: { ...p.edits, camera: { ...cameraEdits(p), pip } } } : p;
+}
+
+/** The corner bubble's box (output pixels) at `srcUs` when it shows at rest there (not during another
+ *  layout or a switch), else null. */
+function restingBubble(p: Project, srcUs: number) {
+  const cam = p.tracks.camera;
+  if (!cam) return null;
+  const now = layoutAt(p, srcUs, p.output).camera;
+  const rest = staticLayout("pip", p.output, cam, cameraEdits(p).pip).camera;
+  if (!now || !rest) return null;
+  return now.x === rest.x && now.y === rest.y && now.w === rest.w && now.h === rest.h ? rest : null;
 }
 
 /** Click tolerance on the preview, in output pixels. */
@@ -167,7 +185,8 @@ export function Preview() {
     if (!ctx) return;
     // The export's setting, so the scaled camera looks the same in both.
     ctx.imageSmoothingQuality = "high";
-    const { project: p, editing } = live.current;
+    const { project: p0, editing } = live.current;
+    const p = withCameraDraft(p0);
     const srcUs = sourceTimeUs(p, Math.round(video.currentTime * 1e6), firstFrame.current);
     if (live.current.vertical) {
       try {
@@ -256,6 +275,8 @@ export function Preview() {
   useEffect(draw, [project, editingZoom?.id, editingStroke?.id, blocks, look, vertical]);
   // A stroke dragged on the preview is drawn where it is going.
   useEffect(() => useStrokeDraft.subscribe(() => draw()), []);
+  // So is the camera bubble.
+  useEffect(() => useCameraDraft.subscribe(() => draw()), []);
   // Text strokes use the display font; draw again once it loaded.
   useEffect(() => {
     if (!drawingStrokes(project).some((s) => s.tool === "text")) return;
@@ -269,11 +290,21 @@ export function Preview() {
   /** A click on the picture selects the topmost stroke under it (paused, no zoom being edited). */
   const strokeMeasure = useMemo(() => measureStrokeText(), []);
   const onFrameDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
-    if (playing || editingZoom || !hasStrokes || vertical) return;
+    if (playing || editingZoom || vertical) return;
     const r = e.currentTarget.getBoundingClientRect();
     const outX = ((e.clientX - r.left) / r.width) * project.output.width;
     const outY = ((e.clientY - r.top) / r.height) * project.output.height;
     const { events, playheadUs } = useEditorStore.getState();
+    // The camera sits on top of the strokes, so a click on the bubble picks the bubble.
+    const bub = restingBubble(project, playheadUs);
+    if (bub && outX >= bub.x && outX <= bub.x + bub.w && outY >= bub.y && outY <= bub.y + bub.h) {
+      useEditorStore.getState().select({ kind: "camera", id: "pip" });
+      return;
+    }
+    if (!hasStrokes) {
+      if (selection?.kind === "camera") useEditorStore.getState().select(null);
+      return;
+    }
     const spec = frameAt(project, events, playheadUs, layoutAt(project, playheadUs, project.output).screen);
     const k = spec.dstRect.dw / spec.srcRect.sw;
     const sx = spec.srcRect.sx + (outX - spec.dstRect.dx) / k;
@@ -281,10 +312,11 @@ export function Preview() {
     const shown = strokesAt(project, playheadUs).map((v) => v.stroke);
     const hit = strokeAtPoint(shown, sx, sy, HIT_PX / k, strokeMeasure);
     if (hit) useEditorStore.getState().select({ kind: "drawing", id: hit.id });
-    else if (selection?.kind === "drawing") useEditorStore.getState().select(null);
+    else if (selection?.kind === "drawing" || selection?.kind === "camera") useEditorStore.getState().select(null);
   };
   const playheadUs = useEditorStore((s) => s.playheadUs);
   const events = useEditorStore((s) => s.events);
+  const camBubble = selection?.kind === "camera" && !playing && !vertical && !editingZoom ? restingBubble(project, playheadUs) : null;
   const strokeMap = editingStroke && !vertical ? frameAt(project, events, playheadUs, layoutAt(project, playheadUs, project.output).screen) : null;
   // The display font loads lazily; draw again once it can be used on the canvas.
   useEffect(() => {
@@ -438,6 +470,8 @@ export function Preview() {
       ? "Press Play to see the switch"
     : selectedStroke
       ? "Drag to move. Pull a corner to resize"
+    : camBubble
+      ? "Drag the camera anywhere. Let go near a corner to snap"
     : selectedCut
       ? "This part is skipped when you export"
       : "Full frame. Select a zoom or cut on the timeline to edit it";
@@ -457,6 +491,7 @@ export function Preview() {
           onPointerDown={onFrameDown}
         />
         {editingZoom && !vertical && <ZoomOverlay key={editingZoom.id} zoom={editingZoom} />}
+        {camBubble && cam && <CameraOverlay box={camBubble} out={project.output} cam={cam} />}
         {editingStroke && strokeMap && <DrawingOverlay key={editingStroke.id} stroke={editingStroke} map={strokeMap} out={project.output} />}
         {selectedCut && (
           <>

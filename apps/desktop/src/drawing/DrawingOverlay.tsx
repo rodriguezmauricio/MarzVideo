@@ -50,6 +50,8 @@ export function DrawingOverlay({ stroke, map, out }: { stroke: Stroke; map: Stro
   const start = (e: React.PointerEvent, mode: Drag["mode"]) => {
     if (e.button !== 0) return;
     e.stopPropagation();
+    // No text selection or native drag: either cancels the pointer mid drag.
+    e.preventDefault();
     boxRef.current!.setPointerCapture(e.pointerId);
     const p = src(e);
     drag.current = { mode, x0: p.x, y0: p.y, orig: stroke, box: strokeBounds(stroke, measure) };

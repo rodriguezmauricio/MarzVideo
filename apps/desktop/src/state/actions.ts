@@ -80,8 +80,8 @@ export function runAutoZoom(): void {
 
 export function deleteSelection(): void {
   const { selection, apply, select } = useEditorStore.getState();
-  // A caption word is not deleted (hide it from captions in the inspector instead).
-  if (!selection || selection.kind === "word") return;
+  // A caption word is not deleted (hide it from captions in the inspector instead); nor is the camera bubble.
+  if (!selection || selection.kind === "word" || selection.kind === "camera") return;
   apply(
     selection.kind === "frame"
       ? removeHold(selection.id)
