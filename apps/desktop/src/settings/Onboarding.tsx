@@ -26,7 +26,7 @@ const KEYS: { name: string; ids: ActionId[] }[] = [
   { name: "Zoom out", ids: ["zoomOut"] },
   { name: "Draw on screen", ids: ["draw"] },
   { name: "Tick next topic", ids: ["check"] },
-  { name: "Camera layouts", ids: ["layout1", "layout4"] },
+  { name: "Camera layouts", ids: ["layout1", "layout5"] },
 ];
 
 function Screen({ title, lede, children }: { title: string; lede: string; children: ReactNode }) {

@@ -8,7 +8,7 @@ use std::fmt;
 use std::sync::RwLock;
 
 /// Every rebindable action: id (as stored in `settings.json`), default combo, name shown to people.
-pub const ACTIONS: [(&str, &str, &str); 19] = [
+pub const ACTIONS: [(&str, &str, &str); 20] = [
     ("recordStop", "Ctrl+Shift+R", "Record and stop"),
     ("pause", "Ctrl+Shift+P", "Pause and resume"),
     ("mute", "Ctrl+Shift+M", "Mute mic"),
@@ -26,6 +26,7 @@ pub const ACTIONS: [(&str, &str, &str); 19] = [
     ("layout2", "Ctrl+Shift+2", "Layout: side"),
     ("layout3", "Ctrl+Shift+3", "Layout: camera"),
     ("layout4", "Ctrl+Shift+4", "Layout: screen"),
+    ("layout5", "Ctrl+Shift+5", "Layout: floating"),
     ("draw", "Ctrl+Shift+D", "Draw on screen"),
     ("check", "Ctrl+Shift+K", "Tick next topic"),
 ];
@@ -201,7 +202,7 @@ mod tests {
     #[test]
     fn defaults_are_valid_and_distinct() {
         let all = resolve(&BTreeMap::new()).unwrap();
-        assert_eq!(all.len(), 19);
+        assert_eq!(all.len(), 20);
         assert!(check(&all).is_empty());
     }
 

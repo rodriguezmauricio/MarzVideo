@@ -4,7 +4,7 @@
 export type ActionId =
   | "recordStop" | "pause" | "mute"
   | "preset1" | "preset2" | "preset3" | "preset4" | "preset5" | "preset6" | "preset7" | "preset8" | "preset9"
-  | "zoomOut" | "layout1" | "layout2" | "layout3" | "layout4" | "draw" | "check";
+  | "zoomOut" | "layout1" | "layout2" | "layout3" | "layout4" | "layout5" | "draw" | "check";
 
 export const ACTIONS: readonly { id: ActionId; combo: string; name: string }[] = [
   { id: "recordStop", combo: "Ctrl+Shift+R", name: "Record and stop" },
@@ -16,6 +16,7 @@ export const ACTIONS: readonly { id: ActionId; combo: string; name: string }[] =
   { id: "layout2", combo: "Ctrl+Shift+2", name: "Layout: side" },
   { id: "layout3", combo: "Ctrl+Shift+3", name: "Layout: camera" },
   { id: "layout4", combo: "Ctrl+Shift+4", name: "Layout: screen" },
+  { id: "layout5", combo: "Ctrl+Shift+5", name: "Layout: floating" },
   { id: "draw", combo: "Ctrl+Shift+D", name: "Draw on screen" },
   { id: "check", combo: "Ctrl+Shift+K", name: "Tick next topic" },
 ];
