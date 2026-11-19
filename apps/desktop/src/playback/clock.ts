@@ -31,3 +31,22 @@ export function mediaTimeUs(project: Project, srcUs: number, firstFrameUs: numbe
 export function sourceTimeUs(project: Project, mediaUs: number, firstFrameUs: number): number {
   return mediaUs - firstFrameUs + project.tracks.screen.offsetUs;
 }
+
+/** Audio may drift this far from the video before it is put back. */
+export const AUDIO_DRIFT_S = 0.04;
+
+/** What an audio element should do this frame while the video plays. `wantS` is where the track should
+ *  be (negative: the track has not started yet, its offset is still ahead). Before its start the track
+ *  waits at 0, so it never runs ahead and then jumps back (the first stretch heard twice). */
+export function audioStep(a: { wantS: number; currentS: number; paused: boolean; ended: boolean; videoPaused: boolean }): {
+  play?: true;
+  pause?: true;
+  seekS?: number;
+} {
+  if (a.wantS < 0) return a.paused ? {} : { pause: true, seekS: 0 };
+  if (a.ended) return {};
+  const out: { play?: true; seekS?: number } = {};
+  if (a.paused && !a.videoPaused) out.play = true;
+  if (Math.abs(a.currentS - a.wantS) > AUDIO_DRIFT_S) out.seekS = a.wantS;
+  return out;
+}

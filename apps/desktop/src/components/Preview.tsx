@@ -10,7 +10,7 @@ import { ensureCleanMic, previewMicFile, useCleanMic } from "../audio/cleanMic";
 import { useAppStore } from "../state/appStore";
 import { captionBlocks, captionStyle, loadCaptionFont } from "../ai/captionStyle";
 import { useEditorStore } from "../state/editorStore";
-import { mediaTimeUs, nextPlaybackTime, playbackEnded, sourceTimeUs, startTimeForPlay } from "../playback/clock";
+import { audioStep, mediaTimeUs, nextPlaybackTime, playbackEnded, sourceTimeUs, startTimeForPlay } from "../playback/clock";
 import { readFirstFrameUs } from "../playback/firstFrame";
 import { mmss } from "./timecode";
 import { tokenColors } from "./cameraColors";
@@ -31,7 +31,6 @@ function visibleStrokes(p: Project, srcUs: number, editId: string | null): Visib
 /** Click tolerance on the preview, in output pixels. */
 const HIT_PX = 8;
 
-const AUDIO_DRIFT_S = 0.04;
 /** Camera sync while playing: a seek past this gap, else a small speed nudge (a video seek lands late
  *  on a decoder that has to start at a keyframe, so seeking for small gaps never settles). */
 const CAMERA_SEEK_S = 0.25;
@@ -339,7 +338,8 @@ export function Preview() {
     }
     seekMedia(start);
     void video.play().catch(() => useEditorStore.getState().pause());
-    for (const [audio] of audios()) void audio.play().catch(() => {});
+    // A track whose offset is still ahead waits; the loop starts it on time.
+    for (const [audio, track] of audios()) if (start >= track.offsetUs) void audio.play().catch(() => {});
     if (camRef.current && cam) void camRef.current.play().catch(() => {});
 
     let raf = 0;
@@ -353,9 +353,10 @@ export function Preview() {
       const next = nextPlaybackTime(live.current.segs, srcUs) ?? srcUs;
       if (next !== srcUs) seekMedia(next);
       for (const [audio, track] of audios()) {
-        const want = (next - track.offsetUs) / 1e6;
-        if (want >= 0 && !audio.ended && audio.paused && !video.paused) void audio.play().catch(() => {});
-        if (want >= 0 && !audio.ended && Math.abs(audio.currentTime - want) > AUDIO_DRIFT_S) audio.currentTime = want;
+        const step = audioStep({ wantS: (next - track.offsetUs) / 1e6, currentS: audio.currentTime, paused: audio.paused, ended: audio.ended, videoPaused: video.paused });
+        if (step.pause) audio.pause();
+        if (step.seekS !== undefined) audio.currentTime = step.seekS;
+        if (step.play) void audio.play().catch(() => {});
       }
       const cv = camRef.current;
       if (cv && live.current.project.tracks.camera) {
