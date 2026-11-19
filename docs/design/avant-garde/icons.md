@@ -42,4 +42,6 @@ Template:
 | `folder` | `<path d="M3 7h6l2 2h10v10H3z"/>` |
 | `check` | `<path d="M5 12.5l4.5 4.5L19 7"/>` |
 | `close` | `<path d="M6 6l12 12M18 6L6 18"/>` |
+| `ai` | `<path d="M12 3l2.2 6.8L21 12l-6.8 2.2L12 21l-2.2-6.8L3 12l6.8-2.2z"/>` (Edit with AI) |
+| `captions` | `<rect x="3" y="6" width="18" height="12"/><path d="M7 14h4M13 14h4M7 10h10"/>` (Burn captions, caption inspector) |
 | `redo` | `<path d="M15 14l5-5-5-5"/><path d="M20 9H10a6 6 0 000 12h4"/>` |

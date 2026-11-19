@@ -1,3 +1,3 @@
 [workspace]
 resolver = "3"
-members = ["crates/capture", "crates/export", "apps/desktop/src-tauri"]
+members = ["crates/capture", "crates/export", "crates/transcribe", "apps/desktop/src-tauri"]

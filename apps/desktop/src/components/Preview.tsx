@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef } from "react";
-import { cameraLayout, cameraMediaUs, drawFrame, frameAt } from "@marz/compositor";
-import { keptSegments, outputToSource } from "@marz/timeline";
+import { canvasMeasure, captionLayout, cameraLayout, cameraMediaUs, drawCaptions, drawFrame, frameAt, type CaptionStyle } from "@marz/compositor";
+import { keptSegments, outputToSource, sourceToOutput } from "@marz/timeline";
+import { captionBlocks, captionStyle, loadCaptionFont } from "../ai/captionStyle";
 import { useEditorStore } from "../state/editorStore";
 import { mediaTimeUs, nextPlaybackTime, playbackEnded, sourceTimeUs, startTimeForPlay } from "../playback/clock";
 import { readFirstFrameUs } from "../playback/firstFrame";
@@ -45,9 +46,14 @@ export function Preview() {
       ] as const
     ).filter((p): p is [HTMLAudioElement, AudioTrack] => !!p[0] && !!p[1]);
 
+  const words = useEditorStore((s) => s.words);
+  const look = useEditorStore((s) => s.captionLook);
+  const blocks = useMemo(() => captionBlocks(project, words, look), [project, words, look]);
+  const style = useRef<CaptionStyle | null>(null);
+
   // Latest values for the animation loop without restarting it.
-  const live = useRef({ project, segs, editing: false });
-  live.current = { project, segs, editing: !!editingZoom };
+  const live = useRef({ project, segs, editing: false, blocks, look });
+  live.current = { project, segs, editing: !!editingZoom, blocks, look };
 
   const draw = () => {
     const canvas = canvasRef.current;
@@ -65,6 +71,19 @@ export function Preview() {
     const camVideo = camRef.current;
     const camera = layout && camVideo && camVideo.readyState >= 2 ? { source: camVideo, ...layout } : null;
     drawFrame(ctx, video, frameAt(shown, events, srcUs), p.output, camera);
+    // Captions: the same layout and drawing as the export (DESIGN-SYSTEM.md "Captions in the video").
+    const { blocks: bl, look: lk, segs: sg } = live.current;
+    const tOut = bl.length ? sourceToOutput(sg, srcUs) : null;
+    if (tOut !== null) {
+      try {
+        style.current ??= captionStyle();
+        const st = style.current;
+        const d = captionLayout(bl, tOut, lk, p.output, { x: 0, y: 0, w: p.output.width, h: p.output.height }, canvasMeasure(ctx, st.family));
+        if (d) drawCaptions(ctx, d, st);
+      } catch (e) {
+        console.warn("captions not drawn", e);
+      }
+    }
   };
 
   /** Camera media time (s) for source time `srcUs`, held on its last frame past its end. */
@@ -115,7 +134,16 @@ export function Preview() {
       }
     };
   }, [cam?.file]);
-  useEffect(draw, [project, editingZoom?.id]);
+  useEffect(draw, [project, editingZoom?.id, blocks]);
+  // The display font loads lazily; draw again once it can be used on the canvas.
+  useEffect(() => {
+    if (blocks.length === 0) return;
+    let on = true;
+    void loadCaptionFont(captionStyle().family).then(() => on && draw());
+    return () => {
+      on = false;
+    };
+  }, [blocks.length > 0]);
 
   // Dev only: `window.__marzGrab(outUs)` pauses, seeks to output time `outUs`, draws and returns the
   // preview canvas as a PNG data URL (export checks compare it with the exported frame).

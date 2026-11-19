@@ -425,6 +425,33 @@ pub async fn export_cancel_all(app: AppHandle) -> Result<(), String> {
     tauri::async_runtime::spawn_blocking(move || app.state::<Exports>().cancel_all()).await.map_err(|e| e.to_string())
 }
 
+/// The `.srt` beside an MP4: same name, `.srt` extension.
+pub fn srt_path(mp4: &Path) -> PathBuf {
+    mp4.with_extension("srt")
+}
+
+/// Write `text` through `<name>.srt.part` and a rename (the export's `.part` rule).
+pub fn write_srt_atomic(mp4: &Path, text: &str) -> std::io::Result<PathBuf> {
+    let dest = srt_path(mp4);
+    let part = PathBuf::from(format!("{}.part", dest.to_string_lossy()));
+    std::fs::write(&part, text.as_bytes())?;
+    if let Err(e) = std::fs::rename(&part, &dest) {
+        let _ = std::fs::remove_file(&part);
+        return Err(e);
+    }
+    Ok(dest)
+}
+
+/// Captions as SubRip beside a finished export. Only for MP4s this app just exported.
+#[tauri::command(async)]
+pub fn export_write_srt(exports: State<'_, Exports>, out_path: String, text: String) -> Result<String, String> {
+    let mp4 = PathBuf::from(&out_path);
+    if !lock(&exports.done).contains(&mp4) {
+        return Err("This file was not exported here".into());
+    }
+    write_srt_atomic(&mp4, &text).map(|p| p.to_string_lossy().into_owned()).map_err(|e| e.to_string())
+}
+
 /// Open Explorer with a finished export selected. Only files this app exported.
 #[tauri::command]
 pub fn show_in_folder(exports: State<'_, Exports>, path: String) -> Result<(), String> {
@@ -446,6 +473,27 @@ fn open_explorer(path: &Path) -> Result<(), String> {
 #[cfg(not(windows))]
 fn open_explorer(_path: &Path) -> Result<(), String> {
     Err("Show in folder needs Windows.".into())
+}
+
+#[cfg(test)]
+mod srt_tests {
+    use super::*;
+
+    #[test]
+    fn writes_the_srt_beside_the_mp4_without_a_part_file() {
+        let dir = std::env::temp_dir().join(format!("marz-srt-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let mp4 = dir.join("Demo YouTube.mp4");
+        let srt = write_srt_atomic(&mp4, "1
+00:00:00,000 --> 00:00:01,000
+Hi
+
+").unwrap();
+        assert_eq!(srt, dir.join("Demo YouTube.srt"));
+        assert!(std::fs::read_to_string(&srt).unwrap().contains("Hi"));
+        assert!(!dir.join("Demo YouTube.srt.part").exists());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }
 
 #[cfg(test)]

@@ -12,6 +12,10 @@ export interface ExportPreset {
   keyframeEverySec: 1;
   /** Where the 16:9 editor frame goes on the encoded picture; the rest is ink. */
   frameRect: { x: number; y: number; w: number; h: number };
+  /** The caption look of this preset (DESIGN-SYSTEM.md "Captions in the video"). */
+  captionLook: "subtitles" | "highlight";
+  /** Whether "Burn captions" starts on for this preset. */
+  burnCaptionsDefault: boolean;
 }
 
 /** The two export choices. The preset never changes `project.output` or the format. */
@@ -25,6 +29,8 @@ export const PRESETS: Record<ExportPresetId, ExportPreset> = {
     bitrate: (fps) => (fps > 30 ? 12_000_000 : 8_000_000),
     keyframeEverySec: 1,
     frameRect: { x: 0, y: 0, w: 1920, h: 1080 },
+    captionLook: "subtitles",
+    burnCaptionsDefault: false,
   },
   vertical: {
     id: "vertical",
@@ -36,5 +42,7 @@ export const PRESETS: Record<ExportPresetId, ExportPreset> = {
     keyframeEverySec: 1,
     // 16:9 scaled to the full width (1080 x 608), centered vertically: (1920 - 608) / 2 = 656.
     frameRect: { x: 0, y: 656, w: 1080, h: 608 },
+    captionLook: "highlight",
+    burnCaptionsDefault: true,
   },
 };

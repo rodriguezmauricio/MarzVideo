@@ -1873,6 +1873,7 @@ version = "0.1.0"
 dependencies = [
  "marz-capture",
  "marz-export",
+ "marz-transcribe",
  "serde",
  "serde_json",
  "tauri",
@@ -1883,6 +1884,14 @@ dependencies = [
 
 [[package]]
 name = "marz-export"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "marz-transcribe"
 version = "0.1.0"
 dependencies = [
  "serde",

@@ -1,0 +1,28 @@
+import { blockSpans, captionLines, type CaptionLook } from "@marz/autoedit";
+import type { CaptionBlock, CaptionStyle } from "@marz/compositor";
+import type { Project, Word } from "@marz/format";
+
+/** Caption colours and font from tokens.css (no colour is written anywhere else). */
+export function captionStyle(): CaptionStyle {
+  const css = getComputedStyle(document.documentElement);
+  const v = (name: string) => css.getPropertyValue(name).trim();
+  const ink = v("--ink");
+  const paper = v("--paper");
+  const accent = v("--accent");
+  if (!ink || !paper || !accent) throw new Error("caption tokens are missing");
+  return { ink, paper, accent, family: v("--font-display") || "sans-serif" };
+}
+
+/** The caption blocks for a look, in output time. */
+export function captionBlocks(project: Project, words: Word[], look: CaptionLook): CaptionBlock[] {
+  return words.length ? blockSpans(captionLines(project, words, look)) : [];
+}
+
+/** Waits until the display font can be drawn on a canvas (fonts load lazily). */
+export async function loadCaptionFont(family: string): Promise<void> {
+  try {
+    await document.fonts.load(`700 48px ${family}`);
+  } catch {
+    /* a fallback font is drawn; layout still holds */
+  }
+}

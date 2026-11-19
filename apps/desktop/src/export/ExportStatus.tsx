@@ -15,6 +15,9 @@ export function ExportControl() {
   const phase = useExportStore((s) => s.phase);
   const progress = useExportStore((s) => s.progress);
   const panel = useExportStore((s) => s.panel);
+  const burn = useExportStore((s) => s.burn);
+  const toggleBurn = useExportStore((s) => s.toggleBurn);
+  const hasWords = useEditorStore((s) => s.words.length > 0);
   const last = useExportStore((s) => s.last);
   const { togglePanel, closePanel, highlight, start, cancel } = useExportStore.getState();
   const wrap = useRef<HTMLDivElement>(null);
@@ -82,6 +85,17 @@ export function ExportControl() {
               <i className={last === p.id ? "mark" : undefined} />
             </button>
           ))}
+          {hasWords && (
+            <button type="button" role="menuitemcheckbox" aria-checked={burn[panel.highlight]} className="ep-burn" onClick={() => toggleBurn(panel.highlight)}>
+              <span className="lbl">
+                <Icon name="captions" size={15} />
+                Burn captions
+              </span>
+              <span className={`tg${burn[panel.highlight] ? " on" : ""}`} aria-hidden="true">
+                <i />
+              </span>
+            </button>
+          )}
         </div>
       )}
     </div>

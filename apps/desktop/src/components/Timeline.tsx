@@ -6,7 +6,10 @@ import { Icon } from "./Icon";
 import { MicWave, ScreenThumbs } from "./Lanes";
 import { count, mmss } from "./timecode";
 import { handleWidthPx, MAX_TIMELINE_ZOOM, pxToUs, snapUs, timelineWidthPx, usToPx } from "./timelineMath";
-import { zoomLabels } from "./zoomLabels";
+import { cutCapLabel, zoomLabels } from "./zoomLabels";
+
+/** Roughly how wide a 10px mono label is, to hide labels that would not fit (micro type). */
+const labelPx = (text: string, ai: boolean) => text.length * 7 + (ai ? 26 : 0) + 8;
 
 type Kind = "zoom" | "cut";
 type Mode = "move" | "start" | "end";
@@ -171,9 +174,14 @@ export function Timeline({ expanded, onToggleLanes }: { expanded: boolean; onTog
   const sys = project.tracks.system;
   const cam = project.tracks.camera;
   /** A Later lane that this recording fills: computer sound, or the camera. */
-  const real = (name: string) => (name === "System audio" && !!sys) || (name === "Camera" && !!cam);
+  const real = (name: string) => (name === "System audio" && !!sys) || (name === "Camera" && !!cam) || (name === "Captions" && hasWords);
   const nAuto = project.edits.zooms.filter((z) => z.origin === "auto").length;
   const nOwn = project.edits.zooms.length - nAuto;
+  const nAi = project.edits.zooms.filter((z) => z.origin === "ai").length + project.edits.cuts.filter((c) => c.origin === "ai").length;
+  const words = useEditorStore((s) => s.words);
+  const hasWords = words.length > 0;
+  const overrides = project.edits.captions?.overrides ?? {};
+  const hiddenWords = new Set(project.edits.captions?.hidden ?? []);
 
   return (
     <section className="tl" aria-label="Timeline">
@@ -253,7 +261,12 @@ export function Timeline({ expanded, onToggleLanes }: { expanded: boolean; onTog
                     style={{ left: x(r.startUs), width: w, height: rows.zoom - 12 }}
                   >
                     <i className="g l" />
-                    <span>{labels.get(z.id)}</span>
+                    {w >= labelPx(labels.get(z.id) ?? "", z.origin === "ai") + 16 && (
+                      <span className="lbl-ai">
+                        {labels.get(z.id)}
+                        {z.origin === "ai" && <b className="ai-tag">AI</b>}
+                      </span>
+                    )}
                     <i className="g r" />
                     {handle("zoom", z.id, "start", z, w)}
                     {handle("zoom", z.id, "end", z, w)}
@@ -271,6 +284,32 @@ export function Timeline({ expanded, onToggleLanes }: { expanded: boolean; onTog
                 // The camera keeps the Camera lane's place and height, with the Screen lane's thumbnails.
                 <div key={name} className="tk" style={{ height: rows.later }}>
                   <ScreenThumbs url={storage.fileUrl(cam.file)} durationUs={D} widthPx={x(D)} pps={pps} rowH={rows.later} />
+                </div>
+              ) : name === "Captions" && hasWords ? (
+                // The transcript words, one block each (DESIGN-SYSTEM.md "Captions lane").
+                <div key={name} className="tk" style={{ height: rows.later }}>
+                  {words.map((wd) => {
+                    const left = x(wd.startUs);
+                    const wpx = Math.max(2, x(wd.endUs - wd.startUs));
+                    const text = overrides[wd.id] ?? wd.text;
+                    const sel = selection?.kind === "word" && selection.id === wd.id;
+                    return (
+                      <div
+                        key={wd.id}
+                        data-testid={`word-${wd.id}`}
+                        className={`cap-word${hiddenWords.has(wd.id) ? " hidden-word" : ""}${sel ? " sel" : ""}`}
+                        style={{ left, width: wpx }}
+                        title={text}
+                        onPointerDown={(e) => {
+                          e.stopPropagation();
+                          select({ kind: "word", id: wd.id });
+                          seek(wd.startUs);
+                        }}
+                      >
+                        {wpx >= text.length * 7 + 6 ? text : null}
+                      </div>
+                    );
+                  })}
                 </div>
               ) : (
                 <div key={name} className="tk tk-later" style={{ height: rows.later }} aria-hidden="true">
@@ -295,7 +334,12 @@ export function Timeline({ expanded, onToggleLanes }: { expanded: boolean; onTog
                     className="cutcap"
                     style={{ left, width: w }}
                   >
-                    <span>Cut</span>
+                    {w >= labelPx(cutCapLabel(c), c.origin === "ai") && (
+                      <span className="lbl-ai">
+                        {cutCapLabel(c)}
+                        {c.origin === "ai" && <b className="ai-tag">AI</b>}
+                      </span>
+                    )}
                     {handle("cut", c.id, "start", c, w)}
                     {handle("cut", c.id, "end", c, w)}
                   </div>
@@ -312,6 +356,7 @@ export function Timeline({ expanded, onToggleLanes }: { expanded: boolean; onTog
       <div className="tl-foot">
         <span>
           {count(nOwn, "zoom")} / {count(project.edits.cuts.length, "cut")} / {nAuto} suggested
+          {nAi > 0 && ` / ${nAi} by AI`}
         </span>
         <span>
           <Icon name="lock" size={12} />

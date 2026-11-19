@@ -12,6 +12,8 @@ import { WarningBar } from "./components/WarningBar";
 import { keptSegments } from "@marz/timeline";
 import { refuseEmpty } from "./export/outputFrames";
 import { addCutAtPlayhead, addZoomAtPlayhead, deleteSelection, runAutoZoom } from "./state/actions";
+import { abortAiPass, answerModelAsk, loadTranscriptWords, startAiPass } from "./ai/aiActions";
+import { statusText } from "./ai/runAiPass";
 import { useAppStore } from "./state/appStore";
 import { flushAutosave, useEditorStore } from "./state/editorStore";
 import { pickStorage } from "./storage/pickStorage";
@@ -32,6 +34,38 @@ function SaveState({ status }: { status: SaveStatus }) {
       <i />
       {saved ? "All changes saved" : "Saving..."}
     </span>
+  );
+}
+
+/** The AI pass in the save status slot (DESIGN-SYSTEM.md "AI pass"). */
+function AiState() {
+  const ai = useEditorStore((s) => s.ai);
+  if (ai.downloadPct !== null)
+    return (
+      <span data-testid="ai-status" className="save save-pending">
+        <i />
+        Downloading the transcription model {Math.round(ai.downloadPct * 100)}%
+      </span>
+    );
+  if (!ai.status) return null;
+  const busy = ai.status.step === "transcribing" || ai.status.step === "editing";
+  return (
+    <span data-testid="ai-status" className={`save${busy ? " save-pending" : ""}`}>
+      <i />
+      {statusText(ai.status)}
+    </span>
+  );
+}
+
+/** The model download ask in the Warning bar. */
+function ModelAsk() {
+  return (
+    <div className="warn" role="status">
+      <Icon name="alert" size={13} />
+      <b>Download the transcription model (550 MB)?</b>
+      <button type="button" className="ask" onClick={() => void answerModelAsk(true)}>Download</button>
+      <button type="button" className="ask" onClick={() => void answerModelAsk(false)}>Not now</button>
+    </div>
   );
 }
 
@@ -73,12 +107,25 @@ function Editor({ dir }: { dir: string }) {
   const saveStatus = useEditorStore((s) => s.saveStatus);
   const exportFailure = useExportStore((s) => (s.phase === "failed" ? s.failure : null));
   const exportDone = useExportDoneLine();
+  const aiWarning = useEditorStore((s) => s.ai.warning);
+  const aiAsk = useEditorStore((s) => s.ai.ask);
+  const aiShown = useEditorStore((s) => s.ai.status !== null || s.ai.downloadPct !== null);
   const [lanesExpanded, setLanesExpanded] = useState(false);
 
   useEffect(() => {
-    void load(pickStorage(dir));
-    // Leaving the editor cancels a running export (nothing is written).
-    return () => useExportStore.getState().reset();
+    let live = true;
+    void load(pickStorage(dir)).then(() => {
+      if (!live || useEditorStore.getState().status !== "ready") return;
+      // A recording that was just stopped (or ?ai=1 in the browser): run the AI pass once.
+      if (useAppStore.getState().takePendingAi()) void startAiPass();
+      else void loadTranscriptWords();
+    });
+    // Leaving the editor cancels a running export and AI pass (nothing is written).
+    return () => {
+      live = false;
+      abortAiPass();
+      useExportStore.getState().reset();
+    };
   }, [load, dir]);
 
   useEffect(() => {
@@ -114,6 +161,7 @@ function Editor({ dir }: { dir: string }) {
       } else if (e.code === "KeyZ") addZoomAtPlayhead();
       else if (e.code === "KeyC") addCutAtPlayhead();
       else if (e.code === "KeyA") runAutoZoom();
+      else if (e.code === "KeyE" && e.shiftKey) void startAiPass();
       else if (e.code === "Delete" || e.code === "Backspace") deleteSelection();
       else if (e.code === "Escape") s.select(null);
     };
@@ -146,7 +194,7 @@ function Editor({ dir }: { dir: string }) {
           <BackLink />
           <span className="faint">/</span>
           <b className="proj">{project.name}</b>
-          {exportDone ?? <SaveState status={saveStatus} />}
+          {exportDone ?? (aiShown ? <AiState /> : <SaveState status={saveStatus} />)}
         </div>
         <div className="strip-r">
           <span className="faint">
@@ -156,7 +204,13 @@ function Editor({ dir }: { dir: string }) {
         </div>
         <ExportProgressLine />
       </header>
-      {(exportFailure ?? warning) && <WarningBar text={(exportFailure ?? warning)!} />}
+      {exportFailure ? (
+        <WarningBar text={exportFailure} />
+      ) : aiAsk === "model" ? (
+        <ModelAsk />
+      ) : (aiWarning ?? warning) ? (
+        <WarningBar text={(aiWarning ?? warning)!} />
+      ) : null}
       {lanesExpanded && <Toolbar horizontal />}
       <main className="main">
         <div className="timecode" aria-hidden="true">

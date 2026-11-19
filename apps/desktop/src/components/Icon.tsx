@@ -105,6 +105,13 @@ const PATHS = {
       <path d="M5 11a7 7 0 0014 0M12 18v3M4 4l16 16" />
     </>
   ),
+  ai: <path d="M12 3l2.2 6.8L21 12l-6.8 2.2L12 21l-2.2-6.8L3 12l6.8-2.2z" />,
+  captions: (
+    <>
+      <rect x="3" y="6" width="18" height="12" />
+      <path d="M7 14h4M13 14h4M7 10h10" />
+    </>
+  ),
   speaker: <path d="M4 9h4l5-4v14l-5-4H4zM16.5 9.5a3.5 3.5 0 010 5M19 7a7 7 0 010 10" />,
   zoomout: (
     <>

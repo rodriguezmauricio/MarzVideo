@@ -113,7 +113,8 @@ describe("commands", () => {
     p = addZoom(zoom("live", "live"))(p);
     p = addZoom(zoom("man", "manual"))(p);
     p = addZoom(zoom("old-auto", "auto"))(p);
-    p = replaceAutoZooms([zoom("new-auto", "auto")])(p);
+    p = replaceAutoZooms([{ ...zoom("new-auto", "auto"), startUs: 6_000_000, endUs: 8_000_000 }, zoom("on-top", "auto")])(p);
+    // "on-top" overlaps the live and manual zooms, so it is skipped.
     expect(p.edits.zooms.map((z) => z.id).sort()).toEqual(["live", "man", "new-auto"]);
   });
 

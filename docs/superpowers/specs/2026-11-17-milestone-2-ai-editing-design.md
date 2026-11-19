@@ -1,6 +1,6 @@
 # Marz Recorder: Milestone 2 Design (AI editing)
 
-**Status:** APPROVED by Mauricio on 2026-11-17, with the review calls marked "Claude's call". Dependencies: Whisper approved; Claude runs through his own Claude Code subscription, no API key (his call, 2026-11-17).
+**Status:** APPROVED by Mauricio on 2026-11-17, with the review calls marked "Claude's call". BUILT on branch `claude/ai-editing-ca47b2` (2026-11-19); his three test takes and the quality check are still open (see `docs/spikes/2026-11-19-ai-spike.md`). Changes from the spike: Whisper runs with its VAD model (`ggml-silero-v5.1.2.bin`, 0.9 MB, downloaded with the main model) and Claude runs with `--effort high`. Dependencies: Whisper approved; Claude runs through his own Claude Code subscription, no API key (his call, 2026-11-17).
 **Date:** 2026-11-17
 **Builds on:** Milestone 1 (branch `claude/capture-plan-d523b6`, PR 1). M2 work branches from that branch (or from main once PR 1 is merged); steps 2 to 4 can start in the cloud right away: capture engine, Tauri shell, Home, recorder bars, editor, export. M1 design and format contract: `docs/superpowers/specs/2026-11-15-milestone-1-design.md`. Product spec: `docs/product-spec.md` (sections 2, 9, 10, 12).
 

@@ -99,3 +99,13 @@ Checked in Edge at 1440 x 900 on the `?fake` recorder pages and on `samples/demo
 - **Camera preview on the overlay** while setting up: not in `Recorder-Setup.dc.html`. Its tag is paper (not accent) so it never reads as a zoom preset.
 - **The Camera lane is a real lane** with thumbnails when the recording has a camera, in the Later lane's 22 px slot (44 expanded), like System audio.
 - **Inspector Camera block** under the Project toggles: not in `Editor-Avant-Garde.dc.html`. The four corner squares have no visible text (their names are accessible labels and tooltips), the one exception to "icon, label, hotkey", because four 22 px squares are the corner picker itself. No hotkeys for camera settings.
+
+## AI pass and captions (M2, 2026-11-19)
+
+Checked in Edge (built-in browser) at 1440 x 900 and 1280 x 720 on `samples/demo.marz` with the fixture AI provider. No mockup exists for these states; they follow DESIGN-SYSTEM.md (updated first: "AI pass", "Captions lane", "Captions in the video", Inspector, Badges, Timeline).
+
+- **Eight ledger rows**: "Edit with AI" (Shift+E) sits after Auto zoom. The ledger is 34 px taller, so the hero timecode, playline, ledger and preview start moving up below a 525 px main area instead of 491. At 1440 x 900 (516 px main area) the timecode is about 239 px instead of 250 and everything above the timeline sits 9 px higher than in `Editor-Avant-Garde.dc.html`.
+- **The Project panel scrolls** when the Camera and AI edit blocks make it taller than the inspector (a thin ink scrollbar on paper).
+- **The AI tag** is a 14 px outlined "AI" after the block or cap label; labels and tags are hidden on blocks and caps too narrow to hold them (most short silence cuts at Fit), which also hides the label of very short manual zooms.
+- **Caption word blocks** show no text at Fit on normal speech (words are 2 to 5 px wide); the text appears when the timeline is zoomed in.
+- **The model download ask** uses the Warning bar with two underlined text buttons (not the 34 px banner buttons) so it keeps the bar's 24 px height.
