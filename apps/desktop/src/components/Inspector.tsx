@@ -42,6 +42,7 @@ const BADGE: Record<Zoom["origin"], { text: string; cls: string }> = {
   live: { text: "Live", cls: "badge-live" },
   auto: { text: "Suggested", cls: "badge-suggested" },
   manual: { text: "Manual", cls: "badge-manual" },
+  ai: { text: "AI", cls: "badge-ai" },
 };
 
 function ZoomInspector({ zoom, title, durationUs }: { zoom: Zoom; title: string; durationUs: number }) {
