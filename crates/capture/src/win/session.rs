@@ -729,6 +729,17 @@ impl Session {
         }
     }
 
+    /// Live camera layout switch: logs a `layout` line (one of `events::LAYOUTS`). Ignored before
+    /// t0 and while paused. The editor turns the lines into layout scenes; without a camera track
+    /// it ignores them.
+    pub fn layout(&self, layout: &str) {
+        let now = qpc_hns();
+        let Some(t) = self.clock.lock().ok().and_then(|g| g.as_ref().and_then(|c| c.rec_hns(now))).map(|h| h / 10) else {
+            return;
+        };
+        self.log(|l| l.layout(t, layout));
+    }
+
     /// Move or resize preset `preset_id` live. The zoom running on it now takes the new frame, and
     /// so does every later zoom to it; zooms that already ended keep theirs. The project's preset
     /// list gets the last frame. Unknown presets are ignored.

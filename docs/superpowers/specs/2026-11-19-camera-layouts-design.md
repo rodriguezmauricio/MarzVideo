@@ -94,8 +94,9 @@ the zoom area overlay matches the frame (as today it drops the zoom).
 {"tUs":4000000,"type":"layout","layout":"side"}
 ```
 
-Written by the engine on a layout hotkey while recording (not while paused, only when the camera is
-recorded, a repeat of the current layout is skipped). Older editors ignore unknown event types. On
+Written by the engine on a layout hotkey while recording (not while paused; a repeat of the current
+layout is skipped). The editor ignores them in a take without a camera. Older editors ignore unknown
+event types. On
 open, each press starts a scene that ends at the next press or the end; presses of `pip` only end the
 previous scene.
 
@@ -123,8 +124,8 @@ previous scene.
   Colour row (three 22 px squares filled paper, ink, accent, 1px ink border, selected = 2px ink ring
   via an inner square). Every change is one undo step.
 - Tool ledger: "Add layout" (L) row after Add cut, only for projects with a camera.
-- Recorder: the setup bar hint lists "Ctrl+Shift+1-4 layouts" only when the camera is on (no new
-  button).
+- Recorder: no new button or hint; the keys are listed with the other recorder hotkeys in
+  DESIGN-SYSTEM.md.
 
 ## Not checked by this design
 

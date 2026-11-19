@@ -80,6 +80,18 @@ struct ZoomLine<'a> {
 }
 
 #[derive(Serialize)]
+struct LayoutLine<'a> {
+    #[serde(rename = "tUs")]
+    t_us: i64,
+    r#type: &'static str,
+    layout: &'a str,
+}
+
+/// Camera layouts a live hotkey can switch to, in hotkey order (Ctrl+Shift+1 .. Ctrl+Shift+4):
+/// corner bubble, side column, camera fullscreen, screen only. Names as in `project.json`.
+pub const LAYOUTS: [&str; 4] = ["pip", "side", "camera", "screen"];
+
+#[derive(Serialize)]
 struct MarkerLine {
     #[serde(rename = "tUs")]
     t_us: i64,
@@ -145,6 +157,11 @@ impl<W: Write> EventLog<W> {
     /// Both `In` and `Out` carry a preset id; an `Out` line names the zoom being ended.
     pub fn zoom(&mut self, rec_us: i64, preset_id: &str, action: ZoomAction) {
         self.write_line(rec_us, &ZoomLine { t_us: rec_us, r#type: "zoom", preset_id, action });
+    }
+
+    /// A live layout switch (one of `LAYOUTS`); the editor turns these into layout scenes.
+    pub fn layout(&mut self, rec_us: i64, layout: &str) {
+        self.write_line(rec_us, &LayoutLine { t_us: rec_us, r#type: "layout", layout });
     }
 
     pub fn pause(&mut self, rec_us: i64) {
@@ -313,6 +330,14 @@ mod tests {
                 r#"{"tUs":960000,"type":"click","button":"middle","state":"up","x":3,"y":4}"#,
             ]
         );
+    }
+
+    #[test]
+    fn layout_line() {
+        let mut log = new_log((0, 0));
+        log.layout(4_000_000, LAYOUTS[1]);
+        let out = text(log);
+        assert_eq!(lines(&out), vec![HEADER_LINE, r#"{"tUs":4000000,"type":"layout","layout":"side"}"#]);
     }
 
     #[test]

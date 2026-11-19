@@ -109,3 +109,13 @@ Checked in Edge (built-in browser) at 1440 x 900 and 1280 x 720 on `samples/demo
 - **The AI tag** is a 14 px outlined "AI" after the block or cap label; labels and tags are hidden on blocks and caps too narrow to hold them (most short silence cuts at Fit), which also hides the label of very short manual zooms.
 - **Caption word blocks** show no text at Fit on normal speech (words are 2 to 5 px wide); the text appears when the timeline is zoomed in.
 - **The model download ask** uses the Warning bar with two underlined text buttons (not the 34 px banner buttons) so it keeps the bar's 24 px height.
+
+## Camera layouts (2026-11-19)
+
+Checked in Edge (Playwright) at 1440 x 900 and 1280 x 720 on `samples/demo-camera.marz` (synthetic camera, simulated live layout presses). No mockup exists for these states; they follow DESIGN-SYSTEM.md (updated first: "Camera layouts", "Layout lane", Inspector, Tool ledger, Preview frame).
+
+- **Nine ledger rows in projects with a camera**: "Add layout" (L) after Add cut. The main area's hero timecode, playline, ledger and preview move up one more row (34 px, the `--lx` variable on `.main.has-cam`), so at 1440 x 900 the timecode is smaller (about 200 px) than in `Editor-Avant-Garde.dc.html`. Projects without a camera are unchanged.
+- **Round corners on the camera** (Round and Circle masks): video content drawn by the compositor, not UI chrome. The UI itself stays at radius 0; the one design-check ignore is the "Round" option label in the Shape picker.
+- **Layout blocks** use short labels (Corner, Side, Camera, Screen) because the Layout lane is 22 px high at Fit; the inspector picker uses the same words.
+- **Shape row segmented control** has four options with 8 px side padding (the Motion row's control uses 12 px) so it fits the 308 px inspector column.
+- **Preview caption** "Press Play to see the switch" while a layout is selected.

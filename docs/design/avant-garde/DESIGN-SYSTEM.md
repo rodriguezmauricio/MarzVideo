@@ -175,7 +175,7 @@ Layouts are scenes on the Layout lane. Between scenes the corner bubble shows. D
 - Camera: the camera fills the frame, centre cropped. Screen: no camera.
 - Border: None, Thin (1px at 1080), Thick (4px at 1080), inside the camera's box along its mask; colour paper (default), ink or accent from `tokens.css`. No shadow.
 - Switch: 0.4 s from the scene boundary, ease in-out cubic. The screen box and camera box move together; a camera that appears grows from the centre of its box (the side column slides in from its edge) and shrinks back the same way.
-- Recording: Ctrl+Shift+1 Corner, Ctrl+Shift+2 Side, Ctrl+Shift+3 Camera, Ctrl+Shift+4 Screen (only with the camera on). Not drawn on screen while recording. When the editor first opens the take they become Live layout blocks.
+- Recording: Ctrl+Shift+1 Corner, Ctrl+Shift+2 Side, Ctrl+Shift+3 Camera, Ctrl+Shift+4 Screen. Not drawn on screen while recording (no button, no overlay change). When the editor first opens the take they become Live layout blocks.
 
 ### Layout lane (projects with a camera)
 The Layout lane becomes a real lane: label "Layout" in paper, same heights (22, expanded 44). One block per scene, the zoom block's geometry (3px from the top and bottom at 22, 6px at 44), labels 10px mono 500: "Corner", "Side", "Camera", "Screen". Manual = paper fill, ink label, ink grips. Live = accent fill, ink label (the Live badge colours). Grips, drag, trim, snapping and the selection ring as zoom blocks. Click selects; L adds a 4 s Side block at the playhead (in the free time after it); Del deletes the selected one. Each change is one undo step.
@@ -229,7 +229,7 @@ Ink, 1px paper border, padding 10 x 12 x 10 x 16. A press on the bar's empty par
 While the camera is on during setup, the live camera sits on the overlay where the picture-in-picture will be: bottom-right of the region (the monitor in Full screen), 22% of its width, gap 3% of its width, camera aspect kept, mirrored. 1px paper border, no radius, no shadow. Label tag above its top-left like a zoom preset tag but paper fill, ink text: camera icon + "Camera". It passes clicks through and is not draggable (corner and size are picked in the editor). It is released when Record is pressed, so the engine can open the camera; nothing new shows on the overlay while recording.
 
 ### Recorder: hotkeys (registered only while the recorder is open)
-Record / stop Ctrl+Shift+R, Pause / resume Ctrl+Shift+P, Mute mic Ctrl+Shift+M, zoom presets Ctrl+1 to Ctrl+9, Zoom out Ctrl+0. Esc closes the recorder before recording. Each control that has a hotkey shows it next to its label in faint (on accent or rec: in the control's text colour).
+Record / stop Ctrl+Shift+R, Pause / resume Ctrl+Shift+P, Mute mic Ctrl+Shift+M, zoom presets Ctrl+1 to Ctrl+9, Zoom out Ctrl+0, camera layouts Ctrl+Shift+1 (Corner), Ctrl+Shift+2 (Side), Ctrl+Shift+3 (Camera), Ctrl+Shift+4 (Screen); the layout keys have no button on the bars. Esc closes the recorder before recording. Each control that has a hotkey shows it next to its label in faint (on accent or rec: in the control's text colour).
 
 ### Recorder: bar WHILE recording (floating, bottom centre, y 716)
 Rec square (14px) + timer (display 30px), Pause, Mute mic with meter, divider, one button per zoom preset ("1 Cart total", active = accent fill), Zoom out, divider, Stop (rec fill, white). Top-left chip: "Recording this region. Autosaving every few seconds" with red 1px border and square rec indicator. Region border 3px solid rec. Same "never captured" chip below.

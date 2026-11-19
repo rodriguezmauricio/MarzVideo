@@ -42,6 +42,12 @@ Windows-first screen recorder + non-destructive editor (Tauri 2, Rust, React/TS)
   Whisper is looked up in `MARZ_WHISPER`, beside the exe, the app data folder `whisper` (`%APPDATA%/com.marz.recorder/whisper`), then PATH;
   models live in the app data folder `models` (downloaded after his yes). Ran end to end on this laptop on a copy of his 19.35 take.
   Open: his three test takes and the quality check (list at the end of the spike doc).
+- **Done (branch `claude/camera-layouts-826937`, not merged yet):** camera layouts (design
+  `docs/superpowers/specs/2026-11-19-camera-layouts-design.md`, plan `docs/superpowers/plans/2026-11-19-camera-layouts.md`).
+  Masks (plain, round, circle, square) and border on the corner bubble; layout scenes (corner, side column, camera
+  fullscreen, screen only) on the Layout lane (L adds, drag, trim, delete, undo); 0.4 s eased switches drawn by
+  `packages/compositor/src/layout.ts` in preview and export; live hotkeys Ctrl+Shift+1..4 logged as `layout` events
+  and turned into Live blocks when the take first opens (`importLiveLayouts`).
 - **Not checked by hand yet:** the owner checks in `docs/spikes/2026-11-17-owner-checks.md` (clean 3-minute run,
   flash and beep sync, clicks, static screen, mic unplug, 60 Hz, real hotkeys), plus: open New recording once and
   look at the overlay, play an export in Windows Media Player, upload one export of each preset privately and
