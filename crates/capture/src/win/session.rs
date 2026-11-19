@@ -740,6 +740,30 @@ impl Session {
         self.log(|l| l.layout(t, layout));
     }
 
+    /// Recording time in microseconds now, or None (not started, paused).
+    fn rec_us_now(&self) -> Option<i64> {
+        let now = qpc_hns();
+        self.clock.lock().ok().and_then(|g| g.as_ref().and_then(|c| c.rec_hns(now))).map(|h| h / 10)
+    }
+
+    /// A finished live drawing stroke, pressed `ago_us` before now. Points are physical screen pixels.
+    pub fn draw_add(&self, id: &str, ago_us: i64, stroke: &crate::events::DrawStroke) {
+        let Some(t) = self.rec_us_now() else { return };
+        self.log(|l| l.draw_add(t, id, t - ago_us.max(0), stroke));
+    }
+
+    /// The eraser removed stroke `id`.
+    pub fn draw_remove(&self, id: &str) {
+        let Some(t) = self.rec_us_now() else { return };
+        self.log(|l| l.draw_remove(t, id));
+    }
+
+    /// Every stroke on screen goes. Also call it just before a pause (the clock stops then).
+    pub fn draw_clear(&self) {
+        let Some(t) = self.rec_us_now() else { return };
+        self.log(|l| l.draw_clear(t));
+    }
+
     /// Move or resize preset `preset_id` live. The zoom running on it now takes the new frame, and
     /// so does every later zoom to it; zooms that already ended keep theirs. The project's preset
     /// list gets the last frame. Unknown presets are ignored.

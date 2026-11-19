@@ -59,6 +59,25 @@ Windows-first screen recorder + non-destructive editor (Tauri 2, Rust, React/TS)
   caption style per export preset (Ink, Paper, Accent band, Plain; S/M/L; top/middle/bottom; word highlight), `.vtt`
   beside every export next to the `.srt`. Code: `apps/desktop/src/captions`, `packages/autoedit/src/captions.ts`,
   `packages/compositor/src/captions.ts`.
+- **Built (branch `claude/smart-vertical-4e8de8`, not merged, not checked by hand yet):** smart vertical (design
+  `docs/superpowers/specs/2026-11-19-smart-vertical-design.md`, plan `docs/superpowers/plans/2026-11-19-smart-vertical.md`).
+  The vertical export follows the action by default (a 9:16 window aimed by cursor rests, clicks and zooms; camera in a 1080 x 608
+  slot; captions in the Reels/TikTok safe area) or fits with bars. Vertical preview (V) with an Aim view, Vertical lane with Frame
+  blocks (F) that win over the automatic aim, Vertical block in the Project panel, "Follow the action" row in the export panel.
+  Optional `edits.vertical`. Code: `packages/timeline/src/reframe.ts`, `packages/compositor/src/vertical.ts`, `apps/desktop/src/vertical`.
+  App exports on copies "Vertical test" (camera) and "Vertical test clicks" in `Videos/Marz Recorder/Exports/Vertical test`, with frame sheets.
+- **Built (branch `claude/live-drawing-d842df`, not merged):** live drawing (design `docs/superpowers/specs/2026-11-19-live-drawing-design.md`,
+  plan `docs/superpowers/plans/2026-11-19-live-drawing.md`). Ctrl+Shift+D (or Draw on the recording bar) while recording: pen, highlight,
+  arrow, box, oval, text, erase, clear, four token colours, on the capture-excluded overlay. Strokes go to `events.jsonl` (`draw` lines) and
+  become `edits.drawings` strokes on first open; Drawing lane, select/move/resize on the preview, Drawing inspector, drawn by the compositor
+  in preview and both exports. Checked: real take "Drawing test" with simulated input, `screen.mp4` frames without the drawing, both exports with it.
+- **Built on branch `claude/cursor-clicks-08f5d3` (2026-11-19, not merged):** cursor and clicks (design
+  `docs/superpowers/specs/2026-11-19-cursor-clicks-design.md`, plan `docs/superpowers/plans/2026-11-19-cursor-clicks.md`).
+  `cursorShape` lines in `events.jsonl` (Windows cursor shape and size, from the 16 ms poll), `source.cursor` "layer" or "baked",
+  the compositor draws the recorded shape at the recorded size (x 1, 1.5, 2), Cursor lane blocks (H) hide the cursor or switch
+  click effects per section, click effects Ripple, Pulse, Ring with token colour and size, in preview and export.
+  Code: `packages/format/src/cursor.ts`, `packages/timeline/src/cursor.ts`, `packages/compositor/src/cursor.ts` and `cursorShapes.ts`,
+  `crates/capture/src/win/cursor.rs`, `apps/desktop/src/components/CursorPanel.tsx`.
 - **Not checked by hand yet:** the owner checks in `docs/spikes/2026-11-17-owner-checks.md` (clean 3-minute run,
   flash and beep sync, clicks, static screen, mic unplug, 60 Hz, real hotkeys), plus: open New recording once and
   look at the overlay, play an export in Windows Media Player, upload one export of each preset privately and

@@ -123,6 +123,10 @@ for timed layouts and kept as is. Preview and export draw the camera last, aspec
 - `edits.ai` (optional): `{ "paceUs": 300000, "kinds": { "silences", "fillers", "mistakes", "zooms", "captions" },
   "rejected": [ { "kind": "cut", "reason", "fromWordId", "toWordId" } | { "kind": "zoom", "candidateId" } ],
   "lastRun": { "at", "provider", "model", "languages" }, "lastResult": { "mistakes", "contextFillers", "zooms" } }`.
+- Smart vertical (2026-11-19, owner's overnight pre-approval; design `2026-11-19-smart-vertical-design.md`): `edits.vertical`
+  (optional) `{ "framing": "follow" | "fit", "cameraSlot": "top" | "bottom", "holds": [ { "id", "startUs", "endUs", "x" } ] }`.
+  Missing = follow, slot from the camera corner, no holds; unknown values read as the default and are kept on save. `x` is the
+  9:16 window's centre as a share of the screen width (source time like every edit).
 - Tolerant readers: an unknown zoom or cut `origin` reads as `"manual"`, an unknown `easing` as
   `"easeInOutCubic"`, an unknown cut `reason` as none; the original value is written back on save unless the
   editor changed that field. Older projects open as before; `version` stays 1.
@@ -157,6 +161,9 @@ normalized 0–1 relative to the source frame, so edits survive resolution/proxy
 - Readers must ignore unknown `type` values. That is how later features (layout, stroke, key,
   checklist) get added without a version bump.
 - A crash can leave a half-written last line; readers must drop an unparseable final line.
+- Live drawing (2026-11-19, `2026-11-19-live-drawing-design.md`) adds `draw` lines:
+  `{"tUs":..,"type":"draw","op":"add","id":"s1","startUs":..,"stroke":{"tool","color","width","points"[,"text"]}}`,
+  `{"op":"remove","id":"s1"}` and `{"op":"clear"}`; points and width in captured-frame pixels.
 
 ### `project.json`
 
@@ -195,6 +202,10 @@ normalized 0–1 relative to the source frame, so edits survive resolution/proxy
 - `origin` on a zoom is `"live"` (triggered while recording), `"auto"` (suggested), `"manual"` or `"ai"` (M2).
 - Zoom rects keep the output aspect ratio. Cuts are in source time; the timeline maps to output time.
 - Unknown fields must be preserved on save, so an older build never destroys newer data.
+- Optional `edits.drawings` (live drawing, 2026-11-19): `{ "strokes": [{ "id", "startUs", "endUs", "tool",
+  "color", "width", "points", "text"?, "origin" }], "liveImported": true }`. Strokes are vectors in source
+  pixels with appear and disappear times; they are never burned into `screen.mp4`. Details in
+  `2026-11-19-live-drawing-design.md`.
 
 ## Technical calls (Claude's, open to correction)
 

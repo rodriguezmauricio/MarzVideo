@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
-import { keptSegments } from "@marz/timeline";
+import { keptSegments, setVertical } from "@marz/timeline";
+import { verticalEdits } from "@marz/format";
 import { Icon } from "../components/Icon";
 import { useEditorStore } from "../state/editorStore";
 import { useExportStore } from "./exportStore";
@@ -22,6 +23,7 @@ export function ExportControl() {
   const { togglePanel, closePanel, highlight, start, cancel } = useExportStore.getState();
   const wrap = useRef<HTMLDivElement>(null);
   const empty = refuseEmpty(keptSegments(project.durationUs, project.edits.cuts));
+  const follow = verticalEdits(project).framing === "follow";
 
   // A click outside the button and the panel closes the panel.
   useEffect(() => {
@@ -85,6 +87,24 @@ export function ExportControl() {
               <i className={last === p.id ? "mark" : undefined} />
             </button>
           ))}
+          {panel.highlight === "vertical" && (
+            // Smart vertical: Follow the action (default) or Fit with bars; the Vertical block's Framing.
+            <button
+              type="button"
+              role="menuitemcheckbox"
+              aria-checked={follow}
+              className="ep-burn"
+              onClick={() => useEditorStore.getState().apply(setVertical({ framing: follow ? "fit" : "follow" }))}
+            >
+              <span className="lbl">
+                <Icon name="portrait" size={15} />
+                Follow the action
+              </span>
+              <span className={`tg${follow ? " on" : ""}`} aria-hidden="true">
+                <i />
+              </span>
+            </button>
+          )}
           {hasWords && (
             <button type="button" role="menuitemcheckbox" aria-checked={burn[panel.highlight]} className="ep-burn" onClick={() => toggleBurn(panel.highlight)}>
               <span className="lbl">

@@ -3,7 +3,7 @@
 //! One JSON object per line. Timestamps are microseconds since recording start on the recording
 //! clock. Coordinates are pixels in the captured frame, so the capture region origin is subtracted.
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::io::{self, Write};
 
 const FLUSH_INTERVAL_US: i64 = 1_000_000;
@@ -59,6 +59,21 @@ struct CursorLine {
 }
 
 #[derive(Serialize)]
+struct CursorShapeLine<'a> {
+    #[serde(rename = "tUs")]
+    t_us: i64,
+    r#type: &'static str,
+    shape: &'a str,
+    px: u32,
+}
+
+/// Cursor shape names written in `cursorShape` lines (see the cursor and clicks design doc).
+pub const CURSOR_SHAPES: [&str; 15] = [
+    "arrow", "hand", "ibeam", "wait", "progress", "cross", "move", "sizeNS", "sizeWE", "sizeNWSE", "sizeNESW", "no", "help",
+    "hidden", "other",
+];
+
+#[derive(Serialize)]
 struct ClickLine {
     #[serde(rename = "tUs")]
     t_us: i64,
@@ -87,6 +102,49 @@ struct LayoutLine<'a> {
     layout: &'a str,
 }
 
+/// A finished live drawing stroke (draw mode while recording). `points` and `width` are physical
+/// screen pixels when passed in; the log writes them in captured-frame pixels (origin subtracted).
+/// `tool` and `color` are the names of `project.json` (`pen`, `highlighter`, `arrow`, `rect`,
+/// `ellipse`, `text`; `accent`, `rec`, `paper`, `ink`).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct DrawStroke {
+    pub tool: String,
+    pub color: String,
+    pub width: f64,
+    pub points: Vec<[f64; 2]>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub text: Option<String>,
+}
+
+#[derive(Serialize)]
+struct DrawAddLine<'a> {
+    #[serde(rename = "tUs")]
+    t_us: i64,
+    r#type: &'static str,
+    op: &'static str,
+    id: &'a str,
+    #[serde(rename = "startUs")]
+    start_us: i64,
+    stroke: &'a DrawStroke,
+}
+
+#[derive(Serialize)]
+struct DrawIdLine<'a> {
+    #[serde(rename = "tUs")]
+    t_us: i64,
+    r#type: &'static str,
+    op: &'static str,
+    id: &'a str,
+}
+
+#[derive(Serialize)]
+struct DrawClearLine {
+    #[serde(rename = "tUs")]
+    t_us: i64,
+    r#type: &'static str,
+    op: &'static str,
+}
+
 /// Camera layouts a live hotkey can switch to, in hotkey order (Ctrl+Shift+1 .. Ctrl+Shift+4):
 /// corner bubble, side column, camera fullscreen, screen only. Names as in `project.json`.
 pub const LAYOUTS: [&str; 4] = ["pip", "side", "camera", "screen"];
@@ -106,6 +164,7 @@ pub struct EventLog<W: Write> {
     fps: u32,
     last_cursor_slot: Option<i64>,
     last_cursor: Option<(i32, i32)>,
+    last_shape: Option<(String, u32)>,
     last_flush_us: i64,
     error: Option<io::Error>,
 }
@@ -123,7 +182,7 @@ impl<W: Write> EventLog<W> {
         serde_json::to_writer(&mut out, &line).map_err(io::Error::from)?;
         out.write_all(b"\n")?;
         out.flush()?;
-        Ok(Self { out, origin, fps, last_cursor_slot: None, last_cursor: None, last_flush_us: 0, error: None })
+        Ok(Self { out, origin, fps, last_cursor_slot: None, last_cursor: None, last_shape: None, last_flush_us: 0, error: None })
     }
 
     /// Records a cursor move. At most one line per frame slot (the first move in it), and only
@@ -140,6 +199,16 @@ impl<W: Write> EventLog<W> {
         self.last_cursor_slot = Some(slot);
         self.last_cursor = Some(pos);
         self.write_line(rec_us, &CursorLine { t_us: rec_us, r#type: "cursor", x: pos.0, y: pos.1 });
+    }
+
+    /// Records the cursor's shape (one of `CURSOR_SHAPES`) and cell size in captured pixels. Written only
+    /// when either differs from the last `cursorShape` line.
+    pub fn cursor_shape(&mut self, rec_us: i64, shape: &str, px: u32) {
+        if self.last_shape.as_ref().is_some_and(|(s, p)| s == shape && *p == px) {
+            return;
+        }
+        self.last_shape = Some((shape.to_string(), px));
+        self.write_line(rec_us, &CursorShapeLine { t_us: rec_us, r#type: "cursorShape", shape, px });
     }
 
     pub fn click(&mut self, rec_us: i64, button: Button, down: bool, screen_x: i32, screen_y: i32) {
@@ -162,6 +231,24 @@ impl<W: Write> EventLog<W> {
     /// A live layout switch (one of `LAYOUTS`); the editor turns these into layout scenes.
     pub fn layout(&mut self, rec_us: i64, layout: &str) {
         self.write_line(rec_us, &LayoutLine { t_us: rec_us, r#type: "layout", layout });
+    }
+
+    /// A finished stroke, written when it is done; `start_us` is the press (clamped to `rec_us`).
+    pub fn draw_add(&mut self, rec_us: i64, id: &str, start_us: i64, stroke: &DrawStroke) {
+        let (ox, oy) = (f64::from(self.origin.0), f64::from(self.origin.1));
+        let local = DrawStroke { points: stroke.points.iter().map(|p| [p[0] - ox, p[1] - oy]).collect(), ..stroke.clone() };
+        let line = DrawAddLine { t_us: rec_us, r#type: "draw", op: "add", id, start_us: start_us.clamp(0, rec_us), stroke: &local };
+        self.write_line(rec_us, &line);
+    }
+
+    /// The eraser removed stroke `id`.
+    pub fn draw_remove(&mut self, rec_us: i64, id: &str) {
+        self.write_line(rec_us, &DrawIdLine { t_us: rec_us, r#type: "draw", op: "remove", id });
+    }
+
+    /// Every stroke on screen goes (Clear all, leaving draw mode, Pause).
+    pub fn draw_clear(&mut self, rec_us: i64) {
+        self.write_line(rec_us, &DrawClearLine { t_us: rec_us, r#type: "draw", op: "clear" });
     }
 
     pub fn pause(&mut self, rec_us: i64) {
@@ -269,6 +356,25 @@ mod tests {
     }
 
     #[test]
+    fn cursor_shape_written_on_change_only() {
+        let mut log = new_log((0, 0));
+        log.cursor_shape(1_000, "arrow", 32);
+        log.cursor_shape(17_000, "arrow", 32);
+        log.cursor_shape(33_000, "hand", 32);
+        log.cursor_shape(50_000, "hand", 48);
+        let out = text(log);
+        assert_eq!(
+            lines(&out),
+            vec![
+                HEADER_LINE,
+                r#"{"tUs":1000,"type":"cursorShape","shape":"arrow","px":32}"#,
+                r#"{"tUs":33000,"type":"cursorShape","shape":"hand","px":32}"#,
+                r#"{"tUs":50000,"type":"cursorShape","shape":"hand","px":48}"#,
+            ]
+        );
+    }
+
+    #[test]
     fn cursor_unchanged_not_written() {
         let mut log = new_log((0, 0));
         log.cursor(16_000, 1203, 644);
@@ -338,6 +444,28 @@ mod tests {
         log.layout(4_000_000, LAYOUTS[1]);
         let out = text(log);
         assert_eq!(lines(&out), vec![HEADER_LINE, r#"{"tUs":4000000,"type":"layout","layout":"side"}"#]);
+    }
+
+    #[test]
+    fn draw_lines_subtract_the_origin() {
+        let mut log = new_log((100, 50));
+        let stroke = DrawStroke { tool: "pen".into(), color: "accent".into(), width: 6.0, points: vec![[110.0, 60.0], [130.5, 70.0]], text: None };
+        log.draw_add(2_000_000, "s1", 1_500_000, &stroke);
+        let text_stroke = DrawStroke { tool: "text".into(), color: "paper".into(), width: 6.0, points: vec![[100.0, 50.0]], text: Some("Hi".into()) };
+        log.draw_add(2_100_000, "s2", 2_200_000, &text_stroke);
+        log.draw_remove(2_500_000, "s1");
+        log.draw_clear(3_000_000);
+        let out = text(log);
+        assert_eq!(
+            lines(&out),
+            vec![
+                HEADER_LINE,
+                r#"{"tUs":2000000,"type":"draw","op":"add","id":"s1","startUs":1500000,"stroke":{"tool":"pen","color":"accent","width":6.0,"points":[[10.0,10.0],[30.5,20.0]]}}"#,
+                r#"{"tUs":2100000,"type":"draw","op":"add","id":"s2","startUs":2100000,"stroke":{"tool":"text","color":"paper","width":6.0,"points":[[0.0,0.0]],"text":"Hi"}}"#,
+                r#"{"tUs":2500000,"type":"draw","op":"remove","id":"s1"}"#,
+                r#"{"tUs":3000000,"type":"draw","op":"clear"}"#,
+            ]
+        );
     }
 
     #[test]

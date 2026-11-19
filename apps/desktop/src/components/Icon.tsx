@@ -132,6 +132,14 @@ const PATHS = {
       <path d="M15.5 15.5L21 21M8 10.5h5" />
     </>
   ),
+  check: <path d="M5 12.5l4.5 4.5L19 7" />,
+  pen: <path d="M4 20l1.5-5L16 4.5l3.5 3.5L9 18.5zM14 6.5l3.5 3.5" />,
+  highlight: <path d="M8 15l8.5-11L20 7 9 15.5zM8 15l-1 4h4l-2-3.5M4 21h16" />,
+  arrow: <path d="M5 19L18 6M10 5h9v9" />,
+  box: <rect x="4" y="6" width="16" height="12" />,
+  oval: <ellipse cx="12" cy="12" rx="9" ry="6" />,
+  text: <path d="M5 6V4h14v2M12 4v16M9 20h6" />,
+  erase: <path d="M8 20l-4-4L14 6l6 6-8 8zM9 11l5 5M12 20h8" />,
 } as const;
 
 const SOLID = new Set(["play", "dot", "stop"]);

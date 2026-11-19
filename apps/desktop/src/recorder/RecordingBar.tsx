@@ -169,6 +169,23 @@ export function RecordingBar({ placed = false }: { placed?: boolean }) {
             <Tip id="out" text="Zoom out / Ctrl+0" {...tipProps} />
           </button>
           <i className="rb-sep" />
+          {/* Draw mode (DESIGN-SYSTEM.md "Recorder: draw mode"). Not while paused. */}
+          <button
+            type="button"
+            className={`rr-b${rec.drawing ? " on" : ""}`}
+            aria-pressed={rec.drawing}
+            disabled={rec.paused}
+            onClick={() => void api.toggleDraw(!rec.drawing).catch(() => undefined)}
+            {...hover("draw")}
+          >
+            <Icon name="pen" size={16} />
+            <span className="rr-swap">
+              <span className={rec.drawing ? "off" : undefined}>Draw</span>
+              <span className={rec.drawing ? undefined : "off"}>Drawing</span>
+            </span>
+            <Tip id="draw" text={rec.paused ? "Resume to draw" : rec.drawing ? "Stop drawing / Ctrl+Shift+D" : "Draw on screen / Ctrl+Shift+D"} {...tipProps} />
+          </button>
+          <i className="rb-sep" />
           <button type="button" className="rr-stop" disabled={stopping} onClick={stop} {...hover("stop")}>
             <Icon name="stop" size={14} />
             Stop

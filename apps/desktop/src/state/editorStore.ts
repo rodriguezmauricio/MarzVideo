@@ -1,13 +1,13 @@
 import { create } from "zustand";
-import { cameraScenes, parseProject, serializeProject, type CaptionPresetId, type MarzEvent, type Project, type Section, type Word } from "@marz/format";
+import { cameraScenes, cursorSections, drawingStrokes, parseProject, verticalEdits, serializeProject, type CaptionPresetId, type MarzEvent, type Project, type Section, type Word } from "@marz/format";
 import type { Levels } from "@marz/autoedit";
 import type { AiStatus } from "../ai/runAiPass";
-import { History, importLiveLayouts, type Command } from "@marz/timeline";
+import { History, importLiveDrawings, importLiveLayouts, type Command } from "@marz/timeline";
 import { createAutosave, type SaveStatus } from "../storage/autosave";
 import type { ProjectStorage } from "../storage/types";
 import { loadEventsOrEmpty } from "./loadEvents";
 
-export type Selection = { kind: "zoom" | "cut" | "word" | "layout"; id: string } | null;
+export type Selection = { kind: "zoom" | "cut" | "word" | "layout" | "cursor" | "drawing" | "frame"; id: string } | null;
 
 /** The AI pass as the editor shows it: status line, warning, the model download ask. */
 export type AiUi = {
@@ -66,6 +66,9 @@ type EditorState = {
   /** The word being fixed in place in the Transcript panel. */
   transcriptEditing: string | null;
   setTranscriptEditing: (id: string | null) => void;
+  /** The preview shows the smart vertical picture (and the Vertical lane shows). */
+  verticalPreview: boolean;
+  toggleVerticalPreview: () => void;
   ai: AiUi;
   setAi: (patch: Partial<AiUi>) => void;
   setTranscript: (words: Word[], sections: Section[], levels: Levels | null) => void;
@@ -113,6 +116,12 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   setInspectorTab: (inspectorTab) => set({ inspectorTab }),
   transcriptEditing: null,
   setTranscriptEditing: (transcriptEditing) => set({ transcriptEditing }),
+  verticalPreview: false,
+  toggleVerticalPreview: () => {
+    const on = !get().verticalPreview;
+    // A Frame block selection only makes sense while its lane shows.
+    set({ verticalPreview: on, ...(!on && get().selection?.kind === "frame" ? { selection: null } : {}) });
+  },
   ai: IDLE_AI,
   setAi: (patch) => set({ ai: { ...get().ai, ...patch } }),
   setTranscript: (words, sections, levels) => set({ words, sections, levels }),
@@ -124,8 +133,8 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       const read = parseProject(JSON.parse(await storage.readText("project.json")));
       const { events, warning } = await loadEventsOrEmpty(() => storage.readText("events.jsonl"));
       // Layout hotkeys pressed while recording become Live layout blocks the first time the take
-      // opens (not an undo step; saved with the next autosave).
-      const project = importLiveLayouts(events)(read);
+      // opens (not an undo step; saved with the next autosave). Live drawing strokes too.
+      const project = importLiveDrawings(events)(importLiveLayouts(events)(read));
       const history = new History(project);
       autosave = createAutosave(() => storage.writeProjectJson(serializeProject(history.current)), AUTOSAVE_DELAY_MS, (saveStatus) => set({ saveStatus }));
       history.subscribe(() => {
@@ -134,7 +143,18 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         const stillThere =
           !sel ||
           sel.kind === "word" ||
-          (sel.kind === "layout" ? cameraScenes(p) : sel.kind === "zoom" ? p.edits.zooms : p.edits.cuts).some((x) => x.id === sel.id);
+          (sel.kind === "frame"
+            ? verticalEdits(p).holds
+            : sel.kind === "layout"
+            ? cameraScenes(p)
+            : sel.kind === "cursor"
+              ? cursorSections(p)
+              : sel.kind === "drawing"
+                ? drawingStrokes(p)
+                : sel.kind === "zoom"
+                  ? p.edits.zooms
+                  : p.edits.cuts
+          ).some((x) => x.id === sel.id);
         // The "AI edit: ..." line stays until the next edit.
         const ai = get().ai;
         const clearDone = ai.status?.step === "done" || ai.status?.step === "nothing";

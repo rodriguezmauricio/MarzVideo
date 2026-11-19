@@ -1,6 +1,12 @@
 import type { Box } from "./camera";
 import { coverCrop } from "./layout";
 import type { FrameSpec } from "./frame";
+import { drawStrokes, type DrawLayer } from "./drawings";
+import type { ClickDraw } from "./cursor";
+import { drawCursorShape } from "./cursorShapes";
+
+/** Click effect colours by token name. Callers pass the `tokens.css` values they read at run time. */
+export type ClickColors = Record<ClickDraw["color"], string>;
 
 type Ctx = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
 
@@ -21,14 +27,25 @@ export type CameraLayer = {
 };
 
 /** Draw one frame: the cropped source scaled to `out` (into the layout's screen box, see
- *  `frameAt`), then the cursor sprite, then the camera. Same code for preview and export. */
-export function drawFrame(ctx: Ctx, source: CanvasImageSource, spec: FrameSpec, out: { width: number; height: number }, camera?: CameraLayer | null): void {
+ *  `frameAt`), then the live drawing strokes, the click effects, the cursor, then the camera. Same code for
+ *  preview and export. */
+export function drawFrame(
+  ctx: Ctx,
+  source: CanvasImageSource,
+  spec: FrameSpec,
+  out: { width: number; height: number },
+  camera?: CameraLayer | null,
+  clickColors?: ClickColors,
+  drawings?: DrawLayer | null,
+): void {
   const { sx, sy, sw, sh } = spec.srcRect;
   const { dx, dy, dw, dh } = spec.dstRect;
   ctx.fillStyle = "#000000";
   ctx.fillRect(0, 0, out.width, out.height);
   ctx.drawImage(source, sx, sy, sw, sh, dx, dy, dw, dh);
-  if (spec.cursor) drawCursor(ctx, spec.cursor, out);
+  if (drawings) drawStrokes(ctx, drawings.items, spec, drawings.colors, drawings.family);
+  if (spec.clicks.length > 0) drawClicks(ctx, spec.clicks, clickColors);
+  if (spec.cursor) drawCursorShape(ctx, spec.cursor.shape, spec.cursor.x, spec.cursor.y, spec.cursor.scale);
   if (camera) drawCamera(ctx, camera);
 }
 
@@ -91,24 +108,23 @@ export function drawCamera(ctx: Ctx, cam: CameraLayer): void {
   ctx.restore();
 }
 
-function drawCursor(ctx: Ctx, cursor: { x: number; y: number }, out: { width: number; height: number }): void {
-  const s = out.height / 1080;
-  ctx.save();
-  ctx.translate(cursor.x, cursor.y);
-  ctx.scale(s, s);
-  ctx.beginPath();
-  ctx.moveTo(0, 0);
-  ctx.lineTo(0, 17);
-  ctx.lineTo(4.5, 13);
-  ctx.lineTo(7.5, 20);
-  ctx.lineTo(10, 19);
-  ctx.lineTo(7, 12);
-  ctx.lineTo(12.5, 12);
-  ctx.closePath();
-  ctx.fillStyle = "#ffffff";
-  ctx.strokeStyle = "#000000";
-  ctx.lineWidth = 1.2;
-  ctx.fill();
-  ctx.stroke();
-  ctx.restore();
+/** Click effects: rings (stroke) or discs (fill), with their opacity. Fallback colour: paper. */
+export function drawClicks(ctx: Ctx, clicks: ClickDraw[], colors?: ClickColors): void {
+  for (const c of clicks) {
+    if (c.alpha <= 0 || c.r <= 0) continue;
+    const color = colors?.[c.color] || PIP_BORDER;
+    ctx.save();
+    ctx.globalAlpha = c.alpha;
+    ctx.beginPath();
+    ctx.arc(c.x, c.y, c.r, 0, Math.PI * 2);
+    if (c.fill) {
+      ctx.fillStyle = color;
+      ctx.fill();
+    } else {
+      ctx.strokeStyle = color;
+      ctx.lineWidth = c.lineWidth;
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
 }

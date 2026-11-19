@@ -77,8 +77,9 @@ function kindAt(scenes: Scene[], t: number): LayoutKind {
 }
 
 /** The camera and screen boxes at source time `srcUs` on a frame of size `out`, switches included.
- *  Shared by preview and export. */
-export function layoutAt(project: Project, srcUs: number, out: Size): LayoutState {
+ *  Shared by preview and export. `statics` gives other boxes for each layout at rest (the vertical
+ *  picture); with it a camera that appears or leaves always grows from or shrinks to its centre. */
+export function layoutAt(project: Project, srcUs: number, out: Size, statics?: (kind: LayoutKind) => LayoutState): LayoutState {
   const cam = project.tracks.camera;
   const full = { x: 0, y: 0, w: out.width, h: out.height };
   if (!cam) return { screen: full, camera: null, radius: 0 };
@@ -90,7 +91,7 @@ export function layoutAt(project: Project, srcUs: number, out: Size): LayoutStat
 
   // `before`: only boundaries strictly before it count (the state just before a switch at `before`).
   const state = (t: number, kind: LayoutKind, before: number, depth: number): LayoutState => {
-    const to = staticLayout(kind, out, cam, pip);
+    const to = statics ? statics(kind) : staticLayout(kind, out, cam, pip);
     if (depth > 8) return to;
     for (const c of bounds) {
       if (c > t || c >= before) continue;
@@ -98,7 +99,7 @@ export function layoutAt(project: Project, srcUs: number, out: Size): LayoutStat
       const prev = kindAt(scenes, c - 1);
       if (prev === kindAt(scenes, c)) continue;
       const from = state(c, prev, c, depth + 1);
-      return mix(from, to, kind, easeInOutCubic((t - c) / LAYOUT_SWITCH_US), out, pip);
+      return mix(from, to, kind, easeInOutCubic((t - c) / LAYOUT_SWITCH_US), out, pip, !statics);
     }
     return to;
   };
@@ -106,14 +107,14 @@ export function layoutAt(project: Project, srcUs: number, out: Size): LayoutStat
 }
 
 /** `from` at p = 0 to `to` (a layout of kind `toKind`) at p = 1. */
-function mix(from: LayoutState, to: LayoutState, toKind: LayoutKind, p: number, out: Size, pip: Pip): LayoutState {
+function mix(from: LayoutState, to: LayoutState, toKind: LayoutKind, p: number, out: Size, pip: Pip, slide = true): LayoutState {
   const screen = lerpBox(from.screen, to.screen, p);
   if (p >= 1) return to;
   if (from.camera && to.camera) return { screen, camera: lerpBox(from.camera, to.camera, p), radius: lerp(from.radius, to.radius, p) };
-  if (to.camera) return { screen, camera: lerpBox(hiddenCamera(toKind, to.camera, out, pip), to.camera, p), radius: toKind === "side" ? to.radius : to.radius * p };
+  if (to.camera) return { screen, camera: lerpBox(hiddenCamera(slide ? toKind : "pip", to.camera, out, pip), to.camera, p), radius: toKind === "side" ? to.radius : to.radius * p };
   if (from.camera) {
     // Leaving: the side column slides out to its edge, the rest shrink to their centre.
-    const slides = from.camera.h === out.height && from.camera.w === sideWidth(out) && (from.camera.x === 0 || from.camera.x === out.width - from.camera.w);
+    const slides = slide && from.camera.h === out.height && from.camera.w === sideWidth(out) && (from.camera.x === 0 || from.camera.x === out.width - from.camera.w);
     const gone = slides ? hiddenCamera("side", from.camera, out, pip) : hiddenCamera("pip", from.camera, out, pip);
     return { screen, camera: lerpBox(from.camera, gone, p), radius: from.radius * (1 - p) };
   }

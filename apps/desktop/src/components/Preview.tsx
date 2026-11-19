@@ -1,7 +1,11 @@
 import { useEffect, useMemo, useRef } from "react";
-import { canvasMeasure, captionLayout, cameraLayerFor, cameraMediaUs, drawCaptions, drawFrame, frameAt, layoutAt, type CaptionStyle } from "@marz/compositor";
-import { keptSegments, outputDurationUs, outputToSource, sourceToOutput, trackGain } from "@marz/timeline";
-import { audioEdits, captionStyleFor } from "@marz/format";
+import { canvasMeasure, captionLayout, cameraLayerFor, cameraMediaUs, drawCaptions, drawFrame, frameAt, layoutAt, strokesAt, type CaptionStyle, type VisibleStroke } from "@marz/compositor";
+import { keptSegments, outputDurationUs, outputToSource, sourceToOutput, strokeAtPoint, trackGain } from "@marz/timeline";
+import { audioEdits, captionStyleFor, drawingStrokes, type Project } from "@marz/format";
+import { addHold, updateHold } from "@marz/timeline";
+import { VERTICAL_SIZE, type Box } from "@marz/compositor";
+import { drawVertical } from "../vertical/drawVertical";
+import { aimFrameAt, HOLD_LEN_US } from "../vertical/verticalActions";
 import { ensureCleanMic, previewMicFile, useCleanMic } from "../audio/cleanMic";
 import { useAppStore } from "../state/appStore";
 import { captionBlocks, captionStyle, loadCaptionFont } from "../ai/captionStyle";
@@ -11,6 +15,21 @@ import { readFirstFrameUs } from "../playback/firstFrame";
 import { mmss } from "./timecode";
 import { tokenColors } from "./cameraColors";
 import { ZoomOverlay } from "./ZoomOverlay";
+import { DrawingOverlay, useStrokeDraft } from "../drawing/DrawingOverlay";
+import { loadDrawingFont, measureStrokeText, strokeFamily } from "../drawing/drawingFont";
+
+/** The strokes to draw at `srcUs`: the dragged draft instead of its stored stroke, and the selected
+ *  stroke at full opacity while it is being edited (paused), even outside its time. */
+function visibleStrokes(p: Project, srcUs: number, editId: string | null): VisibleStroke[] {
+  const draft = useStrokeDraft.getState().draft;
+  let items = strokesAt(p, srcUs).filter((v) => v.stroke.id !== editId);
+  const edited = editId ? drawingStrokes(p).find((s) => s.id === editId) : undefined;
+  if (edited) items = [...items, { stroke: draft?.id === edited.id ? draft : edited, alpha: 1 }];
+  return items;
+}
+
+/** Click tolerance on the preview, in output pixels. */
+const HIT_PX = 8;
 
 const AUDIO_DRIFT_S = 0.04;
 /** Camera sync while playing: a seek past this gap, else a small speed nudge (a video seek lands late
@@ -27,6 +46,9 @@ export function Preview() {
   const selectedZoom = selection?.kind === "zoom" ? project.edits.zooms.find((z) => z.id === selection.id) : undefined;
   // While a zoom is selected (and not playing) show the full frame so its area can be edited on the canvas.
   const editingZoom = selectedZoom && !playing ? selectedZoom : undefined;
+  const selectedStroke = selection?.kind === "drawing" ? drawingStrokes(project).find((s) => s.id === selection.id) : undefined;
+  const editingStroke = selectedStroke && !playing ? selectedStroke : undefined;
+  const hasStrokes = drawingStrokes(project).length > 0;
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -79,14 +101,63 @@ export function Preview() {
   };
 
   const words = useEditorStore((s) => s.words);
-  const preset = useEditorStore((s) => s.captionPreset);
+  const vertical = useEditorStore((s) => s.verticalPreview);
+  // The vertical preview always shows the vertical preset's caption style.
+  const preset = useEditorStore((s) => (s.verticalPreview ? "vertical" : s.captionPreset));
   const look = useMemo(() => captionStyleFor(project, preset), [project, preset]);
+  const aimCanvasRef = useRef<HTMLCanvasElement>(null);
+  const aimBoxRef = useRef<HTMLDivElement>(null);
+  /** The window shown last (normalized), and the aim being dragged in the Aim view. */
+  const lastCrop = useRef<Box | null>(null);
+  const aimDraft = useRef<number | null>(null);
   const blocks = useMemo(() => captionBlocks(project, words, look), [project, words, look]);
   const style = useRef<CaptionStyle | null>(null);
 
   // Latest values for the animation loop without restarting it.
-  const live = useRef({ project, segs, editing: false, blocks, look });
-  live.current = { project, segs, editing: !!editingZoom, blocks, look };
+  const live = useRef({ project, segs, editing: false, blocks, look, vertical, strokeId: null as string | null });
+  live.current = { project, segs, editing: !!editingZoom && !vertical, blocks, look, vertical, strokeId: editingStroke?.id ?? null };
+
+  /** The project as the vertical preview shows it: with the aim being dragged applied. */
+  const shownVertical = (p: Project): Project => {
+    const x = aimDraft.current;
+    if (x === null) return p;
+    const sel = useEditorStore.getState().selection;
+    if (sel?.kind === "frame") return updateHold(sel.id, { x })(p);
+    const at = useEditorStore.getState().playheadUs;
+    return addHold({ id: "aim-draft", startUs: at, endUs: at + HOLD_LEN_US, x })(p);
+  };
+
+  /** The vertical frame, then the Aim view (the whole screen, the window drawn on it). */
+  const drawVerticalFrame = (ctx: CanvasRenderingContext2D, video: HTMLVideoElement, srcUs: number) => {
+    const { project: p0, blocks: bl, look: lk, segs: sg, strokeId } = live.current;
+    const p = shownVertical(p0);
+    const { events } = useEditorStore.getState();
+    const camVideo = camRef.current;
+    const tOut = bl.length ? sourceToOutput(sg, srcUs) : null;
+    let captions = null;
+    if (tOut !== null) {
+      style.current ??= captionStyle();
+      captions = { blocks: bl, look: lk, style: style.current, tOutUs: tOut, measure: canvasMeasure(ctx, style.current.family) };
+    }
+    const camera = camVideo && camVideo.readyState >= 2 ? { source: camVideo, size: { width: camVideo.videoWidth, height: camVideo.videoHeight } } : null;
+    const drawings = { items: visibleStrokes(p, srcUs, strokeId), colors: tokenColors(), family: strokeFamily() };
+    const { crop } = drawVertical(ctx, { project: p, events, srcUs, screen: video, camera, colors: tokenColors(), captions, drawings });
+    lastCrop.current = crop;
+    const aim = aimCanvasRef.current;
+    const actx = aim?.getContext("2d");
+    if (aim && actx) actx.drawImage(video, 0, 0, aim.width, aim.height);
+    const box = aimBoxRef.current;
+    if (box) {
+      box.style.display = crop ? "block" : "none";
+      if (crop) {
+        box.style.left = `${crop.x * 100}%`;
+        box.style.top = `${crop.y * 100}%`;
+        box.style.width = `${crop.w * 100}%`;
+        box.style.height = `${crop.h * 100}%`;
+        box.setAttribute("aria-valuenow", String(Math.round((crop.x + crop.w / 2) * 100)));
+      }
+    }
+  };
 
   const draw = () => {
     const canvas = canvasRef.current;
@@ -98,6 +169,14 @@ export function Preview() {
     ctx.imageSmoothingQuality = "high";
     const { project: p, editing } = live.current;
     const srcUs = sourceTimeUs(p, Math.round(video.currentTime * 1e6), firstFrame.current);
+    if (live.current.vertical) {
+      try {
+        drawVerticalFrame(ctx, video, srcUs);
+      } catch (e) {
+        console.warn("vertical frame not drawn", e);
+      }
+      return;
+    }
     const { events } = useEditorStore.getState();
     const shown = editing ? { ...p, edits: { ...p.edits, zooms: [] } } : p;
     // While a zoom is edited the frame is the screen alone, so the zoom area overlay lines up.
@@ -107,7 +186,9 @@ export function Preview() {
       lay && camVideo && camVideo.readyState >= 2
         ? cameraLayerFor(p, lay, p.output, camVideo, { width: camVideo.videoWidth, height: camVideo.videoHeight }, tokenColors())
         : null;
-    drawFrame(ctx, video, frameAt(shown, events, srcUs, lay?.screen), p.output, camera);
+    const { strokeId } = live.current;
+    const drawings = editing ? null : { items: visibleStrokes(p, srcUs, strokeId), colors: tokenColors(), family: strokeFamily() };
+    drawFrame(ctx, video, frameAt(shown, events, srcUs, lay?.screen), p.output, camera, tokenColors(), drawings);
     // Captions: the same layout and drawing as the export (DESIGN-SYSTEM.md "Captions in the video").
     const { blocks: bl, look: lk, segs: sg } = live.current;
     const tOut = bl.length ? sourceToOutput(sg, srcUs) : null;
@@ -171,7 +252,39 @@ export function Preview() {
       }
     };
   }, [cam?.file]);
-  useEffect(draw, [project, editingZoom?.id, blocks, look]);
+  useEffect(draw, [project, editingZoom?.id, editingStroke?.id, blocks, look, vertical]);
+  // A stroke dragged on the preview is drawn where it is going.
+  useEffect(() => useStrokeDraft.subscribe(() => draw()), []);
+  // Text strokes use the display font; draw again once it loaded.
+  useEffect(() => {
+    if (!drawingStrokes(project).some((s) => s.tool === "text")) return;
+    let on = true;
+    void loadDrawingFont().then(() => on && draw());
+    return () => {
+      on = false;
+    };
+  }, [hasStrokes]);
+
+  /** A click on the picture selects the topmost stroke under it (paused, no zoom being edited). */
+  const strokeMeasure = useMemo(() => measureStrokeText(), []);
+  const onFrameDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (playing || editingZoom || !hasStrokes || vertical) return;
+    const r = e.currentTarget.getBoundingClientRect();
+    const outX = ((e.clientX - r.left) / r.width) * project.output.width;
+    const outY = ((e.clientY - r.top) / r.height) * project.output.height;
+    const { events, playheadUs } = useEditorStore.getState();
+    const spec = frameAt(project, events, playheadUs, layoutAt(project, playheadUs, project.output).screen);
+    const k = spec.dstRect.dw / spec.srcRect.sw;
+    const sx = spec.srcRect.sx + (outX - spec.dstRect.dx) / k;
+    const sy = spec.srcRect.sy + (outY - spec.dstRect.dy) / (spec.dstRect.dh / spec.srcRect.sh);
+    const shown = strokesAt(project, playheadUs).map((v) => v.stroke);
+    const hit = strokeAtPoint(shown, sx, sy, HIT_PX / k, strokeMeasure);
+    if (hit) useEditorStore.getState().select({ kind: "drawing", id: hit.id });
+    else if (selection?.kind === "drawing") useEditorStore.getState().select(null);
+  };
+  const playheadUs = useEditorStore((s) => s.playheadUs);
+  const events = useEditorStore((s) => s.events);
+  const strokeMap = editingStroke && !vertical ? frameAt(project, events, playheadUs, layoutAt(project, playheadUs, project.output).screen) : null;
   // The display font loads lazily; draw again once it can be used on the canvas.
   useEffect(() => {
     if (blocks.length === 0) return;
@@ -281,19 +394,67 @@ export function Preview() {
   }, [micFile]);
 
   const selectedCut = selection?.kind === "cut" ? project.edits.cuts.find((c) => c.id === selection.id) : undefined;
-  const caption = selectedZoom
+  const selectedFrame = selection?.kind === "frame";
+  /** Drag the window in the Aim view: the selected Frame block (or a new one at the playhead) follows. */
+  const onAimDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    const crop = lastCrop.current;
+    const host = aimCanvasRef.current;
+    if (!crop || !host) return;
+    e.preventDefault();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    useEditorStore.getState().pause();
+    const startX = e.clientX;
+    const startAim = crop.x + crop.w / 2;
+    const width = host.getBoundingClientRect().width;
+    const el = e.currentTarget;
+    const move = (ev: PointerEvent) => {
+      aimDraft.current = Math.min(1, Math.max(0, startAim + (ev.clientX - startX) / Math.max(1, width)));
+      draw();
+    };
+    const up = () => {
+      el.removeEventListener("pointermove", move);
+      el.removeEventListener("pointerup", up);
+      el.removeEventListener("pointercancel", up);
+      const x = aimDraft.current;
+      aimDraft.current = null;
+      if (x !== null) aimFrameAt(Math.round(x * 1000) / 1000);
+      draw();
+    };
+    el.addEventListener("pointermove", move);
+    el.addEventListener("pointerup", up);
+    el.addEventListener("pointercancel", up);
+  };
+
+  const caption = vertical
+    ? selectedFrame
+      ? "Drag the frame to aim this block"
+      : "Vertical picture. Drag the frame to hold it here"
+    : selectedZoom
     ? "Press Play to see the result"
     : selection?.kind === "layout"
       ? "Press Play to see the switch"
+    : selectedStroke
+      ? "Drag to move. Pull a corner to resize"
     : selectedCut
       ? "This part is skipped when you export"
       : "Full frame. Select a zoom or cut on the timeline to edit it";
 
   return (
-    <div className="pv-wrap" style={{ "--ar": `${project.output.width} / ${project.output.height}` } as React.CSSProperties}>
-      <div className="pv-frame">
-        <canvas ref={canvasRef} width={project.output.width} height={project.output.height} />
-        {editingZoom && <ZoomOverlay key={editingZoom.id} zoom={editingZoom} />}
+    <div
+      className={`pv-wrap${vertical ? " pv-vertical" : ""}`}
+      style={{ "--ar": vertical ? `${VERTICAL_SIZE.width} / ${VERTICAL_SIZE.height}` : `${project.output.width} / ${project.output.height}` } as React.CSSProperties}
+    >
+      <div className="pv-row">
+      <div className="pv-frame" data-testid="preview-frame">
+        <canvas
+          key={vertical ? "v" : "h"}
+          ref={canvasRef}
+          width={vertical ? VERTICAL_SIZE.width : project.output.width}
+          height={vertical ? VERTICAL_SIZE.height : project.output.height}
+          onPointerDown={onFrameDown}
+        />
+        {editingZoom && !vertical && <ZoomOverlay key={editingZoom.id} zoom={editingZoom} />}
+        {editingStroke && strokeMap && <DrawingOverlay key={editingStroke.id} stroke={editingStroke} map={strokeMap} out={project.output} />}
         {selectedCut && (
           <>
             <div className="pv-cut" data-testid="preview-cut" />
@@ -302,6 +463,24 @@ export function Preview() {
             </div>
           </>
         )}
+      </div>
+      {vertical && (
+        // The Aim view (DESIGN-SYSTEM.md "Vertical preview"): the whole screen with the 9:16 window on it.
+        <div className="pv-aim" data-testid="aim-view" style={{ aspectRatio: `${project.source.width} / ${project.source.height}` }}>
+          <canvas ref={aimCanvasRef} width={480} height={Math.round((480 * project.source.height) / project.source.width)} />
+          <div
+            ref={aimBoxRef}
+            className="aim-box"
+            data-testid="aim-box"
+            onPointerDown={onAimDown}
+            role="slider"
+            aria-label="Vertical frame. Drag to aim"
+            aria-valuemin={0}
+            aria-valuemax={100}
+          />
+          <span className="aim-tag">Aim</span>
+        </div>
+      )}
       </div>
       <div className="pv-cap">{caption}</div>
       <video

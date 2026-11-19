@@ -7,8 +7,12 @@ import type { Monitor, RecordOptions } from "./recorderStore";
 
 export type Mic = { id: string; name: string; default: boolean };
 /** `recorder://state` from Rust (recording.rs `RecState`). `activePreset` is a session id ("p1"). */
-export type RecState = { recording: boolean; paused: boolean; muted: boolean; mic: boolean; activePreset: string | null; recUs: number };
-export const IDLE: RecState = { recording: false, paused: false, muted: false, mic: false, activePreset: null, recUs: 0 };
+export type RecState = { recording: boolean; paused: boolean; muted: boolean; mic: boolean; activePreset: string | null; recUs: number; drawing: boolean };
+export const IDLE: RecState = { recording: false, paused: false, muted: false, mic: false, activePreset: null, recUs: 0, drawing: false };
+/** A finished live stroke as the engine logs it: points and width in physical pixels from the monitor's top-left. */
+export type LiveStroke = { tool: string; color: string; width: number; points: [number, number][]; text?: string };
+/** One live drawing change (recording.rs `DrawOpDto`). */
+export type DrawOp = { op: "add"; id: string; agoUs: number; stroke: LiveStroke } | { op: "remove"; id: string } | { op: "clear" };
 export type Camera = { id: string; name: string };
 export type BarInfo = { mics: Mic[]; cameras: Camera[]; ffmpeg: boolean };
 
@@ -51,6 +55,10 @@ export interface RecorderApi {
   /** Where the overlay takes the mouse (its controls, CSS pixels; sent as physical pixels);
    * `grab` takes the whole screen. */
   hits(rects: PxRect[], grab: boolean): void;
+  /** Enter (true), leave (false) or toggle (undefined) draw mode while recording (Ctrl+Shift+D). */
+  toggleDraw(on?: boolean): Promise<void>;
+  /** Log a live drawing change (engine side: only in draw mode). */
+  drawOp(op: DrawOp): void;
   /** Start dragging the bar window (a press on its empty parts). */
   dragBar(): void;
   /** Stop: Rust closes the recorder and opens the project in the main window. */
@@ -111,6 +119,8 @@ function tauriApi(): RecorderApi {
     hits: (rects, grab) =>
       void invoke("overlay_hits", { rects: rects.map((r) => ({ x: px(r.x), y: px(r.y), w: px(r.w), h: px(r.h) })), grab }).catch(() => undefined),
     dragBar: () => void invoke("drag_bar").catch(() => undefined),
+    toggleDraw: (on) => invoke<void>("toggle_draw", { on: on ?? null }),
+    drawOp: (op) => void invoke("draw_op", { op }).catch(() => undefined),
     stop: () => invoke<string>("stop_recording").then(() => undefined),
     cameraPreview: (on) =>
       new Promise<void>((resolve) => {
@@ -143,13 +153,14 @@ function tauriApi(): RecorderApi {
 export const FAKE_MONITOR: Monitor = { index: 0, name: "Fake display", x: 0, y: 0, width: 2880, height: 1800, scale: 2 };
 
 /** Fake recording state (`?fake&state=recording`): the mockup's 02:41 with "Cart total" live. */
-const FAKE_RECORDING: RecState = { recording: true, paused: false, muted: false, mic: true, activePreset: "p1", recUs: 161_000_000 };
+const FAKE_RECORDING: RecState = { recording: true, paused: false, muted: false, mic: true, activePreset: "p1", recUs: 161_000_000, drawing: false };
 
 function fakeApi(): RecorderApi {
   const p = params();
   const error = p.get("error");
   const record = new EventTarget();
-  let rec: RecState = p.get("state") === "recording" ? FAKE_RECORDING : IDLE;
+  // `?fake&state=recording&draw` starts in draw mode (design check of the tool strip).
+  let rec: RecState = p.get("state") === "recording" ? { ...FAKE_RECORDING, drawing: p.has("draw") } : IDLE;
   const states = new EventTarget();
   const set = async (patch: Partial<RecState>) => {
     rec = { ...rec, ...patch };
@@ -196,6 +207,8 @@ function fakeApi(): RecorderApi {
     setPresetRect: async () => undefined,
     hits: () => undefined,
     dragBar: () => undefined,
+    toggleDraw: (on) => set({ drawing: on ?? !rec.drawing }),
+    drawOp: () => undefined,
     stop: async () => undefined,
     cameraPreview: async () => undefined,
     onCameraPreview: () => () => undefined,

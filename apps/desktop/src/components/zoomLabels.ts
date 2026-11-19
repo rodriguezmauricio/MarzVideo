@@ -17,3 +17,17 @@ export function cutCapLabel(c: Cut): string {
 
 /** Layout block and picker labels (DESIGN-SYSTEM.md "Layout lane"). */
 export const LAYOUT_LABEL: Record<LayoutKind, string> = { pip: "Corner", side: "Side", camera: "Camera", screen: "Screen" };
+
+/** Drawing lane and inspector names of the stroke tools. */
+export const STROKE_LABEL: Record<import("@marz/format").StrokeTool, string> = {
+  pen: "Pen",
+  highlighter: "Highlighter",
+  arrow: "Arrow",
+  rect: "Rectangle",
+  ellipse: "Ellipse",
+  text: "Text",
+};
+
+/** Cursor block labels on the Cursor lane (DESIGN-SYSTEM.md "Cursor lane"). */
+export const cursorBlockLabel = (s: { hide: boolean; clicks: boolean }): string =>
+  s.hide ? (s.clicks ? "Clicks only" : "Cursor off") : s.clicks ? "Cursor on" : "No clicks";

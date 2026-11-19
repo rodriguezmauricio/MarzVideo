@@ -1,8 +1,10 @@
-import { canvasMeasure, captionLayout, cameraLayerFor, cameraMediaUs, drawCaptions, drawFrame, frameAt, layoutAt, type CaptionBlock, type CaptionLookOpts, type CaptionStyle } from "@marz/compositor";
-import { cameraEdits, type MarzEvent, type Project } from "@marz/format";
+import { canvasMeasure, captionLayout, cameraLayerFor, cameraMediaUs, drawCaptions, drawFrame, frameAt, layoutAt, strokesAt, verticalLayoutAt, type CaptionBlock, type CaptionLookOpts, type CaptionStyle } from "@marz/compositor";
+import { cameraEdits, drawingStrokes, verticalEdits, type MarzEvent, type Project } from "@marz/format";
+import { drawVertical } from "../vertical/drawVertical";
 import { keptSegments } from "@marz/timeline";
 import { mediaTimeUs } from "../playback/clock";
 import { tokenColors } from "../components/cameraColors";
+import { loadDrawingFont, strokeFamily } from "../drawing/drawingFont";
 import type { ProjectStorage } from "../storage/types";
 import { createFrameSource } from "./frameSource";
 import { outputFrameCount, outputFrameTimes, outputFrameUs, refuseEmpty } from "./outputFrames";
@@ -60,7 +62,9 @@ export async function exportProject(opts: ExportOptions): Promise<ExportReport> 
   // The editor frame (project.output), then the preset's picture with that frame placed at frameRect.
   const out = project.output;
   const rect = preset.frameRect;
-  const direct = out.width === preset.width && out.height === preset.height && rect.x === 0 && rect.y === 0 && rect.w === preset.width && rect.h === preset.height;
+  // Smart vertical, Follow the action: the vertical picture is drawn straight on the encoder canvas.
+  const follow = preset.id === "vertical" && verticalEdits(project).framing === "follow";
+  const direct = follow || out.width === preset.width && out.height === preset.height && rect.x === 0 && rect.y === 0 && rect.w === preset.width && rect.h === preset.height;
   const encCanvas = new OffscreenCanvas(preset.width, preset.height);
   const encCtx = encCanvas.getContext("2d", { alpha: false })!;
   const compCanvas = direct ? encCanvas : new OffscreenCanvas(out.width, out.height);
@@ -76,6 +80,10 @@ export async function exportProject(opts: ExportOptions): Promise<ExportReport> 
   const colors = tokenColors();
   const camShown = !!project.tracks.camera && cameraEdits(project).visible;
   let camSource: Awaited<ReturnType<typeof createFrameSource>> | null = null;
+  // Live drawing strokes, drawn by the same compositor call as the preview (after the screen).
+  const hasStrokes = drawingStrokes(project).length > 0;
+  const family = strokeFamily();
+  if (drawingStrokes(project).some((s) => s.tool === "text")) await loadDrawingFont();
   let encoder: VideoEncoder | null = null;
   let failure: Error | null = null;
   let wake: (() => void) | null = null;
@@ -121,21 +129,37 @@ export async function exportProject(opts: ExportOptions): Promise<ExportReport> 
       if (failure) throw failure;
 
       const frame = await source.frameAt(mediaTimeUs(project, srcUs, source.firstFrameUs));
-      const lay = layoutAt(project, srcUs, out);
-      const camFrame = camSource && lay.camera ? await camSource.frameAt(cameraMediaUs(project, srcUs) + camSource.firstFrameUs) : null;
-      try {
-        const camera = camFrame ? cameraLayerFor(project, lay, out, camFrame, { width: camFrame.displayWidth, height: camFrame.displayHeight }, colors) : null;
-        drawFrame(compCtx, frame, frameAt(project, events, srcUs, lay.screen), out, camera);
-      } finally {
-        frame.close();
-        camFrame?.close();
+      if (follow) {
+        const vlay = verticalLayoutAt(project, srcUs);
+        const camFrame = camSource && vlay.camera ? await camSource.frameAt(cameraMediaUs(project, srcUs) + camSource.firstFrameUs) : null;
+        try {
+          const camera = camFrame ? { source: camFrame, size: { width: camFrame.displayWidth, height: camFrame.displayHeight } } : null;
+          const vcaps = caps && measure ? { ...caps, tOutUs: outputFrameUs(k, fps), measure } : null;
+          const drawings = hasStrokes ? { items: strokesAt(project, srcUs), colors, family } : null;
+          drawVertical(encCtx, { project, events, srcUs, screen: frame, camera, colors, captions: vcaps, drawings, framing: "follow" });
+        } finally {
+          frame.close();
+          camFrame?.close();
+        }
+      }
+      const lay = follow ? null : layoutAt(project, srcUs, out);
+      if (lay) {
+        const camFrame = camSource && lay.camera ? await camSource.frameAt(cameraMediaUs(project, srcUs) + camSource.firstFrameUs) : null;
+        try {
+          const camera = camFrame ? cameraLayerFor(project, lay, out, camFrame, { width: camFrame.displayWidth, height: camFrame.displayHeight }, colors) : null;
+          const drawings = hasStrokes ? { items: strokesAt(project, srcUs), colors, family } : null;
+          drawFrame(compCtx, frame, frameAt(project, events, srcUs, lay.screen), out, camera, colors, drawings);
+        } finally {
+          frame.close();
+          camFrame?.close();
+        }
       }
       if (!direct) {
         encCtx.fillStyle = ink;
         encCtx.fillRect(0, 0, preset.width, preset.height);
         encCtx.drawImage(compCanvas, rect.x, rect.y, rect.w, rect.h);
       }
-      if (caps && measure) {
+      if (caps && measure && !follow) {
         const d = captionLayout(caps.blocks, outputFrameUs(k, fps), caps.look, { width: preset.width, height: preset.height }, capsFrame, measure);
         if (d) drawCaptions(encCtx, d, caps.style);
       }
