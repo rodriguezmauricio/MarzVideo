@@ -28,8 +28,8 @@ input { font: inherit; color: inherit; letter-spacing: inherit; text-transform: 
 .faint { color: var(--faint); }
 .proj { font-weight: 500; }
 .save { display: flex; align-items: center; gap: 8px; color: var(--faint); }
-.save i { width: 8px; height: 8px; background: var(--accent); }
-.save-pending i { background: none; border: 1px solid var(--accent); }
+.save i { width: 8px; height: 8px; background: var(--accent-on-ink); }
+.save-pending i { background: none; border: 1px solid var(--accent-on-ink); }
 .save-failed { background: var(--paper); color: var(--ink); padding: 3px 8px; font-weight: 500; }
 .export { height: 30px; padding: 0 14px; background: var(--accent); color: var(--accent-ink); font-weight: 500; display: flex; align-items: center; gap: 8px; cursor: default; }
 
@@ -47,7 +47,7 @@ input { font: inherit; color: inherit; letter-spacing: inherit; text-transform: 
 .export-run { display: flex; align-items: center; gap: 20px; }
 .exporting { min-width: 14ch; font-weight: 500; color: var(--paper); }
 .btn-line { height: 30px; padding: 0 14px; border: 1px solid var(--paper); color: var(--paper); font-weight: 500; display: flex; align-items: center; gap: 8px; }
-.export-line { position: absolute; left: 0; bottom: -1px; height: 2px; background: var(--accent); pointer-events: none; }
+.export-line { position: absolute; left: 0; bottom: -1px; height: 2px; background: var(--accent-on-ink); pointer-events: none; }
 .save .show { color: var(--paper); }
 .back.off { color: var(--faint); cursor: default; }
 
@@ -163,11 +163,11 @@ input { font: inherit; color: inherit; letter-spacing: inherit; text-transform: 
 /* Camera block colour row and Layout inspector picker: DESIGN-SYSTEM.md Inspector. */
 .swatches { display: flex; gap: 2px; }
 .swatches button { position: relative; width: 22px; height: 22px; border: 1px solid var(--ink); }
-.swatches button.on::after { content: ""; position: absolute; inset: 4px; border: 2px solid var(--ink); }
-.sw-paper { background: var(--paper); }
-.sw-ink { background: var(--ink); }
-.sw-ink.on::after { border-color: var(--paper) !important; }
-.sw-accent { background: var(--accent); }
+.swatches button.on::after { content: ""; position: absolute; inset: 4px; border: 2px solid var(--brand-ink); }
+.sw-paper { background: var(--brand-paper); }
+.sw-ink { background: var(--brand-ink); }
+.sw-ink.on::after { border-color: var(--brand-paper) !important; }
+.sw-accent { background: var(--brand-accent); }
 .lay-row { padding: 10px 0 12px; border-top: 1px solid var(--ink); }
 .lay-grid { display: grid; grid-template-columns: 1fr 1fr; margin-top: 8px; border: 1px solid var(--ink); }
 .lay-grid button { height: 34px; text-align: center; }
@@ -178,12 +178,12 @@ input { font: inherit; color: inherit; letter-spacing: inherit; text-transform: 
 /* toggle 34 x 18, square knob */
 .tg { width: 34px; height: 18px; border: 1px solid var(--paper); position: relative; flex: none; }
 .tg i { position: absolute; top: 2px; left: 2px; width: 12px; height: 12px; background: var(--paper); }
-.tg.on { background: var(--accent); border-color: var(--accent); }
+.tg.on { background: var(--accent-on-ink); border-color: var(--accent-on-ink); }
 .tg.on i { left: 18px; background: var(--ink); }
 .insp .tg { border-color: var(--ink); }
 .insp .tg i { background: var(--ink); }
 .insp .tg.on { background: var(--ink); }
-.insp .tg.on i { background: var(--accent); }
+.insp .tg.on i { background: var(--accent-on-ink); }
 .insp .tg:disabled { border-color: var(--faint-on-paper); cursor: default; }
 .insp .tg:disabled i { background: var(--faint-on-paper); }
 
@@ -197,14 +197,14 @@ input { font: inherit; color: inherit; letter-spacing: inherit; text-transform: 
 .tl-head b { font-weight: 500; }
 .tl-ctl { display: flex; gap: 6px; align-items: center; }
 .bx { height: 22px; padding: 0 10px; border: 1px solid var(--line); display: flex; align-items: center; }
-.bx-lanes { margin-left: 12px; border-color: var(--accent); color: var(--accent); gap: 6px; }
+.bx-lanes { margin-left: 12px; border-color: var(--accent-on-ink); color: var(--accent-on-ink); gap: 6px; }
 .tl-body { position: relative; flex: 1; min-height: 0; display: flex; overflow: hidden; }
 .tl-gutter { flex: none; width: 240px; }
 .lb { display: flex; align-items: center; padding-left: 24px; border-bottom: 1px solid var(--line); }
 .lb.later { color: var(--faint); }
 .lb-vol { margin-left: auto; display: flex; align-items: center; gap: 6px; font-size: 10px; color: var(--faint); }
 .lb-vol span { width: 44px; height: 4px; background: var(--thumb-line); position: relative; }
-.lb-vol span i { position: absolute; left: 0; top: 0; height: 4px; background: var(--accent); }
+.lb-vol span i { position: absolute; left: 0; top: 0; height: 4px; background: var(--accent-on-ink); }
 .tl-scroll { flex: 1; min-width: 0; overflow-x: auto; overflow-y: hidden; scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
 .tl-tracks { position: relative; min-width: 100%; }
 .tk { position: relative; border-bottom: 1px solid var(--line); }
@@ -222,7 +222,7 @@ input { font: inherit; color: inherit; letter-spacing: inherit; text-transform: 
 .blk { position: absolute; top: 6px; z-index: 2; display: flex; align-items: center; padding: 0 12px; font-size: 10px; font-weight: 500; cursor: grab; }
 .blk span { white-space: nowrap; overflow: hidden; pointer-events: none; }
 .blk-zoom { background: var(--accent); color: var(--accent-ink); }
-.blk-sug { border: 1px dashed var(--accent); color: var(--accent); }
+.blk-sug { border: 1px dashed var(--accent-on-ink); color: var(--accent-on-ink); }
 /* Layout lane blocks: DESIGN-SYSTEM.md "Layout lane". */
 .blk-lay { background: var(--paper); color: var(--ink); }
 .blk-cur { background: var(--paper); color: var(--ink); }
@@ -231,9 +231,9 @@ input { font: inherit; color: inherit; letter-spacing: inherit; text-transform: 
 .blk-draw { background: var(--ink); color: var(--paper); border: 1px solid var(--paper); padding-left: 18px; }
 .blk-draw .g { background: var(--paper); }
 .blk-draw .dot { position: absolute; left: 9px; top: 50%; translate: 0 -50%; width: 6px; height: 6px; border: 1px solid var(--paper); pointer-events: none; }
-.sw-rec { background: var(--rec); }
+.sw-rec { background: var(--brand-rec); }
 .blk .g { position: absolute; top: 50%; translate: 0 -50%; width: 3px; height: 14px; background: var(--ink); pointer-events: none; }
-.blk-sug .g { background: var(--accent); }
+.blk-sug .g { background: var(--accent-on-ink); }
 .blk .g.l { left: 4px; }
 .blk .g.r { right: 4px; }
 .blk.sel .g { width: 5px; }
@@ -260,7 +260,7 @@ input { font: inherit; color: inherit; letter-spacing: inherit; text-transform: 
 .tl-foot span { display: flex; align-items: center; gap: 8px; }
 
 /* M2: AI pass (DESIGN-SYSTEM.md "AI pass", "Captions lane", "Timeline" AI edits) */
-.badge-ai { background: var(--ink); color: var(--accent); border: 1px solid var(--ink); }
+.badge-ai { background: var(--ink); color: var(--accent-on-ink); border: 1px solid var(--ink); }
 .ai-tag { flex: none; height: 14px; padding: 0 3px; margin-left: 4px; border: 1px solid currentColor; display: inline-flex; align-items: center; font-size: 10px; font-weight: 500; line-height: 1; pointer-events: none; }
 .blk span.lbl-ai, .cutcap span.lbl-ai { display: flex; align-items: center; overflow: visible; }
 .warn .ask { color: var(--ink); font-weight: 500; text-decoration: underline; text-underline-offset: 2px; }
@@ -290,7 +290,7 @@ input { font: inherit; color: inherit; letter-spacing: inherit; text-transform: 
 .export-panel .tg { border-color: var(--ink); }
 .export-panel .tg i { background: var(--ink); }
 .export-panel .tg.on { background: var(--ink); }
-.export-panel .tg.on i { background: var(--accent); }
+.export-panel .tg.on i { background: var(--accent-on-ink); }
 
 /* Audio block of the Project panel (DESIGN-SYSTEM.md "Inspector", Audio block): the AI edit block's rows. */
 .insp-audio { margin-top: 18px; border-top: 1px solid var(--ink); }

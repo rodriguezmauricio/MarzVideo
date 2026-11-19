@@ -5,6 +5,7 @@ import { useAppStore } from "../state/appStore";
 import { pickStorage } from "../storage/pickStorage";
 import { bannerText, folderName, toRows, type ProjectRow, type RowView } from "./projectRows";
 import { projectsApi, type StorageApi } from "./projectsApi";
+import { ThemeButton } from "./ThemeButton";
 import { storageBar, type ArchiveSettings, type StorageButtonId, type StorageStep, type StorageView } from "./storageBar";
 
 const NOT_A_PROJECT = "This folder is not a Marz project. Pick a folder that ends in .marz.";
@@ -328,11 +329,14 @@ export function Home() {
           <i />
           Marz Recorder
         </b>
-        {/* Settings is a later milestone: drawn as in the mockup, does nothing yet. */}
-        <button type="button" className="h-settings tip-left" aria-disabled="true" data-tip="Settings come in a later version">
-          <Icon name="gear" size={14} />
-          Settings
-        </button>
+        <span className="h-strip-end">
+          <ThemeButton />
+          {/* Settings is a later milestone: drawn as in the mockup, does nothing yet. */}
+          <button type="button" className="h-settings tip-left" aria-disabled="true" data-tip="Settings come in a later version">
+            <Icon name="gear" size={14} />
+            Settings
+          </button>
+        </span>
       </header>
       {warning && <WarningBar text={warning} />}
       {empty ? (

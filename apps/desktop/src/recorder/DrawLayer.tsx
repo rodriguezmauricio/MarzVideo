@@ -39,7 +39,7 @@ let nextId = 1;
 function tokenColors(): StrokeColors {
   const css = getComputedStyle(document.documentElement);
   const v = (n: string) => css.getPropertyValue(n).trim();
-  return { accent: v("--accent"), rec: v("--rec"), paper: v("--paper"), ink: v("--ink") };
+  return { accent: v("--brand-accent"), rec: v("--brand-rec"), paper: v("--brand-paper"), ink: v("--brand-ink") };
 }
 
 type Draft = { stroke: Stroke; downAt: number };

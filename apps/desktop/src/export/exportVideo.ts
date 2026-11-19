@@ -38,8 +38,8 @@ export interface ExportOptions {
 
 /** Ink behind the vertical letterbox, read from tokens.css so the colour lives in one place. */
 function inkColor(): string {
-  const ink = getComputedStyle(document.documentElement).getPropertyValue("--ink").trim();
-  if (!ink) throw new Error("The --ink token is missing");
+  const ink = getComputedStyle(document.documentElement).getPropertyValue("--brand-ink").trim();
+  if (!ink) throw new Error("The --brand-ink token is missing");
   return ink;
 }
 

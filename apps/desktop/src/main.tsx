@@ -3,6 +3,9 @@ import { createRoot } from "react-dom/client";
 import "./index.css";
 import { App } from "./App";
 import { openStoppedRecordings, saveBeforeClose } from "./state/appStore";
+import { startTheme } from "./theme";
+
+startTheme();
 
 openStoppedRecordings();
 saveBeforeClose();

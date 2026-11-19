@@ -37,6 +37,8 @@ Colour budget on any screen: ink + paper + faint + ONE accent + red only where r
 | paper | `#ECEAE4` | text on ink, inverted panels (inspector, Home hero) | |
 | accent | `#D4FF3A` | zoom blocks, Play row, primary action (Export MP4, New recording, Recover), active toggle, selected mode, live badge, status square, dashed zoom area, presets | any decoration; more than ~10% of a screen |
 | accent-ink | `#0B0B0A` | text on accent | |
+| accent-on-ink | `#D4FF3A` (light: `#4A5C00`) | accent as text, outline or a bare mark on the ground or inside an ink chip: save square, brand square, mic meter, volume bar, active toggle, suggestion blocks, AI badge text, focus ring | fills that carry accent-ink text |
+| accent-on-paper | `#4A5C00` (light: `#D4FF3A`) | accent as text or a bare mark inside inverted panels | |
 | rec | `#E0352B` | Record button, recording indicator and border, cut blocks, cut hatching, cut cap, "Cut" badge and chip | errors, delete buttons, warnings |
 | rec-ink | `#FFFFFF` | text on rec | |
 | faint | `#9A988F` | secondary text on ink | primary text |
@@ -52,6 +54,18 @@ Colour budget on any screen: ink + paper + faint + ONE accent + red only where r
 The accent is a placeholder until the brand kit exists. Change it in `tokens.css` only. Because accent text on ink and ink text on accent both pass 4.5:1 for any bright accent, a replacement must stay bright (lightness above ~60%) or `accent-ink` must flip to paper.
 
 Contrast checks that already pass: paper on ink 16:1, faint on ink 6.1:1, ink on accent 15:1, rec-ink on rec 4.7:1, faint-on-paper on paper 7.2:1.
+
+### Light theme (added 2026-11-19, spec section 14)
+
+Dark is the default. Light is the same design with the two roles swapped: paper is the ground, ink the text and rules, and the inverted panels (inspector, export panel, Home hero) become ink panels with paper text. Grid, type, sizes, rules and layout do not change. Design doc: `docs/superpowers/specs/2026-11-19-light-theme-design.md`.
+
+- In the code `--ink` means the ground and `--paper` the figure. `tokens.css` redefines them, and every derived colour token (faint, faint-on-paper, line, line-on-paper, grid, grid-on-paper, later, thumb-line, wave, accent-on-ink, accent-on-paper), under `:root[data-theme="light"]`. Nothing else in the app may mention the theme: no `[data-theme]` selector outside `tokens.css`.
+- Accent fills that carry accent-ink text (Export MP4, New recording, Recover, zoom blocks, active mode, live badge, checked boxes) stay lime in light. A bare accent (text, outline, small mark, active toggle) uses `accent-on-ink`, which is accent-deep `#4A5C00` in light: 6.2:1 on paper, 6.4:1 next to lime. Lime on paper is 1.04:1 and is never used bare.
+- Anything drawn over the video keeps `--accent` (zoom area, aim box, recorder region and presets, drawing).
+- Recording red, rec-ink, dim and dim-rec do not change.
+- Video output never changes with the theme. Captions, camera border, drawings and the export letterbox read the fixed `--brand-ink`, `--brand-paper`, `--brand-accent`, `--brand-rec`. Colour swatches that show a video colour (camera border, drawing colours) use them too.
+- Light values: faint `#4A4944` (7.5:1 on paper), faint-on-paper `#9A988F` (6.8:1 on ink), line `rgba(11,11,10,.24)`, line-on-paper `#ECEAE4`, grid `rgba(11,11,10,.10)`, grid-on-paper `rgba(236,234,228,.12)`, later `#8A887F`, thumb-line `#B5B3AB`, wave `#5A5953`.
+- Choice: Dark, Light or Windows (follows the Windows app mode, live). Stored in `localStorage` `marz.theme`, applied by `src/theme.ts` in every window (main, recorder bar, overlay).
 
 The recorded screen inside the preview (a light app UI) is content, not interface. It is the only place allowed to contain colours outside the table. The mockups use a fictional billing app called "Fieldnote" as a placeholder.
 
@@ -307,7 +321,7 @@ Ctrl+Shift+D or the Draw button on the recording bar enters it; the same key, Do
 - Recover banner: ink row, 56px, 2px paper top, hatched red square (24px), "Interrupted: Pricing page walkthrough. The video up to 03:12 is safe.", buttons Recover (accent) and Discard (1px paper border).
 - Recent projects: 68px ruled rows, never cards. Columns: index "01" (faint), 96 x 54 thumbnail (1px line), project name display 26px, length mono 500, meta in faint ("3 zooms, 1 cut, edited 2 hours ago"), "Open" with arrow. Table header: "Recent projects" / "Last edited, newest first".
 - Empty: giant "Nothing yet." (230px), one sentence, same two buttons, and a ruled preview of the three tracks (Screen, Mic, Clicks) as dashed empty rows saying "Appears here after you record".
-- Top strip on Home: 14px accent square + "Marz Recorder" (mono 500) left; "Settings" (gear icon, 1px paper border, 30px high) right.
+- Top strip on Home: 14px accent square + "Marz Recorder" (mono 500) left; right, 8px apart: the theme button ("Dark theme", "Light theme" or "Windows theme", `contrast` icon, same look as Settings; a click cycles Dark, Light, Windows) and "Settings" (gear icon, 1px paper border, 30px high). The theme button moves to the Settings page when it exists.
 - Hero buttons: mono 500 at 13px (hotkey 10px), 16px side padding, icon 16px. Banner buttons: 34px high, 16px side padding.
 - Discard asks first, inside the same banner: bold "Move <name> to the Recycle Bin?" + faint "You can restore it from there.", buttons Discard (1px paper border) and Keep (1px paper border). Discard never deletes; it moves the folder to the Recycle Bin.
 - Errors on Home (a folder that is not a project, a failed recover or discard) use the Warning bar under the strip: "This folder is not a Marz project. Pick a folder that ends in .marz."
@@ -334,7 +348,7 @@ Ctrl+Shift+D or the Draw button on the recording bar enters it; the same key, Do
 - State changes are instant. No fades, slides, springs, hover transitions.
 - Selection: click a block or the preview zoom area. Selected block gets the ring. Inspector shows only the selected item.
 - Autosave is always on. The save status square is the only feedback; never show a toast.
-- Keyboard: every hotkey in section 6 works. Focus ring is 2px solid accent with 2px offset (ink outline on paper panels). Never remove it.
+- Keyboard: every hotkey in section 6 works. Focus ring is 2px solid accent-on-ink with 2px offset (ink outline on paper panels). Never remove it.
 - Never lose the user's work: raw tracks are never modified (see CLAUDE.md).
 
 ## 8. Copy

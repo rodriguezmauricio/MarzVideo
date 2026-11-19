@@ -32,7 +32,7 @@
 .tr-w.hid { color: var(--faint-on-paper); }
 .tr-w.is-fixed { text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; }
 .tr-w.sel { background: var(--ink); color: var(--paper); }
-.tr-w.now { background: var(--ink); color: var(--accent); }
+.tr-w.now { background: var(--ink); color: var(--accent-on-ink); }
 .tr-input { font: inherit; letter-spacing: inherit; text-transform: none; color: var(--ink); background: none; border: 0; border-bottom: 1px solid var(--ink); padding: 0; }
 
 /* Captions lane: the first word of every caption. */
@@ -42,7 +42,7 @@
 .ckl-list { margin-top: 16px; border-top: 1px solid var(--ink); }
 .ckl-row { display: flex; align-items: flex-start; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--ink); }
 .ckl-box { width: 14px; height: 14px; margin-top: 2px; flex: none; border: 1px solid var(--ink); display: flex; align-items: center; justify-content: center; }
-.ckl-row.done .ckl-box { background: var(--ink); color: var(--accent); }
+.ckl-row.done .ckl-box { background: var(--ink); color: var(--accent-on-ink); }
 .ckl-main { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
 .ckl-text { text-align: left; text-transform: none; line-height: 1.5; font-weight: 400; color: var(--ink); }
 .ckl-text:disabled { cursor: default; }
