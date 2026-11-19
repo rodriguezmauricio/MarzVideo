@@ -30,11 +30,11 @@ Windows-first screen recorder + non-destructive editor (Tauri 2, Rust, React/TS)
 - **Capture facts:** no B-frames (first frame at 0; preview and export align to the first frame time for
   older files). A capture area larger than 2560 x 1440 records at 30 fps instead of 60 (the engine lowers it, the
   setup bar says so before Record). The app opens maximized; the editor fits down to 1280 x 720.
-- **Done (branch, not merged yet):** camera track (plan `docs/superpowers/plans/2026-11-18-camera-track.md`,
+- **Done (merged 2026-11-19):** camera track (plan `docs/superpowers/plans/2026-11-18-camera-track.md`,
   design `docs/superpowers/specs/2026-11-18-camera-track-design.md`). `camera.mp4` recorded on the shared clock
   (`crates/capture/src/win/camera.rs`), setup bar picker, toggle and live preview, crash recovery, Camera lane,
   picture-in-picture in preview and export, inspector Camera block. Owner clap check: `docs/spikes/2026-11-17-owner-checks.md` section 8.
-- **Done (branch `claude/ai-editing-ca47b2`, not merged yet):** M2 AI editing (plan `docs/superpowers/plans/2026-11-17-m2-ai-editing.md`,
+- **Done (merged 2026-11-19):** M2 AI editing (plan `docs/superpowers/plans/2026-11-17-m2-ai-editing.md`,
   design `docs/superpowers/specs/2026-11-17-milestone-2-ai-editing-design.md`, spike `docs/spikes/2026-11-19-ai-spike.md`). After Stop the
   editor runs the AI pass: local Whisper (whisper.cpp CUDA build + VAD model) writes `transcript.json`, rules cut silences and ums,
   Claude Code (`claude -p`, his subscription) finds mistakes and picks zooms, captions in preview and export, `.srt` beside exports.
