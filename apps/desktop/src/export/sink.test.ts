@@ -41,7 +41,13 @@ describe("buildExportJob", () => {
       system: null,
       outputDurationUs: 1_000_000,
       normalize: { targetLufs: -14 },
+      codec: "h264",
     });
+  });
+
+  it("names the codec FFmpeg reads", () => {
+    const job = buildExportJob({ project, preset: { ...PRESETS.youtube, codec: "hevc" }, projectDir: "p", outPath: "o.mp4" });
+    expect(job.codec).toBe("hevc");
   });
 
   it("passes fades, the cleaned mic and the loudness switch from edits.audio", () => {

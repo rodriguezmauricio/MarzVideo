@@ -6,15 +6,18 @@ mod audio;
 mod checklist;
 mod close;
 mod export;
+mod export_copy;
 mod projects;
 mod recorder;
 mod recording;
 mod thumbs;
 mod transcribe;
+mod webview;
 
 use tauri::Manager;
 
 pub fn run() {
+    webview::set_browser_args();
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(projects::Allowed::default())
@@ -69,6 +72,10 @@ pub fn run() {
             export::show_in_folder,
             export::export_write_srt,
             export::export_write_vtt,
+            export_copy::export_copy_settings,
+            export_copy::pick_export_copy_dest,
+            export_copy::clear_export_copy_dest,
+            export_copy::export_copy_to,
             ai::ai_edit_pass,
             ai::ai_cancel,
             transcribe::transcribe,

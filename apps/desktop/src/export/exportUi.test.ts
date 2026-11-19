@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { pickEncoderConfig } from "./encoderConfig";
-import { failureText, panelKey, percent, presetSize, readLastPreset, writeLastPreset } from "./exportUi";
+import { copyNote, doneLead, hevcNote, failureText, folderName, panelKey, percent, presetSize, readLastPreset, writeLastPreset } from "./exportUi";
 import { PRESETS } from "./presets";
 import { ExportFailure } from "./tauriSink";
 
@@ -67,6 +67,23 @@ describe("export copy", () => {
     expect(presetSize(PRESETS.youtube, 30)).toBe("1920 x 1080, 30 fps");
     expect(presetSize(PRESETS.youtube, 144)).toBe("1920 x 1080, 60 fps");
     expect(presetSize(PRESETS.vertical, 60)).toBe("1080 x 1920, 30 fps");
+  });
+  it("the done line names the copy folder and an HEVC fallback", () => {
+    expect(folderName(String.raw`D:\MarzOS\Inbox`)).toBe("Inbox");
+    expect(folderName(String.raw`D:\MarzOS\Inbox\ `.trim())).toBe("Inbox");
+    expect(folderName("/home/m/drop")).toBe("drop");
+    expect(folderName(String.raw`E:\ `.trim())).toBe("E:");
+    expect(copyNote(String.raw`D:\MarzOS\Inbox`, true)).toBe("Copied to Inbox.");
+    expect(copyNote(String.raw`D:\MarzOS\Inbox`, false)).toBe("Could not copy to Inbox.");
+    expect(doneLead("h264", "h264")).toBe("Exported.");
+    expect(doneLead("hevc", "hevc")).toBe("Exported.");
+    expect(doneLead("hevc", "h264")).toBe("Exported as H.264. HEVC is not available.");
+  });
+  it("says plainly when HEVC cannot be used", () => {
+    expect(hevcNote("no", undefined)).toBe("HEVC is not available on this computer. Exports use H.264.");
+    expect(hevcNote("yes", false)).toBe("HEVC is not available at this size and frame rate. This export uses H.264.");
+    expect(hevcNote("yes", true)).toBeNull();
+    expect(hevcNote("unknown", undefined)).toBeNull();
   });
   it("progress is a whole percent from 0 to 100", () => {
     expect(percent(0)).toBe(0);

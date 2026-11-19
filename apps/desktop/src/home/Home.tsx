@@ -363,7 +363,7 @@ export function Home() {
           <section className="h-hero on-paper">
             <div className="grid-lines grid-on-paper" aria-hidden="true" />
             <h1 className="h-title">Record once.</h1>
-            <p className="h-lede">Screen, mic and clicks are kept as separate tracks. Nothing is baked in, so fix and polish afterwards.</p>
+            <p className="h-lede">Screen, camera, mic, computer sound and clicks are kept as separate tracks. Zooms, cuts, layouts, captions and drawings sit on top as edits. Nothing is baked in, so fix and polish afterwards.</p>
             <HeroButtons onNew={newRecording} onOpen={() => void openFolder()} />
           </section>
           {banners.map((b) => (

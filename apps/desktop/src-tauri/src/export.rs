@@ -301,6 +301,11 @@ impl Exports {
         let _ = r.worker.join();
     }
 
+    /// True for an MP4 this app exported in this run.
+    pub fn is_done(&self, path: &Path) -> bool {
+        lock(&self.done).contains(path)
+    }
+
     /// Cancel everything (the app is closing, or the page reloaded).
     pub fn cancel_all(&self) {
         let ids: Vec<u32> = lock(&self.running).keys().copied().collect();

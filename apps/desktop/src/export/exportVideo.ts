@@ -9,7 +9,8 @@ import type { ProjectStorage } from "../storage/types";
 import { createFrameSource } from "./frameSource";
 import { outputFrameCount, outputFrameTimes, outputFrameUs, refuseEmpty } from "./outputFrames";
 import { createChunkQueue } from "./chunkQueue";
-import { pickEncoderConfig } from "./encoderConfig";
+import { pickCodecConfig } from "./encoderConfig";
+import { withCodec } from "./choices";
 import type { ExportPreset } from "./presets";
 import { buildExportJob, type ExportReport, type ExportSink } from "./sink";
 
@@ -50,20 +51,26 @@ function abortError(): DOMException {
 /** Composite every output frame with the preview's compositor, encode it with WebCodecs and stream the
  *  chunks to `sink`. Resolves with the sink's report; on failure or abort the sink is cancelled. */
 export async function exportProject(opts: ExportOptions): Promise<ExportReport> {
-  const { project, events, storage, sink, preset, signal, onProgress } = opts;
+  const { project, events, storage, sink, signal, onProgress } = opts;
   const segs = keptSegments(project.durationUs, project.edits.cuts);
   const empty = refuseEmpty(segs);
   if (empty) throw new Error(empty);
   if (signal.aborted) throw abortError();
 
-  const fps = preset.fps(project.source.fps);
+  const fps = opts.preset.fps(project.source.fps);
   const total = outputFrameCount(segs, fps);
-  const config = await pickEncoderConfig(preset, fps, async (c) => (await VideoEncoder.isConfigSupported(c)).supported === true);
-  if (!config) throw new Error("This computer cannot encode H.264 video");
+  const picked = await pickCodecConfig(opts.preset, fps, async (c) => (await VideoEncoder.isConfigSupported(c)).supported === true);
+  if (!picked) throw new Error("This computer cannot encode H.264 video");
+  const { config, codec } = picked;
+  if (codec !== opts.preset.codec) console.warn("[export] HEVC is not available here; encoding H.264");
+  const preset = withCodec(opts.preset, codec);
 
-  // The editor frame (project.output), then the preset's picture with that frame placed at frameRect.
-  const out = project.output;
+  // The editor frame, then the preset's picture with that frame placed at frameRect. A landscape preset
+  // of the editor frame's shape (720p, 1080p, 1440p) is composited straight at its own size.
   const rect = preset.frameRect;
+  const fullRect = rect.x === 0 && rect.y === 0 && rect.w === preset.width && rect.h === preset.height;
+  const sameShape = Math.abs(project.output.width * preset.height - project.output.height * preset.width) <= preset.width;
+  const out = fullRect && sameShape ? { width: preset.width, height: preset.height } : project.output;
   // Smart vertical, Follow the action: the vertical picture is drawn straight on the encoder canvas.
   const follow = preset.id === "vertical" && verticalEdits(project).framing === "follow";
   const direct = follow || out.width === preset.width && out.height === preset.height && rect.x === 0 && rect.y === 0 && rect.w === preset.width && rect.h === preset.height;
@@ -150,7 +157,7 @@ export async function exportProject(opts: ExportOptions): Promise<ExportReport> 
         try {
           const camera = camFrame ? cameraLayerFor(project, lay, out, camFrame, { width: camFrame.displayWidth, height: camFrame.displayHeight }, colors) : null;
           const drawings = hasStrokes ? { items: strokesAt(project, srcUs), colors, family } : null;
-          drawFrame(compCtx, frame, frameAt(project, events, srcUs, lay.screen), out, camera, colors, drawings);
+          drawFrame(compCtx, frame, frameAt(project, events, srcUs, lay.screen, { out }), out, camera, colors, drawings);
         } finally {
           frame.close();
           camFrame?.close();
@@ -189,7 +196,7 @@ export async function exportProject(opts: ExportOptions): Promise<ExportReport> 
     source = null;
     camSource?.close();
     camSource = null;
-    return await sink.finish();
+    return { ...(await sink.finish()), codec };
   } catch (e) {
     if (encoder && encoder.state !== "closed") encoder.close();
     source?.close();

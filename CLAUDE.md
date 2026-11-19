@@ -112,6 +112,19 @@ Windows-first screen recorder + non-destructive editor (Tauri 2, Rust, React/TS)
   panels through tokens only (`:root[data-theme="light"]` in `tokens.css`); bare accent uses `--accent-on-ink` (accent-deep `#4A5C00` in light).
   Video output reads the fixed `--brand-*` tokens and never changes. `pnpm design:check` guards both. Checked: 1440 x 900 screenshots of Home,
   Editor (inspector, transcript, export panel, timeline) and the recorder fake pages in both themes. Not checked: the Tauri app, Windows follow mode live.
+- **Built on branch `claude/export-extras-b9d4ec`, not merged (2026-11-19):** export extras (design
+  `docs/superpowers/specs/2026-11-19-export-extras-design.md`, plan `docs/superpowers/plans/2026-11-19-export-extras.md`).
+  Export panel rows per preset: Codec (H.264, HEVC), Size (YouTube: 720p, 1080p, 1440p; vertical stays 1080 x 1920), Frame rate
+  (24, 30, 60, capped at the recording), remembered per preset in local storage (not in `project.json`). Landscape is composited
+  straight at the picked size. "Also copy to" (app only, remembered in `export-settings.json`): after a good export the MP4, `.srt`,
+  `.vtt` and a `.json` sidecar (title, length, preset, codec, size, fps, caption file names) go to that folder for MarzOS, sidecar last.
+  HEVC needs Chromium's `PlatformHEVCEncoderSupport`, switched on for every window at start (`src-tauri/src/webview.rs`). On this laptop
+  HEVC works up to 1080p (or 1080 x 1920) at 30 fps only; above that the panel says so and the export uses H.264.
+  Measured, app exports of a copy of the 19.35 take (5:43 after cuts, debug build, other sessions busy so times vary):
+  H.264 1080p60 546 MB (95 MB/min), 175 to 287 s; H.264 1080p30 368 MB (64 MB/min), 92 s; HEVC 1080p30 210 MB (37 MB/min, 43% smaller), 165 s
+  (slower than H.264); H.264 1440p60 1050 MB (184 MB/min), 236 s; 720p30 234 MB (41 MB/min), 66 s; 1080p24 369 MB, 78 s; vertical HEVC 30 fps
+  159 MB (28 MB/min), 83 s. Every file checked with ffprobe (codec, size, fps, length, `hvc1` tag). Not checked: playback in Windows
+  Media Player (HEVC there needs the HEVC Video Extensions), a real MarzOS reading the drop folder.
 - **Not checked by hand yet:** the owner checks in `docs/spikes/2026-11-17-owner-checks.md` (clean 3-minute run,
   flash and beep sync, clicks, static screen, mic unplug, 60 Hz, real hotkeys), plus: open New recording once and
   look at the overlay, play an export in Windows Media Player, upload one export of each preset privately and
