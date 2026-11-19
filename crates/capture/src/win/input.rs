@@ -49,6 +49,8 @@ pub enum Hotkey {
     Layout(u8),
     /// Ctrl+Shift+D: enter or leave draw mode.
     Draw,
+    /// Ctrl+Shift+K: tick the next open checklist topic.
+    Check,
 }
 
 impl Hotkey {
@@ -59,6 +61,7 @@ impl Hotkey {
         v.push(Hotkey::ZoomOut);
         v.extend((1..=4).map(Hotkey::Layout));
         v.push(Hotkey::Draw);
+        v.push(Hotkey::Check);
         v
     }
 
@@ -72,6 +75,7 @@ impl Hotkey {
             Hotkey::ZoomOut => "Ctrl+0".into(),
             Hotkey::Layout(n) => format!("Ctrl+Shift+{n}"),
             Hotkey::Draw => "Ctrl+Shift+D".into(),
+            Hotkey::Check => "Ctrl+Shift+K".into(),
         }
     }
 
@@ -84,6 +88,7 @@ impl Hotkey {
             Hotkey::ZoomOut => 13,
             Hotkey::Layout(n) => 13 + i32::from(n),
             Hotkey::Draw => 18,
+            Hotkey::Check => 19,
         }
     }
 
@@ -102,6 +107,7 @@ impl Hotkey {
             Hotkey::ZoomOut => (ctrl, u32::from(b'0')),
             Hotkey::Layout(n) => (ctrl_shift, u32::from(b'0' + n)),
             Hotkey::Draw => (ctrl_shift, u32::from(b'D')),
+            Hotkey::Check => (ctrl_shift, u32::from(b'K')),
         }
     }
 }

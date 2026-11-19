@@ -6,6 +6,7 @@ import {
   DEFAULT_SILENCE_GAP_US,
   EMPTY_RESULT,
   levelCuts,
+  matchTopics,
   mergeResults,
   ruleCuts,
   validateResult,
@@ -14,8 +15,8 @@ import {
   type AiResult,
   type Levels,
 } from "@marz/autoedit";
-import { aiEdits, type MarzEvent, type Transcript, type Word } from "@marz/format";
-import { applyAiPass, touchedRanges, type History } from "@marz/timeline";
+import { aiEdits, checklistItems, type MarzEvent, type Project, type Transcript, type Word } from "@marz/format";
+import { applyAiPass, coverOpenItems, touchedRanges, type History } from "@marz/timeline";
 
 export type AiStatus =
   | { step: "transcribing"; pct: number }
@@ -164,8 +165,13 @@ export async function runAiPass(deps: AiPassDeps): Promise<AiOutcome> {
     ),
   ];
   const before = history.current;
-  history.apply(
-    applyAiPass(
+  // Open checklist topics are matched once more against the whole transcript (better than the live chunks).
+  const coverTopics = (p: Project): Project => {
+    const open = checklistItems(p).filter((i) => i.atUs === null);
+    return open.length > 0 && words.length > 0 ? coverOpenItems(matchTopics(open, words), "transcript")(p) : p;
+  };
+  history.apply((p) =>
+    coverTopics(applyAiPass(
       next,
       { touchedSince: touchedRanges(snapshot, current) },
       {
@@ -175,7 +181,7 @@ export async function runAiPass(deps: AiPassDeps): Promise<AiOutcome> {
         languages,
         result: ai,
       },
-    ),
+    )(p)),
   );
   const after = history.current;
   const nCuts = after.edits.cuts.filter((c) => c.origin === "ai").length;

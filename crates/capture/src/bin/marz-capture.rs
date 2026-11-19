@@ -354,7 +354,7 @@ mod cli {
                             Hotkey::Preset(1) => session.zoom(Some(PRESET_ID)),
                             Hotkey::Preset(_) => {}
                             Hotkey::ZoomOut => session.zoom(None),
-                            Hotkey::Draw => {}
+                            Hotkey::Draw | Hotkey::Check => {}
                             Hotkey::Layout(n) => {
                                 if let Some(name) = marz_capture::events::LAYOUTS.get(usize::from(n.saturating_sub(1))) {
                                     session.layout(name);

@@ -1,6 +1,7 @@
 // The bar before recording: mic picker and meter, camera picker and toggle, Computer sound, Hide cursor, Record, and the
 // "never captured" chip. DESIGN-SYSTEM.md section 6 "Recorder: bar BEFORE recording".
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { ChecklistButton, ChecklistPanel } from "../checklist/ChecklistSetup";
 import { Icon } from "../components/Icon";
 import { NO_FFMPEG, NO_MIC, recorderApi, type BarInfo } from "./recorderApi";
 import { useRecLive } from "./recLive";
@@ -21,6 +22,8 @@ export function SetupBar({ placed = false }: { placed?: boolean }) {
   const [regionError, setRegionError] = useState<string | null>(null);
   const [startError, setStartError] = useState<string | null>(null);
   const [cameraError, setCameraError] = useState<string | null>(null);
+  // `?fake&checklist=open` opens the panel for the design check.
+  const [listOpen, setListOpen] = useState(() => new URLSearchParams(window.location.search).get("checklist") === "open");
   const failed = useRecLive((l) => l.failed);
   const warning = useRecLive((l) => l.warning);
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -79,6 +82,7 @@ export function SetupBar({ placed = false }: { placed?: boolean }) {
   const record = async () => {
     if (phase !== "setup" || blocked) return;
     setPhase("starting");
+    setListOpen(false);
     setStartError(null);
     useRecLive.getState().clearMessages();
     const setup = { ...currentSetup(), micId, cameraId: camera?.id ?? null, cameraOn };
@@ -142,6 +146,7 @@ export function SetupBar({ placed = false }: { placed?: boolean }) {
             {note}
           </div>
         )}
+        {listOpen && phase === "setup" && <ChecklistPanel close={() => setListOpen(false)} />}
         {/* A press on the bar's empty parts drags the bar window. */}
         <div ref={barRef} className="rb-bar" onPointerDown={(e) => e.button === 0 && e.target === e.currentTarget && api.dragBar()}>
           <div className="rb-mic">
@@ -228,6 +233,7 @@ export function SetupBar({ placed = false }: { placed?: boolean }) {
               <i />
             </i>
           </button>
+          <ChecklistButton open={listOpen && phase === "setup"} toggle={() => setListOpen(!listOpen)} disabled={phase !== "setup"} />
           <button type="button" className={`rb-rec${phase === "starting" ? " starting" : ""}`} disabled={phase !== "setup" || blocked} onClick={() => void record()}>
             <Icon name="dot" size={16} />
             {phase === "starting" ? "Starting..." : "Record"}

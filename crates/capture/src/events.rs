@@ -149,6 +149,37 @@ struct DrawClearLine {
 /// corner bubble, side column, camera fullscreen, screen only. Names as in `project.json`.
 pub const LAYOUTS: [&str; 4] = ["pip", "side", "camera", "screen"];
 
+/// One checklist topic as the `list` line carries it.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct ChecklistTopic {
+    pub id: String,
+    pub text: String,
+}
+
+#[derive(Serialize)]
+struct ChecklistListLine<'a> {
+    #[serde(rename = "tUs")]
+    t_us: i64,
+    r#type: &'static str,
+    op: &'static str,
+    items: &'a [ChecklistTopic],
+}
+
+#[derive(Serialize)]
+struct ChecklistTickLine<'a> {
+    #[serde(rename = "tUs")]
+    t_us: i64,
+    r#type: &'static str,
+    op: &'static str,
+    id: &'a str,
+    #[serde(rename = "atUs")]
+    at_us: i64,
+    by: &'a str,
+}
+
+/// How a checklist topic was ticked while recording: local match, Claude, Ctrl+Shift+K.
+pub const CHECKLIST_BY: [&str; 3] = ["auto", "ai", "hand"];
+
 #[derive(Serialize)]
 struct MarkerLine {
     #[serde(rename = "tUs")]
@@ -249,6 +280,17 @@ impl<W: Write> EventLog<W> {
     /// Every stroke on screen goes (Clear all, leaving draw mode, Pause).
     pub fn draw_clear(&mut self, rec_us: i64) {
         self.write_line(rec_us, &DrawClearLine { t_us: rec_us, r#type: "draw", op: "clear" });
+    }
+
+    /// The checklist topics, once at the start of a recording that has them.
+    pub fn checklist_list(&mut self, rec_us: i64, items: &[ChecklistTopic]) {
+        self.write_line(rec_us, &ChecklistListLine { t_us: rec_us, r#type: "checklist", op: "list", items });
+    }
+
+    /// Topic `id` was covered at `at_us` (clamped to 0..=`rec_us`); `by` is one of `CHECKLIST_BY`.
+    pub fn checklist_tick(&mut self, rec_us: i64, id: &str, at_us: i64, by: &str) {
+        let line = ChecklistTickLine { t_us: rec_us, r#type: "checklist", op: "tick", id, at_us: at_us.clamp(0, rec_us.max(0)), by };
+        self.write_line(rec_us, &line);
     }
 
     pub fn pause(&mut self, rec_us: i64) {
@@ -558,6 +600,20 @@ mod tests {
         log.resume(9_000_000);
         log.flush().unwrap();
         String::from_utf8(log.into_inner()).unwrap()
+    }
+
+    #[test]
+    fn checklist_lines() {
+        let mut log = new_log((100, 50));
+        let items = vec![ChecklistTopic { id: "c1".into(), text: "Pricing \"page\"".into() }, ChecklistTopic { id: "c2".into(), text: "Preço".into() }];
+        log.checklist_list(12_000, &items);
+        log.checklist_tick(41_890_000, "c1", 38_120_000, "auto");
+        log.checklist_tick(50_000_000, "c2", 60_000_000, "hand");
+        let out = text(log);
+        let l = lines(&out);
+        assert_eq!(l[1], r#"{"tUs":12000,"type":"checklist","op":"list","items":[{"id":"c1","text":"Pricing \"page\""},{"id":"c2","text":"Preço"}]}"#);
+        assert_eq!(l[2], r#"{"tUs":41890000,"type":"checklist","op":"tick","id":"c1","atUs":38120000,"by":"auto"}"#);
+        assert_eq!(l[3], r#"{"tUs":50000000,"type":"checklist","op":"tick","id":"c2","atUs":50000000,"by":"hand"}"#, "a tick is never after its line");
     }
 
     /// The committed fixture is read by the editor's Vitest suite (`parses the Rust writer fixture`),

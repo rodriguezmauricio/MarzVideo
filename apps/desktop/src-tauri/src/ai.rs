@@ -228,6 +228,11 @@ pub fn ai_edit_pass(run: State<'_, AiRun>, prompt: String, schema: String, model
 
 #[tauri::command]
 pub fn ai_cancel(run: State<'_, AiRun>) {
+    cancel_run(&run);
+}
+
+/// Kill the running `claude` child of `run`, if any.
+pub fn cancel_run(run: &AiRun) {
     if let Some(mut child) = run.0.lock().unwrap_or_else(std::sync::PoisonError::into_inner).take() {
         let _ = child.kill();
         let _ = child.wait();

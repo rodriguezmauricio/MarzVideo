@@ -12,6 +12,7 @@ import { Icon, type IconName } from "../components/Icon";
 import { CameraPreview } from "./CameraPreview";
 import { DrawLayer } from "./DrawLayer";
 import { useHits } from "./hits";
+import { ChecklistOverlay } from "../checklist/ChecklistOverlay";
 import { useRecLive } from "./recLive";
 import { recorderApi } from "./recorderApi";
 import { addPreset, MAX_PRESETS, sessionPresetId, useRecorder, type Mode } from "./recorderStore";
@@ -417,6 +418,7 @@ function RecordingView({ area, full, screen, children }: { area: PxRect; full: b
         </div>
       )}
       {drawing && <DrawLayer />}
+      <ChecklistOverlay />
       <div className="rr-chip" style={chip}>
         <i />
         {full ? "Recording this screen. Autosaving every few seconds" : "Recording this region. Autosaving every few seconds"}

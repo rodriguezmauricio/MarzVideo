@@ -7,3 +7,4 @@ export * from "./drawings";
 export * from "./cursor";
 export * from "./background";
 export * from "./archive";
+export * from "./checklist";

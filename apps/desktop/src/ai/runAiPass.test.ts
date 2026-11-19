@@ -1,6 +1,6 @@
 import { AiProviderError, FakeProvider, type AiProvider, type Levels } from "@marz/autoedit";
-import { parseProject, parseTranscript, type Project, type Transcript, type Word } from "@marz/format";
-import { addCut, History } from "@marz/timeline";
+import { checklistItems, parseProject, parseTranscript, type Project, type Transcript, type Word } from "@marz/format";
+import { addCut, History, importLiveChecklist } from "@marz/timeline";
 import { describe, expect, test, vi } from "vitest";
 import { runAiPass, statusText, TranscribeFailure, type AiPassDeps, type AiStatus } from "./runAiPass";
 
@@ -73,6 +73,20 @@ describe("runAiPass", () => {
     expect(p.edits.ai?.lastRun).toMatchObject({ provider: "spy", languages: ["pt"] });
     expect(d.statuses.map((s) => s.step)).toEqual(["transcribing", "transcribing", "editing", "done"]);
     expect(statusText(d.statuses.at(-1)!)).toMatch(/^AI edit: \d+ cuts, captions\. Ctrl\+Z undoes it$/);
+  });
+
+  test("open checklist topics found in the transcript are covered in the same undo step", async () => {
+    const withList = importLiveChecklist([
+      { tUs: 0, type: "checklist", op: "list", items: [{ id: "c1", text: "Abrir o menu" }, { id: "c2", text: "Preço anual" }] },
+    ])(project());
+    const d = deps({ history: new History(withList) });
+    await runAiPass(d);
+    expect(checklistItems(d.history.current)).toEqual([
+      { id: "c1", text: "Abrir o menu", atUs: ms(500 + 8 * 400), by: "transcript" },
+      { id: "c2", text: "Preço anual", atUs: null },
+    ]);
+    d.history.undo();
+    expect(checklistItems(d.history.current)[0]!.atUs).toBeNull();
   });
 
   test("skips transcription when there is no transcribe step and still uses the transcript", async () => {

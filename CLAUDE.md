@@ -93,6 +93,19 @@ Windows-first screen recorder + non-destructive editor (Tauri 2, Rust, React/TS)
   export asks first ("Restore from archive", "Export anyway"). Code: `src-tauri/src/archive.rs`, `packages/format/src/archive.ts`,
   `apps/desktop/src/home/storageBar.ts`. Checked in the app on copies "Archive test" (camera) and "Archive test 1080" with a scratch
   archive folder: copies hash-identical, raw files in the Recycle Bin, proxy edit and both exports, restore hash-identical. Not checked: a real Google Drive folder.
+- **Built on branch `claude/ai-checklist-b03ab4` (2026-11-19, not merged):** AI checklist (design
+  `docs/superpowers/specs/2026-11-19-ai-checklist-design.md`, plan `docs/superpowers/plans/2026-11-19-ai-checklist.md`).
+  Topics typed on the setup bar (Checklist panel), a capture-excluded overlay panel ticks them while he talks: the growing
+  `mic.wav` is read in 6 s chunks (1 s overlap, silence skipped) and run through the same whisper.cpp at below-normal priority,
+  the overlay page matches the words locally (keywords, stems, typos) and asks Claude Code (haiku, text only, at most once a
+  minute) about topics still open. Ctrl+Shift+K ticks the next topic by hand. `checklist` lines in `events.jsonl`,
+  `edits.checklist` in `project.json`, inspector Checklist tab (K) that opens after Stop when a topic is open, Mark here / Clear,
+  the AI pass re-checks open topics against the full transcript. `MARZ_CHECKLIST_FEED=<wav>` replaces the mic for tests.
+  Code: `packages/autoedit/src/checklist.ts`, `packages/format/src/checklist.ts`, `packages/timeline/src/checklist.ts`,
+  `crates/transcribe/src/live.rs`, `src-tauri/src/checklist.rs`, `apps/desktop/src/checklist`.
+  Checked: a real take in the app fed with synthetic speech ("Checklist test.marz": 3 topics ticked locally, 1 by Claude, 1 left
+  open and flagged), encoder holds 60 fps with Whisper running beside it (`pipe-bench`). Not checked: his real mic with real
+  talking, typing topics by hand, Ctrl+Shift+K pressed for real.
 - **Not checked by hand yet:** the owner checks in `docs/spikes/2026-11-17-owner-checks.md` (clean 3-minute run,
   flash and beep sync, clicks, static screen, mic unplug, 60 Hz, real hotkeys), plus: open New recording once and
   look at the overlay, play an export in Windows Media Player, upload one export of each preset privately and

@@ -22,6 +22,7 @@ test("generates a valid project", async () => {
   expect(events.filter((e) => e.type === "click").length).toBeGreaterThanOrEqual(2);
   expect(events.filter((e) => e.type === "cursor").length).toBeGreaterThanOrEqual(1);
   expect(events.filter((e) => e.type === "draw" && e.op === "add").length).toBe(6);
+  expect(events.filter((e) => e.type === "checklist").map((e) => (e as { op: string }).op)).toEqual(["list", "tick", "tick"]);
   expect(events.filter((e) => e.type === "cursorShape").map((e) => (e as { shape: string }).shape)).toContain("hand");
 
   const vDur = Number(probe(join(dir, "screen.mp4"), ["-show_entries", "format=duration"]));

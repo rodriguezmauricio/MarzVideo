@@ -37,3 +37,21 @@
 
 /* Captions lane: the first word of every caption. */
 .cap-word.cap-start { border-left: 2px solid var(--paper); }
+
+/* Checklist tab (AI checklist, DESIGN-SYSTEM.md Inspector "Checklist panel"). */
+.ckl-list { margin-top: 16px; border-top: 1px solid var(--ink); }
+.ckl-row { display: flex; align-items: flex-start; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--ink); }
+.ckl-box { width: 14px; height: 14px; margin-top: 2px; flex: none; border: 1px solid var(--ink); display: flex; align-items: center; justify-content: center; }
+.ckl-row.done .ckl-box { background: var(--ink); color: var(--accent); }
+.ckl-main { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+.ckl-text { text-align: left; text-transform: none; line-height: 1.5; font-weight: 400; color: var(--ink); }
+.ckl-text:disabled { cursor: default; }
+.ckl-act { font-weight: 500; color: var(--ink); text-decoration: underline; text-underline-offset: 2px; }
+.ckl-when { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; flex: none; }
+.ckl-time { font-weight: 500; }
+.ckl-by { font-size: 10px; color: var(--faint-on-paper); }
+.badge-open { border: 1px solid var(--ink); color: var(--ink); flex: none; }
+.ckl-note { font-size: 10px; color: var(--faint-on-paper); }
+/* Three inspector tabs: icon and label only, the key in the tooltip. */
+.insp-tabs.three button { justify-content: center; padding: 0 8px; }
+.insp-tabs.three .tab-key { display: none; }

@@ -47,6 +47,9 @@ pub struct RecordOptionsDto {
     pub cursor_hidden: bool,
     /// Ids "p1" to "p9", rects normalized to the region (the monitor in Full screen).
     pub presets: Vec<PresetDto>,
+    /// The AI checklist topics, one per entry. Missing from older pages: none.
+    #[serde(default)]
+    pub checklist: Vec<String>,
 }
 
 /// The checked options.
@@ -58,6 +61,7 @@ pub struct Plan {
     pub camera_id: Option<String>,
     pub cursor_hidden: bool,
     pub presets: Vec<ZoomPreset>,
+    pub checklist: Vec<marz_capture::events::ChecklistTopic>,
 }
 
 /// The session preset id for hotkey Ctrl+n.
@@ -96,7 +100,8 @@ pub fn plan(dto: RecordOptionsDto) -> Result<Plan, String> {
         presets.push(ZoomPreset { id: p.id, name, rect: p.rect });
     }
     presets.sort_by(|a, b| a.id.cmp(&b.id));
-    Ok(Plan { region, mic_id: dto.mic_id, system_audio: dto.system_audio, camera_id: dto.camera_id, cursor_hidden: dto.cursor_hidden, presets })
+    let checklist = crate::checklist::topics(&dto.checklist);
+    Ok(Plan { region, mic_id: dto.mic_id, system_audio: dto.system_audio, camera_id: dto.camera_id, cursor_hidden: dto.cursor_hidden, presets, checklist })
 }
 
 /// `<stamp> Recording`, then `<stamp> Recording 2`, `3`, ... while `taken` says the name is used.
@@ -137,6 +142,10 @@ pub struct RecState {
     pub rec_us: i64,
     /// Draw mode is on: the overlay takes the mouse and the keyboard (Ctrl+Shift+D).
     pub drawing: bool,
+    /// The AI checklist topics and their ticks (empty: no checklist).
+    pub checklist: Vec<crate::checklist::CheckItem>,
+    /// Why the topics cannot tick by listening ("No microphone"), or None.
+    pub checklist_note: Option<String>,
 }
 
 /// One live drawing change from the overlay. Points and width are physical pixels from the
@@ -171,6 +180,11 @@ pub fn draw_op(app: tauri::AppHandle, op: DrawOpDto) -> Result<(), String> {
         other => other,
     };
     imp::draw_op(&app, op)
+}
+
+/// Tick a checklist topic (`id` None: the next open one) while recording.
+pub fn checklist_tick(app: &tauri::AppHandle, id: Option<&str>, at_us: Option<i64>, by: &str) -> Result<(), String> {
+    imp::checklist_tick(app, id, at_us, by)
 }
 
 /// Sent to the main window when a stop could not finish the files (the recover banner has it).
@@ -389,6 +403,8 @@ mod imp {
         layout: &'static str,
         /// Draw mode is on.
         drawing: bool,
+        checklist: Vec<crate::checklist::CheckItem>,
+        checklist_note: Option<String>,
     }
 
     /// Lock order: `slot` alone, or `keys` alone; never both. Nothing that emits or touches a
@@ -440,6 +456,8 @@ mod imp {
             active_preset: l.active.clone(),
             rec_us: p.rec_us,
             drawing: l.drawing,
+            checklist: l.checklist.clone(),
+            checklist_note: l.checklist_note.clone(),
         }
     }
 
@@ -503,6 +521,9 @@ mod imp {
             Hotkey::Draw => {
                 let _ = draw_mode(app, None);
             }
+            Hotkey::Check => {
+                let _ = checklist_tick(app, None, None, "hand");
+            }
         }
     }
 
@@ -549,6 +570,7 @@ mod imp {
         let st = state(app);
         let attempt = st.attempts.fetch_add(1, Ordering::SeqCst) + 1;
         lock(&st.slot).begin_start(attempt)?;
+        let topics = plan.checklist.clone();
         let (session, presets, mic) = match open_session(app, attempt, plan) {
             Ok(s) => s,
             Err(e) => {
@@ -558,7 +580,22 @@ mod imp {
             }
         };
         let generation = st.generation.fetch_add(1, Ordering::SeqCst) + 1;
-        let early = lock(&st.slot).attach(attempt, Live { session, presets, active: None, mic, layout: LAYOUTS[0], drawing: false });
+        // The checklist: its `list` line now, and how its topics tick (listening, or by hand only).
+        let listen = if topics.is_empty() {
+            None
+        } else {
+            session.checklist_list(&topics);
+            Some(checklist_listen(app, mic, session.dir(), &topics))
+        };
+        if cfg!(debug_assertions) && let Some(Err(note)) = &listen {
+            eprintln!("[checklist] not listening: {note}");
+        }
+        let checklist_note = match &listen {
+            Some(Err(note)) => Some(note.to_string()),
+            _ => None,
+        };
+        let checklist = crate::checklist::items_of(&topics);
+        let early = lock(&st.slot).attach(attempt, Live { session, presets, active: None, mic, layout: LAYOUTS[0], drawing: false, checklist, checklist_note });
         if let Some((live, msg)) = early {
             // The engine failed between its start and here: handle it as any failure.
             after_failure(app, live, msg);
@@ -570,6 +607,18 @@ mod imp {
             return Ok(());
         }
         emit_state(app);
+        if let Some(Ok(setup)) = listen {
+            let (a1, a2, a3) = (app.clone(), app.clone(), app.clone());
+            let _ = thread::Builder::new().name("marz-checklist".into()).spawn(move || {
+                let alive = move || state(&a1).generation.load(Ordering::SeqCst) == generation;
+                let clock = move || {
+                    let st = state(&a2);
+                    let g = lock(&st.slot);
+                    g.live().and_then(|l| l.session.rec_us().map(|t| (t, l.session.mic_first_rec_us())))
+                };
+                crate::checklist::live::run(a3, setup, alive, clock);
+            });
+        }
         let app = app.clone();
         let _ = thread::Builder::new().name("marz-rec-tick".into()).spawn(move || {
             loop {
@@ -580,6 +629,55 @@ mod imp {
             }
         });
         Ok(())
+    }
+
+    /// How the checklist listens: the live setup, or why it cannot (the overlay's note).
+    /// `MARZ_CHECKLIST_FEED` (a 16-bit mono WAV) replaces the mic, for checks without speaking.
+    fn checklist_listen(
+        app: &AppHandle,
+        mic: bool,
+        dir: &std::path::Path,
+        topics: &[marz_capture::events::ChecklistTopic],
+    ) -> Result<crate::checklist::live::Setup, &'static str> {
+        use crate::checklist::live::{Setup, Source};
+        use crate::checklist::{NOTE_NO_MIC, NOTE_NO_MODEL, NOTE_NO_WHISPER};
+        use marz_transcribe::models;
+        let feed = std::env::var_os("MARZ_CHECKLIST_FEED").filter(|v| !v.is_empty()).map(std::path::PathBuf::from);
+        let source = match feed {
+            Some(f) => Source::Feed(f),
+            None if mic => Source::Mic(dir.join("mic.wav")),
+            None => return Err(NOTE_NO_MIC),
+        };
+        let data = app.path().app_data_dir().map_err(|_| NOTE_NO_MODEL)?;
+        let exe_dir = std::env::current_exe().ok().and_then(|p| p.parent().map(std::path::Path::to_path_buf));
+        if cfg!(debug_assertions) {
+            eprintln!("[checklist] looking for whisper beside {exe_dir:?} and in {}", data.display());
+        }
+        let whisper = marz_transcribe::find_whisper(exe_dir.as_deref(), Some(&data)).ok_or(NOTE_NO_WHISPER)?;
+        if !models::REQUIRED_MODELS.iter().all(|m| models::model_ok(&data, m)) {
+            return Err(NOTE_NO_MODEL);
+        }
+        let prompt = topics.iter().map(|t| t.text.as_str()).collect::<Vec<_>>().join(". ");
+        Ok(Setup {
+            source,
+            whisper,
+            model: models::model_path(&data, &models::MAIN_MODEL),
+            vad: Some(models::model_path(&data, &models::VAD_MODEL)),
+            prompt,
+        })
+    }
+
+    /// Tick a topic and log it. `id` None ticks the first open one (Ctrl+Shift+K).
+    pub fn checklist_tick(app: &AppHandle, id: Option<&str>, at_us: Option<i64>, by: &str) -> Result<(), String> {
+        with_live(app, |l| {
+            let now = l.session.rec_us().unwrap_or(0);
+            if cfg!(debug_assertions) {
+                eprintln!("[checklist] tick {id:?} at {at_us:?} by {by} (now {now})");
+            }
+            if let Some((id, at)) = crate::checklist::tick(&mut l.checklist, id, at_us, by, now) {
+                l.session.checklist_tick(&id, at, by);
+            }
+        })
     }
 
     /// Build the options and start the engine: the session, its preset ids and the mic flag.
@@ -820,6 +918,9 @@ mod imp {
     pub fn draw_op(_app: &AppHandle, _op: DrawOpDto) -> Result<(), String> {
         Err(NOT_RECORDING.into())
     }
+    pub fn checklist_tick(_app: &AppHandle, _id: Option<&str>, _at_us: Option<i64>, _by: &str) -> Result<(), String> {
+        Err(NOT_RECORDING.into())
+    }
     pub fn shutdown(_app: &AppHandle) -> Shutdown {
         Shutdown::Nothing
     }
@@ -838,6 +939,7 @@ mod tests {
             camera_id: None,
             cursor_hidden: true,
             presets,
+            checklist: vec![],
         }
     }
 
@@ -858,6 +960,9 @@ mod tests {
         assert!(pl.cursor_hidden);
         assert_eq!(plan(dto("full", vec![])).unwrap().region, None);
         assert!(plan(dto("window", vec![])).is_err());
+        let mut with_list = dto("full", vec![]);
+        with_list.checklist = vec![" Pricing ".into(), "".into()];
+        assert_eq!(plan(with_list).unwrap().checklist.iter().map(|t| (t.id.as_str(), t.text.as_str())).collect::<Vec<_>>(), [("c1", "Pricing")]);
     }
 
     #[test]

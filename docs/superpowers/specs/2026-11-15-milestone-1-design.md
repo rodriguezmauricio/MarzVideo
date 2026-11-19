@@ -170,6 +170,9 @@ normalized 0–1 relative to the source frame, so edits survive resolution/proxy
 - Live drawing (2026-11-19, `2026-11-19-live-drawing-design.md`) adds `draw` lines:
   `{"tUs":..,"type":"draw","op":"add","id":"s1","startUs":..,"stroke":{"tool","color","width","points"[,"text"]}}`,
   `{"op":"remove","id":"s1"}` and `{"op":"clear"}`; points and width in captured-frame pixels.
+- AI checklist (2026-11-19, `2026-11-19-ai-checklist-design.md`) adds `checklist` lines: once at the start
+  `{"tUs":..,"type":"checklist","op":"list","items":[{"id":"c1","text":"Pricing page"}]}`, then per covered topic
+  `{"tUs":..,"type":"checklist","op":"tick","id":"c1","atUs":..,"by":"auto"|"ai"|"hand"}` (`atUs`: when it was said).
 
 ### `project.json`
 
@@ -212,6 +215,9 @@ normalized 0–1 relative to the source frame, so edits survive resolution/proxy
   "color", "width", "points", "text"?, "origin" }], "liveImported": true }`. Strokes are vectors in source
   pixels with appear and disappear times; they are never burned into `screen.mp4`. Details in
   `2026-11-19-live-drawing-design.md`.
+- Optional `edits.checklist` (AI checklist, 2026-11-19): `{ "items": [{ "id", "text", "atUs" (null while open),
+  "by"? ("auto", "ai", "hand", "transcript", "editor") }], "liveImported": true }`. Imported from the `checklist`
+  lines the first time the take opens. Details in `2026-11-19-ai-checklist-design.md`.
 
 ## Technical calls (Claude's, open to correction)
 

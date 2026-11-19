@@ -1,12 +1,14 @@
 import { create } from "zustand";
-import { cameraScenes, cursorSections, EMPTY_ARCHIVE_STATE, parseArchiveState, type ArchiveState, drawingStrokes, parseProject, verticalEdits, serializeProject, type CaptionPresetId, type MarzEvent, type Project, type Section, type Word } from "@marz/format";
+import { cameraScenes, checklistEdits, checklistItems, cursorSections, EMPTY_ARCHIVE_STATE, parseArchiveState, type ArchiveState, drawingStrokes, parseProject, verticalEdits, serializeProject, type CaptionPresetId, type MarzEvent, type Project, type Section, type Word } from "@marz/format";
 import type { Levels } from "@marz/autoedit";
 import type { AiStatus } from "../ai/runAiPass";
-import { History, importLiveDrawings, importLiveLayouts, type Command } from "@marz/timeline";
+import { History, importLiveChecklist, importLiveDrawings, importLiveLayouts, type Command } from "@marz/timeline";
 import { createAutosave, type SaveStatus } from "../storage/autosave";
 import type { ProjectStorage } from "../storage/types";
 import { withMedia } from "../storage/withMedia";
 import { loadEventsOrEmpty } from "./loadEvents";
+
+export type InspectorTab = "edit" | "transcript" | "checklist";
 
 export type Selection = { kind: "zoom" | "cut" | "word" | "layout" | "cursor" | "drawing" | "frame"; id: string } | null;
 
@@ -68,9 +70,9 @@ type EditorState = {
    * block or the export panel. */
   captionPreset: CaptionPresetId;
   setCaptionPreset: (preset: CaptionPresetId) => void;
-  /** Which inspector tab shows (the Transcript tab exists only with a transcript). */
-  inspectorTab: "edit" | "transcript";
-  setInspectorTab: (tab: "edit" | "transcript") => void;
+  /** Which inspector tab shows (Transcript only with a transcript, Checklist only with a checklist). */
+  inspectorTab: InspectorTab;
+  setInspectorTab: (tab: InspectorTab) => void;
   /** The word being fixed in place in the Transcript panel. */
   transcriptEditing: string | null;
   setTranscriptEditing: (id: string | null) => void;
@@ -150,7 +152,10 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       const archive = await storage.readText("archive.json").then((t) => parseArchiveState(JSON.parse(t)), () => EMPTY_ARCHIVE_STATE);
       // Layout hotkeys pressed while recording become Live layout blocks the first time the take
       // opens (not an undo step; saved with the next autosave). Live drawing strokes too.
-      const project = importLiveDrawings(events)(importLiveLayouts(events)(read));
+      const project = importLiveChecklist(events)(importLiveDrawings(events)(importLiveLayouts(events)(read)));
+      // The first open of a take with a checklist topic not covered shows the Checklist tab (the flag after Stop).
+      const firstCheck = !checklistEdits(read).liveImported && checklistEdits(project).liveImported === true;
+      const flagChecklist = firstCheck && checklistItems(project).some((i) => i.atUs === null);
       const history = new History(project);
       autosave = createAutosave(() => storage.writeProjectJson(serializeProject(history.current)), AUTOSAVE_DELAY_MS, (saveStatus) => set({ saveStatus }));
       history.subscribe(() => {
@@ -177,7 +182,25 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         set({ project: p, selection: stillThere ? sel : null, ...(clearDone && !ai.running ? { ai: { ...ai, status: null } } : {}) });
         autosave?.schedule();
       });
-      set({ status: "ready", storage: withMedia(storage, archive), baseStorage: storage, archive, project, events, warning, saveStatus: "saved", history, playheadUs: 0, playing: false, selection: null, words: [], sections: [], levels: null, ai: IDLE_AI });
+      set({
+        status: "ready",
+        storage: withMedia(storage, archive),
+        baseStorage: storage,
+        archive,
+        project,
+        events,
+        warning,
+        saveStatus: "saved",
+        history,
+        playheadUs: 0,
+        playing: false,
+        selection: null,
+        words: [],
+        sections: [],
+        levels: null,
+        ai: IDLE_AI,
+        inspectorTab: flagChecklist ? "checklist" : "edit",
+      });
       if (project !== read) autosave.schedule();
     } catch (err) {
       set({ status: "error", error: err instanceof Error ? err.message : String(err) });

@@ -43,6 +43,7 @@ Template:
 | `gear` | `<circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/>` |
 | `folder` | `<path d="M3 7h6l2 2h10v10H3z"/>` |
 | `check` | `<path d="M5 12.5l4.5 4.5L19 7"/>` |
+| `list` | `<path d="M4 6h3v3H4zM4 15h3v3H4zM11 7.5h9M11 16.5h9"/>` (Checklist, recorder and inspector) |
 | `close` | `<path d="M6 6l12 12M18 6L6 18"/>` |
 | `ai` | `<path d="M12 3l2.2 6.8L21 12l-6.8 2.2L12 21l-2.2-6.8L3 12l6.8-2.2z"/>` (Edit with AI) |
 | `captions` | `<rect x="3" y="6" width="18" height="12"/><path d="M7 14h4M13 14h4M7 10h10"/>` (Burn captions, caption inspector) |

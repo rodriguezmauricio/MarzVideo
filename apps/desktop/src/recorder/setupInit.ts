@@ -19,6 +19,9 @@ function fakeSetup(): Setup {
     systemAudio: true,
     cameraId: null,
     cameraOn: new URLSearchParams(window.location.search).get("camera") !== "off",
+    checklist: new URLSearchParams(window.location.search).has("checklist")
+      ? "Pricing page\nRefunds and cancellations\nShow the export button\nAnnual plan discount for teams with more than ten seats"
+      : "",
   };
 }
 
