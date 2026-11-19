@@ -136,3 +136,11 @@ Checked in Edge (Playwright) at 1440 x 900 and 1280 x 720 on `samples/demo.marz`
 - **Four-option segmented control** (caption Style) uses 8 px side padding instead of 12 so it fits the 308 px inspector row.
 - **Plain caption style** draws a thin ink outline (a stroke) around the letters so paper text reads on light screen content; it is not a shadow or glow.
 - **Vertical Plain captions in the 16:9 preview** use the in-frame subtitle size (the preview has no letterbox), so the preview is smaller than the vertical export, as with M2's highlight look.
+## Smart vertical (2026-11-19)
+
+Checked in Edge (Playwright) at 1440 x 900 and 1280 x 720 on `samples/demo.marz` and `samples/demo-camera.marz`. No mockup exists; DESIGN-SYSTEM.md was updated first ("Vertical preview", "Vertical lane", Inspector "Vertical block" and "Frame selected", Export panel row, top strip).
+
+- **The timeline lanes can scroll**: the Vertical lane (shown only while the vertical preview is on) adds a 22 px lane under Zoom, so at 1440 x 900 the last lanes no longer fit the 340 px timeline; the lane area scrolls vertically instead of clipping. Without the vertical preview nothing changes.
+- **The Aim view reuses the zoom area rectangle** (dashed accent, `dim` shadow) for the 9:16 window, without corner handles: only its sideways position can change.
+- **A fourth strip item** (Vertical preview button) sits between the size text and Export MP4. At 1280 wide the strip still fits on one line.
+- **Vertical lane marks**: the automatic moves are shown as 2 px faint marks along the lane bottom; they are information only.

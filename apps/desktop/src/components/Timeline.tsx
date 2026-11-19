@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { cameraScenes } from "@marz/format";
-import { updateCut, updateScene, updateZoom } from "@marz/timeline";
+import { cameraScenes, verticalEdits } from "@marz/format";
+import { updateCut, updateHold, updateScene, updateZoom } from "@marz/timeline";
+import { frameLabels } from "../vertical/VerticalPanels";
+import { aimPathFor } from "../vertical/aimPath";
 import { MIN_US } from "../state/actions";
 import { useEditorStore, type Selection } from "../state/editorStore";
 import { Icon } from "./Icon";
@@ -13,7 +15,7 @@ import { useCaptionFacts } from "../captions/captionActions";
 /** Roughly how wide a 10px mono label is, to hide labels that would not fit (micro type). */
 const labelPx = (text: string, ai: boolean) => text.length * 7 + (ai ? 26 : 0) + 8;
 
-type Kind = "zoom" | "cut" | "layout";
+type Kind = "zoom" | "cut" | "layout" | "frame";
 type Mode = "move" | "start" | "end";
 type Range = { startUs: number; endUs: number };
 type Drag = { kind: Kind; id: string; mode: Mode; startX: number; orig: Range };
@@ -67,6 +69,9 @@ export function Timeline({ expanded, onToggleLanes }: { expanded: boolean; onTog
 
   const D = project.durationUs;
   const scenes = cameraScenes(project);
+  const vertical = useEditorStore((s) => s.verticalPreview);
+  const holds = verticalEdits(project).holds;
+  const events = useEditorStore((s) => s.events);
   const width = timelineWidthPx(viewport, zoomFactor);
   const pps = width / (D / 1e6);
   const x = (us: number) => usToPx(us, pps);
@@ -106,6 +111,7 @@ export function Timeline({ expanded, onToggleLanes }: { expanded: boolean; onTog
     for (const z of project.edits.zooms) if (!(skip.kind === "zoom" && skip.id === z.id)) t.push(z.startUs, z.endUs);
     for (const c of project.edits.cuts) if (!(skip.kind === "cut" && skip.id === c.id)) t.push(c.startUs, c.endUs);
     for (const sc of scenes) if (!(skip.kind === "layout" && skip.id === sc.id)) t.push(sc.startUs, sc.endUs);
+    if (vertical) for (const h of holds) if (!(skip.kind === "frame" && skip.id === h.id)) t.push(h.startUs, h.endUs);
     return t;
   };
 
@@ -147,7 +153,15 @@ export function Timeline({ expanded, onToggleLanes }: { expanded: boolean; onTog
     setDraft(null);
     if (!d || !final || (final.startUs === d.orig.startUs && final.endUs === d.orig.endUs)) return;
     const patch = { startUs: final.startUs, endUs: final.endUs };
-    apply(d.kind === "layout" ? updateScene(d.id, patch) : d.kind === "zoom" ? updateZoom(d.id, patch) : updateCut(d.id, patch));
+    apply(
+      d.kind === "frame"
+        ? updateHold(d.id, patch)
+        : d.kind === "layout"
+          ? updateScene(d.id, patch)
+          : d.kind === "zoom"
+            ? updateZoom(d.id, patch)
+            : updateCut(d.id, patch),
+    );
   };
 
   const stepS = TICK_STEPS_S.find((s) => s * pps >= 70) ?? TICK_STEPS_S[TICK_STEPS_S.length - 1]!;
@@ -207,7 +221,7 @@ export function Timeline({ expanded, onToggleLanes }: { expanded: boolean; onTog
           </button>
         </span>
       </div>
-      <div className="tl-body">
+      <div className={vertical ? "tl-body vert" : "tl-body"}>
         <div className="tl-gutter">
           <div className="lb" style={{ height: rows.ruler }} />
           <div className="lb" style={{ height: rows.screen }}>Screen</div>
@@ -221,6 +235,7 @@ export function Timeline({ expanded, onToggleLanes }: { expanded: boolean; onTog
             )}
           </div>
           <div className="lb" style={{ height: rows.zoom }}>Zoom</div>
+          {vertical && <div className="lb" style={{ height: rows.later }}>Vertical</div>}
           {LATER_LANES.map((name) =>
             real(name) ? (
               <div key={name} className="lb" style={{ height: rows.later }}>{name}</div>
@@ -280,6 +295,38 @@ export function Timeline({ expanded, onToggleLanes }: { expanded: boolean; onTog
                 );
               })}
             </div>
+            {vertical && (
+              // Smart vertical (DESIGN-SYSTEM.md "Vertical lane"): his Frame blocks, the automatic moves as marks.
+              <div className="tk" style={{ height: rows.later }} data-testid="vertical-lane">
+                {aimPathFor(project, events).moves.map((m, i) => (
+                  <i key={i} className="aim-move" style={{ left: x(m.startUs), width: Math.max(2, x(m.endUs - m.startUs)) }} />
+                ))}
+                {holds.map((h) => {
+                  const r = rangeOf("frame", h.id, h);
+                  const sel = selection?.kind === "frame" && selection.id === h.id;
+                  const w = Math.max(4, x(r.endUs - r.startUs));
+                  const pad = rows.later > 30 ? 6 : 3;
+                  const label = frameLabels(holds).get(h.id) ?? "Frame";
+                  return (
+                    <div
+                      key={h.id}
+                      data-testid={`frame-${h.id}`}
+                      onPointerDown={(e) => onBlockDown(e, "frame", h.id, "move", h)}
+                      onPointerMove={onBlockMove}
+                      onPointerUp={onBlockUp}
+                      className={`blk blk-frame${sel ? " sel" : ""}`}
+                      style={{ left: x(r.startUs), width: w, top: pad, height: rows.later - 2 * pad }}
+                    >
+                      <i className="g l" />
+                      {w >= labelPx(label, false) + 16 && <span>{label}</span>}
+                      <i className="g r" />
+                      {handle("frame", h.id, "start", h, w)}
+                      {handle("frame", h.id, "end", h, w)}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
             {LATER_LANES.map((name) =>
               name === "System audio" && sys ? (
                 // The computer's sound keeps the System audio lane's place and height.

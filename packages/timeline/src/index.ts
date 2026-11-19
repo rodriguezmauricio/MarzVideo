@@ -5,3 +5,5 @@ export * from "./commands";
 export * from "./history";
 export * from "./audio";
 export * from "./scenes";
+export * from "./reframe";
+export * from "./vertical";

@@ -59,6 +59,12 @@ Windows-first screen recorder + non-destructive editor (Tauri 2, Rust, React/TS)
   caption style per export preset (Ink, Paper, Accent band, Plain; S/M/L; top/middle/bottom; word highlight), `.vtt`
   beside every export next to the `.srt`. Code: `apps/desktop/src/captions`, `packages/autoedit/src/captions.ts`,
   `packages/compositor/src/captions.ts`.
+- **Built (branch `claude/smart-vertical-4e8de8`, not merged, not checked by hand yet):** smart vertical (design
+  `docs/superpowers/specs/2026-11-19-smart-vertical-design.md`, plan `docs/superpowers/plans/2026-11-19-smart-vertical.md`).
+  The vertical export follows the action by default (a 9:16 window aimed by cursor rests, clicks and zooms; camera in a 1080 x 608
+  slot; captions in the Reels/TikTok safe area) or fits with bars. Vertical preview (V) with an Aim view, Vertical lane with Frame
+  blocks (F) that win over the automatic aim, Vertical block in the Project panel, "Follow the action" row in the export panel.
+  Optional `edits.vertical`. Code: `packages/timeline/src/reframe.ts`, `packages/compositor/src/vertical.ts`, `apps/desktop/src/vertical`.
 - **Not checked by hand yet:** the owner checks in `docs/spikes/2026-11-17-owner-checks.md` (clean 3-minute run,
   flash and beep sync, clicks, static screen, mic unplug, 60 Hz, real hotkeys), plus: open New recording once and
   look at the overlay, play an export in Windows Media Player, upload one export of each preset privately and

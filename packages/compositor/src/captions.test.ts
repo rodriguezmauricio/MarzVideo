@@ -104,3 +104,29 @@ describe("captionLayout", () => {
     expect(plain.outlinePx).toBeGreaterThan(0);
   });
 });
+
+describe("captionLayout in a caption area (smart vertical)", () => {
+  const area = { x: 65, y: 250, w: 950, h: 1024 };
+  const vFull = { x: 0, y: 0, w: 1080, h: 1920 };
+  test("Bottom sits at the area's bottom, Top at its top, Middle centred; sized on the output width", () => {
+    const b = captionLayout(blocks, 0.5 * S, HI, vOut, vFull, measure, area)!;
+    const last = b.lines[b.lines.length - 1]!;
+    expect(last.top + last.height).toBeCloseTo(area.y + area.h, 6);
+    expect(b.fontPx).toBeCloseTo(1080 * 0.075, 6);
+    const t = captionLayout(blocks, 0.5 * S, { ...HI, position: "top" }, vOut, vFull, measure, area)!;
+    expect(t.lines[0]!.top).toBeCloseTo(area.y, 6);
+    const m = captionLayout(blocks, 0.5 * S, { ...HI, position: "middle" }, vOut, vFull, measure, area)!;
+    const mid = (m.lines[0]!.top + m.lines[m.lines.length - 1]!.top + m.lines[0]!.height) / 2;
+    expect(mid).toBeCloseTo(area.y + area.h / 2, 6);
+  });
+  test("lines stay inside the area's width", () => {
+    const long = [block(0, 2 * S, [["Exceptionally", "long", "words", "here"]])];
+    const d = captionLayout(long, 0.5 * S, HI, vOut, vFull, measure, area)!;
+    for (const l of d.lines) {
+      const left = l.words[0]!.x;
+      const right = l.words[l.words.length - 1]!.x + l.words[l.words.length - 1]!.w;
+      expect(left).toBeGreaterThanOrEqual(area.x - 1e-6);
+      expect(right).toBeLessThanOrEqual(area.x + area.w + 1e-6);
+    }
+  });
+});

@@ -62,7 +62,9 @@ const TONES: Record<CaptionLookOpts["style"], { band: Tone | null; text: Tone; l
  * call it with their own sizes and get the same layout scaled.
  * `frame` is where the picture sits in the output. When the output has ink above or below the frame
  * (the vertical letterbox) and the position is Top or Bottom, captions sit in that ink area;
- * otherwise inside the frame, 6 % of its height from the edge, or centred for Middle. */
+ * otherwise inside the frame, 6 % of its height from the edge, or centred for Middle.
+ * `area` (the smart vertical picture): captions go inside it instead (Top at its top, Bottom at its
+ * bottom, Middle centred), sized on the output width like the vertical preset. */
 export function captionLayout(
   blocks: CaptionBlock[],
   tOutUs: number,
@@ -70,6 +72,7 @@ export function captionLayout(
   out: { width: number; height: number },
   frame: CaptionRect,
   measure: Measure,
+  area?: CaptionRect,
 ): CaptionDraw | null {
   const block = blocks.find((b) => tOutUs >= b.startUs && tOutUs < b.endUs);
   if (!block || block.lines.length === 0) return null;
@@ -80,14 +83,15 @@ export function captionLayout(
   const inkAbove = frame.y;
   const boxed = out.width * HIGHLIGHT_SIZE * LINE_H * 1.5;
   // A letterboxed output (ink above and below the picture) sizes captions on its width.
-  const letterboxed = Math.min(inkAbove, inkBelow) >= boxed;
-  const area =
+  const letterboxed = !area && Math.min(inkAbove, inkBelow) >= boxed;
+  const inkArea =
     letterboxed && look.position === "bottom"
       ? { y: frame.y + frame.h, h: inkBelow }
       : letterboxed && look.position === "top"
         ? { y: 0, h: inkAbove }
         : null;
-  const widthLimit = (letterboxed ? out.width : frame.w) * MAX_WIDTH;
+  const onWidth = letterboxed || !!area;
+  const widthLimit = (area ? area.w : letterboxed ? out.width : frame.w) * MAX_WIDTH;
   const lineCount = block.lines.length;
   const wordsIn = (fontPx: number) => block.lines.map((l) => l.words.map((w) => measure(w.text, fontPx)));
   const linesW = (fontPx: number, ws: number[][]) => {
@@ -95,7 +99,7 @@ export function captionLayout(
     return ws.map((w) => w.reduce((a, b) => a + b, 0) + space * Math.max(0, w.length - 1));
   };
 
-  let fontPx = k * (letterboxed ? out.width * (look.highlight ? HIGHLIGHT_SIZE : LETTERBOX_SUBTITLE_SIZE) : frame.h * SUBTITLE_SIZE);
+  let fontPx = k * (onWidth ? out.width * (look.highlight ? HIGHLIGHT_SIZE : LETTERBOX_SUBTITLE_SIZE) : frame.h * SUBTITLE_SIZE);
   let widths = wordsIn(fontPx);
   let lineW = linesW(fontPx, widths);
   const banded = tones.band !== null;
@@ -110,10 +114,11 @@ export function captionLayout(
   const textH = lineH * lineCount;
   const padY = banded ? PAD_Y * fontPx : 0;
   const boxH = textH + 2 * padY;
-  const cx = frame.x + frame.w / 2;
+  const cx = area ? area.x + area.w / 2 : frame.x + frame.w / 2;
 
   let boxTop: number;
-  if (area) boxTop = area.y + (area.h - boxH) / 2;
+  if (area) boxTop = look.position === "top" ? area.y : look.position === "middle" ? area.y + (area.h - boxH) / 2 : area.y + area.h - boxH;
+  else if (inkArea) boxTop = inkArea.y + (inkArea.h - boxH) / 2;
   else if (look.position === "top") boxTop = frame.y + EDGE_GAP * frame.h;
   else if (look.position === "middle") boxTop = frame.y + (frame.h - boxH) / 2;
   else boxTop = frame.y + frame.h - EDGE_GAP * frame.h - boxH;

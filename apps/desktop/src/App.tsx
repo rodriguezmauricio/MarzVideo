@@ -15,10 +15,24 @@ import { addCutAtPlayhead, addLayoutAtPlayhead, addZoomAtPlayhead, deleteSelecti
 import { abortAiPass, answerModelAsk, loadTranscriptWords, startAiPass } from "./ai/aiActions";
 import { statusText } from "./ai/runAiPass";
 import { setCaptionStartAt } from "./captions/captionActions";
+import { holdFrameHere } from "./vertical/verticalActions";
 import { useAppStore } from "./state/appStore";
 import { flushAutosave, useEditorStore } from "./state/editorStore";
 import { pickStorage } from "./storage/pickStorage";
 import type { SaveStatus } from "./storage/autosave";
+
+/** Top strip: the Vertical preview toggle (DESIGN-SYSTEM.md "Vertical preview"). */
+function VerticalButton() {
+  const on = useEditorStore((s) => s.verticalPreview);
+  const toggle = useEditorStore((s) => s.toggleVerticalPreview);
+  return (
+    <button type="button" className={`strip-vert${on ? " on" : ""}`} aria-pressed={on} aria-keyshortcuts="V" data-tip="Vertical preview / V" onClick={toggle}>
+      <Icon name="portrait" size={14} />
+      Vertical preview
+      <span className="hk">V</span>
+    </button>
+  );
+}
 
 /** Save status: three states (DESIGN-SYSTEM.md "Save status"). A pending debounced save counts as saving. */
 function SaveState({ status }: { status: SaveStatus }) {
@@ -163,6 +177,8 @@ function Editor({ dir }: { dir: string }) {
       else if (e.code === "KeyC") addCutAtPlayhead();
       else if (e.code === "KeyL") addLayoutAtPlayhead();
       else if (e.code === "KeyA") runAutoZoom();
+      else if (e.code === "KeyV") s.toggleVerticalPreview();
+      else if (e.code === "KeyF") holdFrameHere();
       else if (e.code === "KeyE" && e.shiftKey) void startAiPass();
       // Captions editor (DESIGN-SYSTEM.md Inspector, "Tabs" and "Transcript panel").
       else if (e.code === "KeyT" && s.words.length > 0) s.setInspectorTab(s.inspectorTab === "edit" ? "transcript" : "edit");
@@ -210,6 +226,7 @@ function Editor({ dir }: { dir: string }) {
           <span className="faint">
             {project.output.width} x {project.output.height} / {project.output.fps} fps
           </span>
+          <VerticalButton />
           <ExportControl />
         </div>
         <ExportProgressLine />

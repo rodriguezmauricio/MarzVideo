@@ -11,12 +11,14 @@ import { useEditorStore } from "../state/editorStore";
 import { Icon } from "./Icon";
 import { mmsst, parseTimeUs, seconds1 } from "./timecode";
 import { cutCapLabel, LAYOUT_LABEL, zoomLabels } from "./zoomLabels";
+import { verticalEdits } from "@marz/format";
+import { FrameInspector, frameLabels, VerticalBlock } from "../vertical/VerticalPanels";
 
 // design-check-ignore: HTMLElement.blur() drops keyboard focus; it is not a visual blur
 const leaveField = (el: HTMLInputElement) => el.blur();
 
 /** One 68px cell: small label, big display value. The value is editable; Enter or leaving the field commits it. */
-function Cell(props: { label: string; text: string; onCommit: (us: number) => void }) {
+export function Cell(props: { label: string; text: string; onCommit: (us: number) => void }) {
   return (
     <label className="cell">
       <span className="k">{props.label}</span>
@@ -256,11 +258,11 @@ const BORDERS: Array<[number, string]> = [
 const COLOR_NAMES: Record<BorderColor, string> = { paper: "Paper", ink: "Ink", accent: "Accent" };
 
 /** A row with the Motion row's segmented control. */
-function Segmented<T extends string | number>(props: { label: string; options: Array<[T, string]>; value: T; onPick: (v: T) => void }) {
+export function Segmented<T extends string | number>(props: { label: string; options: Array<[T, string]>; value: T; onPick: (v: T) => void; group?: string }) {
   return (
     <div className="irow">
       <span>{props.label}</span>
-      <span className={props.options.length > 3 ? "seg seg-4" : "seg"} role="radiogroup" aria-label={`Camera ${props.label.toLowerCase()}`}>
+      <span className={props.options.length > 3 ? "seg seg-4" : "seg"} role="radiogroup" aria-label={`${props.group ?? "Camera"} ${props.label.toLowerCase()}`}>
         {props.options.map(([v, text]) => (
           <button
             key={String(v)}
@@ -454,6 +456,8 @@ export function Inspector({ compact = false }: { compact?: boolean }) {
   const words = useEditorStore((s) => s.words);
   const word = selection?.kind === "word" ? words.find((w) => w.id === selection.id) : undefined;
   const scene = selection?.kind === "layout" ? cameraScenes(project).find((x) => x.id === selection.id) : undefined;
+  const holds = verticalEdits(project).holds;
+  const hold = selection?.kind === "frame" ? holds.find((h) => h.id === selection.id) : undefined;
   const tab = useEditorStore((s) => s.inspectorTab);
   const setTab = useEditorStore((s) => s.setInspectorTab);
   const tabs = words.length > 0;
@@ -464,6 +468,8 @@ export function Inspector({ compact = false }: { compact?: boolean }) {
         <CutInspector cut={cut} durationUs={project.durationUs} />
       ) : scene ? (
         <LayoutInspector scene={scene} durationUs={project.durationUs} />
+      ) : hold ? (
+        <FrameInspector hold={hold} title={frameLabels(holds).get(hold.id) ?? "Frame"} durationUs={project.durationUs} />
       ) : word ? (
         <WordInspector word={word} project={project} />
       ) : (
@@ -476,6 +482,7 @@ export function Inspector({ compact = false }: { compact?: boolean }) {
             <Toggle label="Click highlight" on={project.edits.clicks.effect !== "none"} />
           </div>
           {project.tracks.camera && <CameraBlock project={project} />}
+          <VerticalBlock project={project} />
           <AudioBlock project={project} />
           {words.length > 0 && <CaptionsBlock project={project} />}
           <AiBlock project={project} />

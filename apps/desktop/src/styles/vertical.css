@@ -1,0 +1,29 @@
+/* Smart vertical (DESIGN-SYSTEM.md "Vertical preview", "Vertical lane", "Vertical block"). */
+
+/* Top strip: the Vertical preview button (strip button, 30px, 1px paper border; on = accent fill). */
+.strip-vert { height: 30px; padding: 0 12px; border: 1px solid var(--paper); color: var(--paper); font-weight: 500; display: flex; align-items: center; gap: 8px; }
+.strip-vert .hk { color: var(--faint); }
+.strip-vert.on { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.strip-vert.on .hk { color: var(--accent-ink); }
+
+/* Preview: the 9:16 picture and the Aim view side by side. */
+.pv-row { display: flex; gap: 12px; align-items: flex-start; }
+.pv-vertical .pv-frame { flex: none; }
+.pv-aim { position: relative; flex: 1 1 0; min-width: 0; max-width: calc((100cqh - var(--cap)) * 16 / 9); border: 1px solid var(--paper); overflow: hidden; background: var(--ink); }
+.pv-aim canvas { display: block; width: 100%; height: 100%; }
+.aim-box {
+  position: absolute; cursor: ew-resize; border: 2px dashed var(--accent);
+  /* design-check-ignore: the 999px dimming is the zoom area's allowed shadow, reused for the vertical window */
+  box-shadow: 0 0 0 999px var(--dim);
+}
+.aim-tag { position: absolute; left: 0; top: 0; background: var(--paper); color: var(--ink); padding: 3px 7px; font-size: 10px; font-weight: 500; pointer-events: none; }
+
+/* Timeline: the Vertical lane. With it the lanes may not fit; the lane area then scrolls. */
+.tl-body.vert { overflow-y: auto; align-items: flex-start; scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
+.blk-frame { background: var(--paper); color: var(--ink); }
+.aim-move { position: absolute; bottom: 2px; height: 2px; background: var(--faint); pointer-events: none; }
+
+/* Inspector: the Aim slider row reuses the Pace slider. */
+.insp-vert { margin-top: 18px; border-top: 1px solid var(--ink); }
+.insp-vert .irow { border-top: 0; border-bottom: 1px solid var(--ink); }
+.insp-vert .btns { margin-top: 12px; }
