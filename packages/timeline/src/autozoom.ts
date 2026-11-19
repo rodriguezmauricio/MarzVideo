@@ -6,7 +6,15 @@ export type AutoZoomOptions = {
   paddingUs?: number;
   zoomScale?: number;
   minGapUs?: number;
+  /** The recording's length: a zoom never runs past it. */
+  durationUs?: number;
 };
+
+/** A cluster that needs a wider rect than this (share of the frame) gives no zoom: it would be
+ *  nearly the full frame and only add a jolt. */
+const MAX_RECT_W = 0.8;
+/** A zoom shorter than this (after clamping to the duration) is dropped. */
+const MIN_LEN_US = 500_000;
 
 type Point = { x: number; y: number };
 type Group = { startUs: number; endUs: number; points: Point[] };
@@ -22,6 +30,7 @@ export function suggestZooms(
   const paddingUs = opts.paddingUs ?? 600_000;
   const zoomScale = opts.zoomScale ?? 0.5;
   const minGapUs = opts.minGapUs ?? 800_000;
+  const durationUs = opts.durationUs ?? Infinity;
 
   const downs = events
     .filter((e): e is ClickEvent => e.type === "click" && e.state === "down")
@@ -53,22 +62,28 @@ export function suggestZooms(
   }
 
   const k = source.width / (outputAspect * source.height); // rect h = w * k
-  return groups.map((g, i): Zoom => {
+  const zooms: Zoom[] = [];
+  for (const g of groups) {
+    const endUs = Math.min(g.endUs, durationUs);
+    if (endUs - g.startUs < MIN_LEN_US) continue;
     const cx = g.points.reduce((s, p) => s + p.x, 0) / g.points.length;
     const cy = g.points.reduce((s, p) => s + p.y, 0) / g.points.length;
     const maxDx = Math.max(...g.points.map((p) => Math.abs(p.x - cx)));
     const maxDy = Math.max(...g.points.map((p) => Math.abs(p.y - cy)));
-    const w = Math.min(1, Math.max(zoomScale, 2 * maxDx + 0.05, (2 * maxDy + 0.05) / k));
+    const need = Math.max(zoomScale, 2 * maxDx + 0.05, (2 * maxDy + 0.05) / k);
+    if (need > MAX_RECT_W) continue;
+    const w = Math.min(1, need);
     const rect = lockAspect({ x: cx - w / 2, y: cy - (w * k) / 2, w, h: w * k }, outputAspect, source);
-    return {
-      id: `auto-${i + 1}`,
+    zooms.push({
+      id: `auto-${zooms.length + 1}`,
       startUs: g.startUs,
-      endUs: g.endUs,
+      endUs,
       rect,
       easeInUs: 400_000,
       easeOutUs: 400_000,
       easing: "easeInOutCubic",
       origin: "auto",
-    };
-  });
+    });
+  }
+  return zooms;
 }

@@ -75,7 +75,7 @@ export function runAutoZoom(): void {
   const { project, events, apply } = useEditorStore.getState();
   if (!project) return;
   const aspect = project.output.width / project.output.height;
-  apply(replaceAutoZooms(suggestZooms(events, project.source, aspect)));
+  apply(replaceAutoZooms(suggestZooms(events, project.source, aspect, { durationUs: project.durationUs })));
 }
 
 export function deleteSelection(): void {

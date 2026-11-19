@@ -122,7 +122,9 @@ export const replaceAutoZooms =
   (zs: Zoom[]): Command =>
   (p) => {
     const kept = p.edits.zooms.filter((z) => z.origin !== "auto");
-    return withEdits(p, { zooms: [...kept, ...zs.filter((z) => !kept.some((k) => overlaps(k, z)))] });
+    const zooms = [...kept, ...zs.filter((z) => !kept.some((k) => overlaps(k, z)))];
+    // Same zooms as now (no clicks, or the same run again): no new object, so no undo step.
+    return JSON.stringify(zooms) === JSON.stringify(p.edits.zooms) ? p : withEdits(p, { zooms });
   };
 
 export const setCursorHidden =
