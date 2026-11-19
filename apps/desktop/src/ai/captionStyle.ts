@@ -6,9 +6,9 @@ import type { CaptionStyleChoice, Project, Word } from "@marz/format";
 export function captionStyle(): CaptionStyle {
   const css = getComputedStyle(document.documentElement);
   const v = (name: string) => css.getPropertyValue(name).trim();
-  const ink = v("--ink");
-  const paper = v("--paper");
-  const accent = v("--accent");
+  const ink = v("--brand-ink");
+  const paper = v("--brand-paper");
+  const accent = v("--brand-accent");
   if (!ink || !paper || !accent) throw new Error("caption tokens are missing");
   return { ink, paper, accent, family: v("--font-display") || "sans-serif" };
 }

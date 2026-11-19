@@ -42,6 +42,7 @@ Template:
 | `alert` | `<path d="M12 4l9 16H3z"/><path d="M12 10v4M12 17.2v.01"/>` |
 | `gear` | `<circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/>` |
 | `folder` | `<path d="M3 7h6l2 2h10v10H3z"/>` |
+| `contrast` | `<path d="M4 4h16v16H4zM12 4v16M12 8h8M12 12h8M12 16h8"/>` (theme button: a square, right half ruled) |
 | `check` | `<path d="M5 12.5l4.5 4.5L19 7"/>` |
 | `list` | `<path d="M4 6h3v3H4zM4 15h3v3H4zM11 7.5h9M11 16.5h9"/>` (Checklist, recorder and inspector) |
 | `close` | `<path d="M6 6l12 12M18 6L6 18"/>` |

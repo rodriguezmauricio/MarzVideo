@@ -6,7 +6,8 @@
 
 /* strip: brand left, Settings right */
 .h-brand { display: flex; align-items: center; gap: 10px; font-weight: 500; }
-.h-brand i { width: 14px; height: 14px; background: var(--accent); }
+.h-brand i { width: 14px; height: 14px; background: var(--accent-on-ink); }
+.h-strip-end { display: flex; align-items: center; gap: 8px; }
 .h-settings { height: 30px; padding: 0 14px; border: 1px solid var(--paper); display: flex; align-items: center; gap: 8px; cursor: default; }
 
 /* hero: paper block, 276px, giant "Record once." */

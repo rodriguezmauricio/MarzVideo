@@ -3,11 +3,21 @@
    Change the accent HERE ONLY. Never write a hex colour anywhere else in the app. */
 
 :root {
-  /* colour */
+  /* brand colours: FIXED, never themed. Video output (captions, camera border, drawings, export
+     letterbox) reads only these, so the app theme can never change a video. */
+  --brand-ink: #0b0b0a;
+  --brand-paper: #eceae4;
+  --brand-accent: #d4ff3a;
+  --brand-rec: #e0352b;
+
+  /* colour (dark theme, the default). In the code --ink means "ground" and --paper "figure":
+     the light theme below swaps them. */
   --ink: #0b0b0a;                    /* page background; text on paper */
   --paper: #eceae4;                 /* text on ink; inverted panels (inspector, Home hero) */
   --accent: #d4ff3a;                 /* THE one accent. Placeholder until the brand kit exists */
   --accent-ink: #0b0b0a;             /* text on accent */
+  --accent-on-ink: #d4ff3a;          /* accent as text, line or bare mark on --ink (the ground, ink chips) */
+  --accent-on-paper: #4a5c00;        /* accent-deep: accent as text, line or bare mark on --paper (6.2:1) */
   --rec: #e0352b;                    /* recording and cuts ONLY */
   --rec-ink: #ffffff;                /* text on rec */
   --faint: #9a988f;                  /* secondary text on ink (>= 4.5:1) */
@@ -36,6 +46,26 @@
   --ruler-h: 28px;
   --gutter-w: 216px;      /* timeline label gutter; tracks start at x = 240 */
   --pps: 7.3;             /* timeline pixels per second at Fit (160 s = 1168 px) */
+}
+
+/* Light theme (DESIGN-SYSTEM.md section 3 "Light theme"). Set by src/theme.ts as <html data-theme="light">.
+   Same layout and type; ground and inverted panels swap. Accent fills, rec, dim stay. Every themed colour
+   token above is redefined here (pnpm design:check enforces it). */
+:root[data-theme="light"] {
+  --ink: #eceae4;                    /* ground: paper */
+  --paper: #0b0b0a;                  /* figure: ink text; inverted panels become ink */
+  --accent-on-ink: #4a5c00;          /* accent-deep on the paper ground (6.2:1) */
+  --accent-on-paper: #d4ff3a;        /* lime on the ink panels */
+  --faint: #4a4944;                  /* 7.5:1 on paper */
+  --faint-on-paper: #9a988f;         /* 6.8:1 on the ink panels */
+  --line: rgba(11, 11, 10, 0.24);
+  --line-on-paper: #eceae4;
+  --grid: rgba(11, 11, 10, 0.1);
+  --grid-on-paper: rgba(236, 234, 228, 0.12);
+  --later: #8a887f;                  /* 2.9:1 on paper, as later on ink */
+  --thumb-line: #b5b3ab;
+  --wave: #5a5953;                   /* 5.8:1 on paper */
+  color-scheme: light;
 }
 
 /* Tailwind v4: wipe the default theme so rounded-*, shadow-*, blur-*, slate/blue/etc. DO NOT EXIST.
@@ -80,7 +110,7 @@ body {
 *, *::before, *::after { box-sizing: border-box; border-radius: 0; box-shadow: none; }
 button { font: inherit; color: inherit; background: none; border: 0; padding: 0; letter-spacing: inherit; text-transform: inherit; text-align: inherit; cursor: pointer; }
 a { color: inherit; text-decoration: underline; text-underline-offset: 3px; }
-:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+:focus-visible { outline: 2px solid var(--accent-on-ink); outline-offset: 2px; }
 .on-paper :focus-visible { outline-color: var(--ink); }
 .display { font-family: var(--font-display); font-weight: 700; text-transform: none; }
 

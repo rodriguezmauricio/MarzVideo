@@ -7,7 +7,7 @@ export function tokenColors(): TokenColors {
   if (cached) return cached;
   const css = getComputedStyle(document.documentElement);
   const v = (name: string) => css.getPropertyValue(name).trim();
-  const colors = { paper: v("--paper"), ink: v("--ink"), accent: v("--accent"), rec: v("--rec") };
+  const colors = { paper: v("--brand-paper"), ink: v("--brand-ink"), accent: v("--brand-accent"), rec: v("--brand-rec") };
   if (colors.paper && colors.ink && colors.accent && colors.rec) cached = colors;
   return colors;
 }

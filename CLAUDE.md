@@ -106,6 +106,12 @@ Windows-first screen recorder + non-destructive editor (Tauri 2, Rust, React/TS)
   Checked: a real take in the app fed with synthetic speech ("Checklist test.marz": 3 topics ticked locally, 1 by Claude, 1 left
   open and flagged), encoder holds 60 fps with Whisper running beside it (`pipe-bench`). Not checked: his real mic with real
   talking, typing topics by hand, Ctrl+Shift+K pressed for real.
+- **Built on branch `claude/light-theme-310e97`, not merged:** light theme (design `docs/superpowers/specs/2026-11-19-light-theme-design.md`,
+  plan `docs/superpowers/plans/2026-11-19-light-theme.md`, DESIGN-SYSTEM.md section 3 "Light theme"). Dark (default), Light or Windows,
+  stored in `localStorage` `marz.theme`, applied in every window by `src/theme.ts`; Home strip button cycles it. Light swaps ground and
+  panels through tokens only (`:root[data-theme="light"]` in `tokens.css`); bare accent uses `--accent-on-ink` (accent-deep `#4A5C00` in light).
+  Video output reads the fixed `--brand-*` tokens and never changes. `pnpm design:check` guards both. Checked: 1440 x 900 screenshots of Home,
+  Editor (inspector, transcript, export panel, timeline) and the recorder fake pages in both themes. Not checked: the Tauri app, Windows follow mode live.
 - **Not checked by hand yet:** the owner checks in `docs/spikes/2026-11-17-owner-checks.md` (clean 3-minute run,
   flash and beep sync, clicks, static screen, mic unplug, 60 Hz, real hotkeys), plus: open New recording once and
   look at the overlay, play an export in Windows Media Player, upload one export of each preset privately and

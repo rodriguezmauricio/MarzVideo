@@ -62,6 +62,7 @@ const PATHS = {
     </>
   ),
   folder: <path d="M3 7h6l2 2h10v10H3z" />,
+  contrast: <path d="M4 4h16v16H4zM12 4v16M12 8h8M12 12h8M12 16h8" />,
   archive: <path d="M3 4h18v5H3zM5 9v11h14V9M10 13h4" />,
   fullscreen: <rect x="3" y="5" width="18" height="14" />,
   portrait: <rect x="7" y="3" width="10" height="18" />,
