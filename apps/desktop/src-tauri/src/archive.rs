@@ -625,8 +625,8 @@ fn save_dest(app: &AppHandle, dest: &Path) -> Result<(), String> {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ArchiveSettings {
-    dest: Option<String>,
-    suggested: Option<String>,
+    pub(crate) dest: Option<String>,
+    pub(crate) suggested: Option<String>,
 }
 
 #[tauri::command(async)]

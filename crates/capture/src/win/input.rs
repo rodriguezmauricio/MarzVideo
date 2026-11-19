@@ -12,7 +12,7 @@ use windows::Win32::Foundation::{LPARAM, LRESULT, POINT, WPARAM};
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::System::Threading::GetCurrentThreadId;
 use windows::Win32::UI::Input::KeyboardAndMouse::{
-    RegisterHotKey, UnregisterHotKey, HOT_KEY_MODIFIERS, MOD_CONTROL, MOD_NOREPEAT, MOD_SHIFT,
+    RegisterHotKey, UnregisterHotKey, HOT_KEY_MODIFIERS, MOD_ALT, MOD_CONTROL, MOD_NOREPEAT, MOD_SHIFT,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
     CallNextHookEx, DispatchMessageW, GetCursorPos, GetMessageW, KillTimer, PeekMessageW, PostThreadMessageW, SetTimer,
@@ -32,7 +32,8 @@ const POLL_MS: u32 = 16;
 /// Thread message: wParam 1 registers the hotkeys, 0 unregisters them.
 const WM_SET_HOTKEYS: u32 = WM_APP + 1;
 
-/// Recorder hotkeys. `Preset(n)` is 1..=9 (Ctrl+1 .. Ctrl+9), the n-th zoom preset.
+/// Recorder hotkeys. `Preset(n)` is 1..=9 (Ctrl+1 .. Ctrl+9), the n-th zoom preset. The comments
+/// name the default combos; Settings can rebind each one (`crate::hotkeys`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Hotkey {
     /// Ctrl+Shift+R
@@ -65,17 +66,22 @@ impl Hotkey {
         v
     }
 
-    /// The name shown to people, e.g. "Ctrl+Shift+R", "Ctrl+1".
+    /// The name shown to people, e.g. "Ctrl+Shift+R", "Ctrl+1" (the combo in force, see `hotkeys`).
     pub fn label(self) -> String {
+        crate::hotkeys::combo_for(&self.action()).to_string()
+    }
+
+    /// The action id used by Settings (`hotkeys::ACTIONS`): "recordStop", "preset3", "layout2".
+    pub fn action(self) -> String {
         match self {
-            Hotkey::RecordStop => "Ctrl+Shift+R".into(),
-            Hotkey::Pause => "Ctrl+Shift+P".into(),
-            Hotkey::Mute => "Ctrl+Shift+M".into(),
-            Hotkey::Preset(n) => format!("Ctrl+{n}"),
-            Hotkey::ZoomOut => "Ctrl+0".into(),
-            Hotkey::Layout(n) => format!("Ctrl+Shift+{n}"),
-            Hotkey::Draw => "Ctrl+Shift+D".into(),
-            Hotkey::Check => "Ctrl+Shift+K".into(),
+            Hotkey::RecordStop => "recordStop".into(),
+            Hotkey::Pause => "pause".into(),
+            Hotkey::Mute => "mute".into(),
+            Hotkey::Preset(n) => format!("preset{n}"),
+            Hotkey::ZoomOut => "zoomOut".into(),
+            Hotkey::Layout(n) => format!("layout{n}"),
+            Hotkey::Draw => "draw".into(),
+            Hotkey::Check => "check".into(),
         }
     }
 
@@ -97,18 +103,14 @@ impl Hotkey {
     }
 
     fn keys(self) -> (HOT_KEY_MODIFIERS, u32) {
-        let ctrl_shift = MOD_CONTROL | MOD_SHIFT | MOD_NOREPEAT;
-        let ctrl = MOD_CONTROL | MOD_NOREPEAT;
-        match self {
-            Hotkey::RecordStop => (ctrl_shift, u32::from(b'R')),
-            Hotkey::Pause => (ctrl_shift, u32::from(b'P')),
-            Hotkey::Mute => (ctrl_shift, u32::from(b'M')),
-            Hotkey::Preset(n) => (ctrl, u32::from(b'0' + n)),
-            Hotkey::ZoomOut => (ctrl, u32::from(b'0')),
-            Hotkey::Layout(n) => (ctrl_shift, u32::from(b'0' + n)),
-            Hotkey::Draw => (ctrl_shift, u32::from(b'D')),
-            Hotkey::Check => (ctrl_shift, u32::from(b'K')),
+        let c = crate::hotkeys::combo_for(&self.action());
+        let mut mods = MOD_NOREPEAT;
+        for (on, m) in [(c.ctrl, MOD_CONTROL), (c.alt, MOD_ALT), (c.shift, MOD_SHIFT)] {
+            if on {
+                mods |= m;
+            }
         }
+        (mods, c.vk())
     }
 }
 

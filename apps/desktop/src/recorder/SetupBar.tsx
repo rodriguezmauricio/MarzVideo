@@ -3,6 +3,8 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ChecklistButton, ChecklistPanel } from "../checklist/ChecklistSetup";
 import { Icon } from "../components/Icon";
+import { hotkeyNow, useHotkeys } from "../settings/hotkeyStore";
+import { matchesCombo } from "../settings/hotkeyMap";
 import { NO_FFMPEG, NO_MIC, recorderApi, type BarInfo } from "./recorderApi";
 import { useRecLive } from "./recLive";
 import { currentSetup, recordOptions, useRecorder } from "./recorderStore";
@@ -16,6 +18,7 @@ type Phase = "setup" | "starting";
 export function SetupBar({ placed = false }: { placed?: boolean }) {
   const api = recorderApi();
   const s = useRecorder();
+  const recordKey = useHotkeys((k) => k.bindings.recordStop);
   const [info, setInfo] = useState<BarInfo | null>(null);
   const [level, setLevel] = useState(0);
   const [phase, setPhase] = useState<Phase>(() => (new URLSearchParams(window.location.search).get("state") === "starting" ? "starting" : "setup"));
@@ -106,7 +109,7 @@ export function SetupBar({ placed = false }: { placed?: boolean }) {
       if (e.key === "Escape") {
         e.preventDefault();
         void api.close();
-      } else if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.code === "KeyR") {
+      } else if (matchesCombo(e, hotkeyNow("recordStop"))) {
         e.preventDefault();
         void recordRef.current();
       }
@@ -237,7 +240,7 @@ export function SetupBar({ placed = false }: { placed?: boolean }) {
           <button type="button" className={`rb-rec${phase === "starting" ? " starting" : ""}`} disabled={phase !== "setup" || blocked} onClick={() => void record()}>
             <Icon name="dot" size={16} />
             {phase === "starting" ? "Starting..." : "Record"}
-            <span className="hk">Ctrl+Shift+R</span>
+            <span className="hk">{recordKey}</span>
           </button>
         </div>
       </div>

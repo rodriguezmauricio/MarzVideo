@@ -9,6 +9,7 @@ mod export;
 mod projects;
 mod recorder;
 mod recording;
+mod settings;
 mod thumbs;
 mod transcribe;
 
@@ -27,6 +28,11 @@ pub fn run() {
         .manage(transcribe::TranscribeRun::default())
         .manage(audio::Cleaning::default())
         .manage(archive::StorageJob::default())
+        .manage(settings::SettingsMeter::default())
+        .setup(|app| {
+            settings::apply_stored_hotkeys(app.handle());
+            Ok(())
+        })
         .on_window_event(close::on_window_event)
         .invoke_handler(tauri::generate_handler![
             close::close_main,
@@ -83,6 +89,15 @@ pub fn run() {
             archive::archive_project,
             archive::remove_raw_files,
             archive::restore_raw_files,
+            settings::settings_get,
+            settings::settings_pick_folder,
+            settings::settings_reset_folder,
+            settings::settings_use_drive,
+            settings::settings_set_hotkeys,
+            settings::settings_set_onboarding,
+            settings::settings_devices,
+            settings::settings_meter,
+            settings::ai_status,
         ])
         .build(tauri::generate_context!())
         .expect("error while running Marz Recorder")

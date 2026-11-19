@@ -3,6 +3,8 @@ import { hasChecklist } from "@marz/format";
 import { ExportControl, ExportProgressLine, useExportDoneLine } from "./export/ExportStatus";
 import { useExportStore } from "./export/exportStore";
 import { Home } from "./home/Home";
+import { Onboarding } from "./settings/Onboarding";
+import { Settings } from "./settings/Settings";
 import { Icon } from "./components/Icon";
 import { Inspector } from "./components/Inspector";
 import { Preview } from "./components/Preview";
@@ -117,6 +119,8 @@ function ProxyAskBar() {
 export function App() {
   const screen = useAppStore((s) => s.screen);
   const dir = useAppStore((s) => s.dir);
+  if (screen === "settings") return <Settings />;
+  if (screen === "onboarding") return <Onboarding />;
   return screen === "editor" && dir ? <Editor key={dir} dir={dir} /> : <Home />;
 }
 

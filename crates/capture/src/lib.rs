@@ -4,6 +4,7 @@
 pub mod clock;
 pub mod events;
 pub mod ffmpeg;
+pub mod hotkeys;
 pub mod mic_timeline;
 pub mod project;
 pub mod recover;

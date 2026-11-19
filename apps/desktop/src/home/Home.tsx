@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Icon } from "../components/Icon";
 import { WarningBar } from "../components/WarningBar";
+import { matchesCombo } from "../settings/hotkeyMap";
+import { hotkeyNow, useHotkey } from "../settings/hotkeyStore";
 import { useAppStore } from "../state/appStore";
 import { pickStorage } from "../storage/pickStorage";
 import { bannerText, folderName, toRows, type ProjectRow, type RowView } from "./projectRows";
@@ -215,12 +217,13 @@ function RecoverBanner({ row, onRecover, onDiscard }: { row: ProjectRow; onRecov
 }
 
 function HeroButtons({ onNew, onOpen }: { onNew: () => void; onOpen: () => void }) {
+  const recordKey = useHotkey("recordStop");
   return (
     <div className="h-cta">
-      <button type="button" className="h-new" data-tip="New recording / Ctrl+Shift+R" onClick={onNew}>
+      <button type="button" className="h-new" data-tip={`New recording / ${recordKey}`} onClick={onNew}>
         <Icon name="dot" size={16} />
         New recording
-        <span className="h-hk">Ctrl+Shift+R</span>
+        <span className="h-hk">{recordKey}</span>
       </button>
       <button type="button" className="h-openp" onClick={onOpen}>
         <Icon name="folder" size={16} />
@@ -235,6 +238,8 @@ const TRACKS = ["Screen", "Mic", "Clicks"];
 export function Home() {
   const api = useMemo(projectsApi, []);
   const openProject = useAppStore((s) => s.openProject);
+  const openSettings = useAppStore((s) => s.openSettings);
+  const recordKey = useHotkey("recordStop");
   const [raw, setRaw] = useState<ProjectRow[] | null>(null);
   const [warning, setWarning] = useState<string | null>(null);
   /** The row whose storage bar is open (one at a time), the archive folder setting, a running step. */
@@ -272,7 +277,7 @@ export function Home() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.code === "KeyR") {
+      if (matchesCombo(e, hotkeyNow("recordStop"))) {
         e.preventDefault();
         newRecording();
       }
@@ -328,8 +333,7 @@ export function Home() {
           <i />
           Marz Recorder
         </b>
-        {/* Settings is a later milestone: drawn as in the mockup, does nothing yet. */}
-        <button type="button" className="h-settings tip-left" aria-disabled="true" data-tip="Settings come in a later version">
+        <button type="button" className="h-settings" onClick={openSettings}>
           <Icon name="gear" size={14} />
           Settings
         </button>
@@ -342,7 +346,7 @@ export function Home() {
             <br />
             yet.
           </h1>
-          <p className="h-empty-text">Press Ctrl+Shift+R from anywhere to start. Your recordings appear here, ready to edit.</p>
+          <p className="h-empty-text">Press {recordKey} from anywhere to start. Your recordings appear here, ready to edit.</p>
           <HeroButtons onNew={newRecording} onOpen={() => void openFolder()} />
           <div className="h-tracks">
             <div className="h-tracks-head">Every recording is saved as separate tracks</div>

@@ -6,6 +6,8 @@
 // While recording it shows only the 3px rec border, the dimming, the live preset (which can be
 // moved and resized) and the "Recording this region" chip.
 // Works in CSS pixels; the store keeps the region in physical pixels.
+import { matchesCombo } from "../settings/hotkeyMap";
+import { hotkeyNow } from "../settings/hotkeyStore";
 import { lockAspect } from "@marz/timeline";
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { Icon, type IconName } from "../components/Icon";
@@ -155,7 +157,7 @@ export function Overlay({ children }: { children?: ReactNode }) {
         addZoom();
       } else if (e.key === "Delete" && s.selected) {
         remove(s.selected);
-      } else if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.code === "KeyR") {
+      } else if (matchesCombo(e, hotkeyNow("recordStop"))) {
         e.preventDefault();
         api.requestRecord();
       }

@@ -106,6 +106,14 @@ Windows-first screen recorder + non-destructive editor (Tauri 2, Rust, React/TS)
   Checked: a real take in the app fed with synthetic speech ("Checklist test.marz": 3 topics ticked locally, 1 by Claude, 1 left
   open and flagged), encoder holds 60 fps with Whisper running beside it (`pipe-bench`). Not checked: his real mic with real
   talking, typing topics by hand, Ctrl+Shift+K pressed for real.
+- **Built on branch `claude/onboarding-settings-c8c378`, not merged:** onboarding and settings (design
+  `docs/superpowers/specs/2026-11-19-onboarding-settings-design.md`, plan `docs/superpowers/plans/2026-11-19-onboarding-settings.md`).
+  Home Settings button opens Settings: projects, exports and archive folders, default mic (with meter), camera and computer sound,
+  rebindable recorder hotkeys with a clash check (`crates/capture/src/hotkeys.rs`, mirrored in `apps/desktop/src/settings/hotkeyMap.ts`),
+  Whisper, models (download button) and Claude Code status, AI model, burn captions per preset, default export preset.
+  Four-screen intro on first start (skippable, "Show the intro again" in Settings). File settings in `settings.json` in the app
+  config folder via `src-tauri/src/settings.rs` (archive folder stays in `archive-settings.json`); localStorage ones via
+  `apps/desktop/src/settings/localSettings.ts`. Browser: `?settings=1`, `?onboarding=1`.
 - **Not checked by hand yet:** the owner checks in `docs/spikes/2026-11-17-owner-checks.md` (clean 3-minute run,
   flash and beep sync, clicks, static screen, mic unplug, 60 Hz, real hotkeys), plus: open New recording once and
   look at the overlay, play an export in Windows Media Player, upload one export of each preset privately and

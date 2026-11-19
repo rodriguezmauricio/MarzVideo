@@ -344,6 +344,11 @@ pub fn list_mics() -> Vec<Mic> {
     platform::mics()
 }
 
+/// Cameras for the pickers (Settings and onboarding too).
+pub(crate) fn list_cameras() -> Vec<Camera> {
+    platform::cameras()
+}
+
 /// The region clamped to the monitor and made even, or the sentence to show.
 #[tauri::command]
 pub fn check_region(state: State<'_, Recorder>, rect: Rect) -> Result<Rect, String> {
