@@ -18,6 +18,7 @@ import { setCaptionStartAt } from "./captions/captionActions";
 import { holdFrameHere } from "./vertical/verticalActions";
 import { useAppStore } from "./state/appStore";
 import { flushAutosave, useEditorStore } from "./state/editorStore";
+import { ignoredRepeat } from "./state/hotkeys";
 import { pickStorage } from "./storage/pickStorage";
 import type { SaveStatus } from "./storage/autosave";
 
@@ -168,7 +169,7 @@ function Editor({ dir }: { dir: string }) {
       } else if (mod && e.code === "KeyY") {
         e.preventDefault();
         s.redo();
-      } else if (mod || e.altKey) {
+      } else if (mod || e.altKey || ignoredRepeat(e)) {
         return;
       } else if (e.code === "Space") {
         e.preventDefault();
