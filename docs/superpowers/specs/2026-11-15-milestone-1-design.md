@@ -77,7 +77,7 @@ MyRecording.marz/
   system.wav       optional (2026-11-18): the computer's sound, 48 kHz stereo PCM, starts at t0
   camera.mp4       optional (2026-11-18): the webcam, fragmented MP4, H.264, 30 fps constant
   proxies/         optional, later
-  (later: transcript.json)
+  transcript.json  optional (M2, 2026-11-19): words from mic.wav, written only by the transcription step
 ```
 
 **Time:** every timestamp is an integer number of **microseconds since recording start** (`tUs`),
@@ -101,6 +101,25 @@ light and the last one is repeated, as for the screen. `edits.camera` is optiona
 `widthFrac` is the camera width as a share of the output width (S 0.16, M 0.22, L 0.30); `scenes` is reserved
 for timed layouts and kept as is. Preview and export draw the camera last, aspect kept, mirrored when set,
 1px paper border; zooms move the screen only. Older projects open as before; `version` stays 1.
+
+**AI editing (M2, added 2026-11-19, Mauricio's yes 2026-11-17; design `2026-11-17-milestone-2-ai-editing-design.md`):**
+- `transcript.json` is derived and regenerable, written by the transcription step only (`transcript.json.tmp`
+  then a rename), never by the editor: `{ "version": 1, "engine", "mic": { "bytes", "modifiedAt" }, "sections":
+  [ { "startUs", "endUs", "language" } ], "words": [ { "id": "w1", "text", "startUs", "endUs", "p" } ] }`. Times are
+  source time (`tracks.mic.offsetUs` added). `mic` is the size and modified time of `mic.wav` when it was made;
+  a transcript whose stamp no longer matches is made again.
+- Cuts gain `origin` (`"manual"` when absent, or `"ai"`) and `reason` (`"silence"`, `"filler"`, `"mistake"`).
+  AI cuts also carry `fromWordId` and `toWordId` (the words they cover; for a silence the words on each side,
+  `"^"` before the first word, `"$"` after the last), so a deleted one is remembered by what it covers.
+- Zoom `origin` gains `"ai"`, with `candidateId` (`k1..kN`, the click cluster it was picked from).
+- `edits.captions` (optional): `{ "overrides": { "w12": "Marz" }, "hidden": ["w40"] }`. Look and burn-in are export
+  choices, not stored.
+- `edits.ai` (optional): `{ "paceUs": 300000, "kinds": { "silences", "fillers", "mistakes", "zooms", "captions" },
+  "rejected": [ { "kind": "cut", "reason", "fromWordId", "toWordId" } | { "kind": "zoom", "candidateId" } ],
+  "lastRun": { "at", "provider", "model", "languages" }, "lastResult": { "mistakes", "contextFillers", "zooms" } }`.
+- Tolerant readers: an unknown zoom or cut `origin` reads as `"manual"`, an unknown `easing` as
+  `"easeInOutCubic"`, an unknown cut `reason` as none; the original value is written back on save unless the
+  editor changed that field. Older projects open as before; `version` stays 1.
 
 **Coordinates:** in events, pixels in the captured source frame (origin top-left). In edits,
 normalized 0–1 relative to the source frame, so edits survive resolution/proxy changes.
@@ -158,7 +177,7 @@ normalized 0–1 relative to the source frame, so edits survive resolution/proxy
 }
 ```
 
-- `origin` on a zoom is `"live"` (triggered while recording), `"auto"` (suggested) or `"manual"`.
+- `origin` on a zoom is `"live"` (triggered while recording), `"auto"` (suggested), `"manual"` or `"ai"` (M2).
 - Zoom rects keep the output aspect ratio. Cuts are in source time; the timeline maps to output time.
 - Unknown fields must be preserved on save, so an older build never destroys newer data.
 

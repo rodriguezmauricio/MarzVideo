@@ -34,6 +34,14 @@ Windows-first screen recorder + non-destructive editor (Tauri 2, Rust, React/TS)
   design `docs/superpowers/specs/2026-11-18-camera-track-design.md`). `camera.mp4` recorded on the shared clock
   (`crates/capture/src/win/camera.rs`), setup bar picker, toggle and live preview, crash recovery, Camera lane,
   picture-in-picture in preview and export, inspector Camera block. Owner clap check: `docs/spikes/2026-11-17-owner-checks.md` section 8.
+- **Done (branch `claude/ai-editing-ca47b2`, not merged yet):** M2 AI editing (plan `docs/superpowers/plans/2026-11-17-m2-ai-editing.md`,
+  design `docs/superpowers/specs/2026-11-17-milestone-2-ai-editing-design.md`, spike `docs/spikes/2026-11-19-ai-spike.md`). After Stop the
+  editor runs the AI pass: local Whisper (whisper.cpp CUDA build + VAD model) writes `transcript.json`, rules cut silences and ums,
+  Claude Code (`claude -p`, his subscription) finds mistakes and picks zooms, captions in preview and export, `.srt` beside exports.
+  Code: `packages/autoedit` (rules, AI prompt and validator, captions), `crates/transcribe`, `src-tauri/src/ai.rs` and `transcribe.rs`.
+  Whisper is looked up in `MARZ_WHISPER`, beside the exe, the app data folder `whisper` (`%APPDATA%/com.marz.recorder/whisper`), then PATH;
+  models live in the app data folder `models` (downloaded after his yes). Ran end to end on this laptop on a copy of his 19.35 take.
+  Open: his three test takes and the quality check (list at the end of the spike doc).
 - **Not checked by hand yet:** the owner checks in `docs/spikes/2026-11-17-owner-checks.md` (clean 3-minute run,
   flash and beep sync, clicks, static screen, mic unplug, 60 Hz, real hotkeys), plus: open New recording once and
   look at the overlay, play an export in Windows Media Player, upload one export of each preset privately and
@@ -63,6 +71,8 @@ pnpm test && pnpm typecheck
 cargo test --workspace
 pnpm design:check
 pnpm sync-check <folder.marz|file.mp4>
+# AI pass in the browser with the fixture provider: http://localhost:5173/?project=demo&ai=1 (Shift+E reruns)
+cargo test -p marz-transcribe -- --ignored   # real whisper run (needs the spike files in %LOCALAPPDATA%/MarzSpike)
 target/release/marz-capture record|recover   # CLI recorder (cargo build --release -p marz-capture)
 ```
 
