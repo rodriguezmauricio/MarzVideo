@@ -105,6 +105,15 @@ pub mod live {
 
     const POLL: Duration = Duration::from_millis(500);
 
+    /// Debug builds log the live pass to stderr (checks without a person at the mic).
+    macro_rules! dlog {
+        ($($t:tt)*) => {
+            if cfg!(debug_assertions) {
+                eprintln!("[checklist] {}", format!($($t)*));
+            }
+        };
+    }
+
     pub enum Source {
         /// The engine's `mic.wav`; its first sample is at the session's `mic_first_rec_us`.
         Mic(PathBuf),
@@ -149,6 +158,7 @@ pub mod live {
         let mut planner: Option<ChunkPlanner> = None;
         let mut released: i64 = 0; // feed: samples handed to the planner
         let mut kept: Vec<Word> = Vec::new();
+        dlog!("live start: {} ({})", path.display(), if feed { "feed" } else { "mic" });
         let w = LiveWhisper { whisper: &setup.whisper, model: &setup.model, vad: setup.vad.as_deref(), work: &work, prompt: &setup.prompt };
         while alive() {
             std::thread::sleep(POLL);
@@ -164,7 +174,10 @@ pub mod live {
             };
             let pcm = match wav.read_new(max_frames.min(64 * MIC_RATE as usize)) {
                 Ok(p) => p,
-                Err(_) => continue,
+                Err(e) => {
+                    dlog!("read failed: {e}");
+                    continue;
+                }
             };
             released += pcm.len() as i64;
             let Some(layout) = wav.layout() else { continue };
@@ -174,8 +187,18 @@ pub mod live {
                 if !alive() {
                     break;
                 }
-                let Some(pcm16) = chunk_for_whisper(&chunk.pcm, layout.rate) else { continue };
-                let Ok(words) = transcribe_chunk(&w, &pcm16, chunk.start_us, first, &|| !alive()) else { continue };
+                let Some(pcm16) = chunk_for_whisper(&chunk.pcm, layout.rate) else {
+                    dlog!("chunk at {} us: silence", chunk.start_us);
+                    continue;
+                };
+                let words = match transcribe_chunk(&w, &pcm16, chunk.start_us, first, &|| !alive()) {
+                    Ok(words) => words,
+                    Err(e) => {
+                        dlog!("chunk at {} us: {e}", chunk.start_us);
+                        continue;
+                    }
+                };
+                dlog!("chunk at {} us: {} words", chunk.start_us, words.len());
                 let before = kept.len();
                 append_words(&mut kept, words);
                 let new: Vec<LiveWordDto> =
@@ -189,6 +212,7 @@ pub mod live {
                 }
             }
         }
+        dlog!("live end");
         let _ = std::fs::remove_dir_all(&work);
     }
 }

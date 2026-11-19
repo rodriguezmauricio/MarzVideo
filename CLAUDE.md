@@ -88,6 +88,9 @@ Windows-first screen recorder + non-destructive editor (Tauri 2, Rust, React/TS)
   the AI pass re-checks open topics against the full transcript. `MARZ_CHECKLIST_FEED=<wav>` replaces the mic for tests.
   Code: `packages/autoedit/src/checklist.ts`, `packages/format/src/checklist.ts`, `packages/timeline/src/checklist.ts`,
   `crates/transcribe/src/live.rs`, `src-tauri/src/checklist.rs`, `apps/desktop/src/checklist`.
+  Checked: a real take in the app fed with synthetic speech ("Checklist test.marz": 3 topics ticked locally, 1 by Claude, 1 left
+  open and flagged), encoder holds 60 fps with Whisper running beside it (`pipe-bench`). Not checked: his real mic with real
+  talking, typing topics by hand, Ctrl+Shift+K pressed for real.
 - **Not checked by hand yet:** the owner checks in `docs/spikes/2026-11-17-owner-checks.md` (clean 3-minute run,
   flash and beep sync, clicks, static screen, mic unplug, 60 Hz, real hotkeys), plus: open New recording once and
   look at the overlay, play an export in Windows Media Player, upload one export of each preset privately and

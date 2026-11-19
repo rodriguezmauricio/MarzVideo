@@ -587,6 +587,9 @@ mod imp {
             session.checklist_list(&topics);
             Some(checklist_listen(app, mic, session.dir(), &topics))
         };
+        if cfg!(debug_assertions) && let Some(Err(note)) = &listen {
+            eprintln!("[checklist] not listening: {note}");
+        }
         let checklist_note = match &listen {
             Some(Err(note)) => Some(note.to_string()),
             _ => None,
@@ -647,6 +650,9 @@ mod imp {
         };
         let data = app.path().app_data_dir().map_err(|_| NOTE_NO_MODEL)?;
         let exe_dir = std::env::current_exe().ok().and_then(|p| p.parent().map(std::path::Path::to_path_buf));
+        if cfg!(debug_assertions) {
+            eprintln!("[checklist] looking for whisper beside {exe_dir:?} and in {}", data.display());
+        }
         let whisper = marz_transcribe::find_whisper(exe_dir.as_deref(), Some(&data)).ok_or(NOTE_NO_WHISPER)?;
         if !models::REQUIRED_MODELS.iter().all(|m| models::model_ok(&data, m)) {
             return Err(NOTE_NO_MODEL);
@@ -665,6 +671,9 @@ mod imp {
     pub fn checklist_tick(app: &AppHandle, id: Option<&str>, at_us: Option<i64>, by: &str) -> Result<(), String> {
         with_live(app, |l| {
             let now = l.session.rec_us().unwrap_or(0);
+            if cfg!(debug_assertions) {
+                eprintln!("[checklist] tick {id:?} at {at_us:?} by {by} (now {now})");
+            }
             if let Some((id, at)) = crate::checklist::tick(&mut l.checklist, id, at_us, by, now) {
                 l.session.checklist_tick(&id, at, by);
             }

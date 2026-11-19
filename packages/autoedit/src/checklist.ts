@@ -153,7 +153,8 @@ export function checklistPrompt(open: Topic[], words: LiveWord[]): string {
     ...timedLines(words),
     "",
     "Which open topics did the speaker actually talk about in this transcript? Count a topic only when the speaker covered it,",
-    "not when one of its words just appears. For each, give atSec: the time in seconds where they started on it.",
+    "not when one of its words just appears. For each, give atSec: the time in brackets of the line where they start",
+    "talking about it (not the start of the transcript).",
     'Answer {"covered": []} when none was covered.',
   ].join("\n");
 }

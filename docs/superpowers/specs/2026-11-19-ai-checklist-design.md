@@ -80,3 +80,17 @@ Escalation to Claude Code (the existing provider, `claude -p` on his subscriptio
 ## Not in this version
 
 Reordering or editing topics in the editor, more than 12 topics, ticking a chosen topic by hand while recording (the hotkey ticks the next open one), timeline markers for topics.
+
+## Checked (2026-11-19, this laptop)
+
+- Unit tests for every pure part (topics, matcher, Claude prompt and answer check, rate limit, growing WAV reader, chunk planner, tick rules, import, editor commands, AI pass transcript match).
+- Real Whisper through the live chunker on 85 s of Windows synthetic speech: about 1.8 s per 7 s chunk on the GPU, silence chunks skipped.
+- Real recording in the Tauri app (debug copy, speech fed by `MARZ_CHECKLIST_FEED`): "Pricing page", "Refunds and cancellations" and "Export button" ticked by the local match 5 to 7 s after they were said, "Data privacy" (said as "a word about your data") ticked by Claude, "Keyboard shortcuts" stayed open. `checklist` lines in `events.jsonl`; the editor opened on the Checklist tab with "Keyboard shortcuts" flagged "Not covered". Project "Checklist test.marz".
+- 60 fps: `pipe-bench` holds 60.02 fps at 1920 x 1080 and 2560 x 1440 with Whisper running non-stop beside it (more write jitter at 1440p).
+
+## Not checked
+
+- His real mic: the feed replaces the mic file; reading the growing `mic.wav` is only unit-tested (a file that grows while read, shared access) and the time base (`mic first sample + n / 48 kHz`) only reasoned. Needs one take where he talks.
+- A real screen recording at 60 fps with the checklist on (the frame-rate check used synthetic frames, see above).
+- Typing topics by hand in the setup panel, Esc in the panel, and Ctrl+Shift+K pressed for real (the hotkey path is the same as the other recorder keys, not pressed here).
+- Claude's time for an AI tick can be early: it said 31.5 s for a topic started at about 42 s. The prompt now asks for the time of the line where the topic starts; not re-run.
