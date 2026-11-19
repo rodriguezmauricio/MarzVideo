@@ -2,6 +2,7 @@
 
 mod ai;
 mod audio;
+mod checklist;
 mod close;
 mod export;
 mod projects;
@@ -21,6 +22,7 @@ pub fn run() {
         .manage(export::Exports::default())
         .manage(close::Closing::default())
         .manage(ai::AiRun::default())
+        .manage(checklist::ChecklistAi::default())
         .manage(transcribe::TranscribeRun::default())
         .manage(audio::Cleaning::default())
         .on_window_event(close::on_window_event)
@@ -54,6 +56,8 @@ pub fn run() {
             recording::recording_state,
             recording::toggle_draw,
             recording::draw_op,
+            checklist::checklist_tick,
+            checklist::checklist_ai,
             export::pick_export_path,
             export::export_begin,
             export::export_chunk,
@@ -78,6 +82,7 @@ pub fn run() {
             if let tauri::RunEvent::Exit = event {
                 app.state::<export::Exports>().cancel_all();
                 ai::ai_cancel(app.state::<ai::AiRun>());
+                checklist::cancel_ai(&app.state::<checklist::ChecklistAi>());
             }
         });
 }

@@ -9,3 +9,4 @@ export * from "./reframe";
 export * from "./vertical";
 export * from "./drawings";
 export * from "./cursor";
+export * from "./checklist";

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { hasChecklist } from "@marz/format";
 import { ExportControl, ExportProgressLine, useExportDoneLine } from "./export/ExportStatus";
 import { useExportStore } from "./export/exportStore";
 import { Home } from "./home/Home";
@@ -182,7 +183,8 @@ function Editor({ dir }: { dir: string }) {
       else if (e.code === "KeyF") holdFrameHere();
       else if (e.code === "KeyE" && e.shiftKey) void startAiPass();
       // Captions editor (DESIGN-SYSTEM.md Inspector, "Tabs" and "Transcript panel").
-      else if (e.code === "KeyT" && s.words.length > 0) s.setInspectorTab(s.inspectorTab === "edit" ? "transcript" : "edit");
+      else if (e.code === "KeyT" && s.words.length > 0) s.setInspectorTab(s.inspectorTab === "transcript" ? "edit" : "transcript");
+      else if (e.code === "KeyK" && s.project && hasChecklist(s.project)) s.setInspectorTab(s.inspectorTab === "checklist" ? "edit" : "checklist");
       else if (e.code === "KeyS" && s.selection?.kind === "word") setCaptionStartAt(s.selection.id, true);
       else if (e.code === "KeyJ" && s.selection?.kind === "word") setCaptionStartAt(s.selection.id, false);
       else if (e.code === "Enter" && s.selection?.kind === "word" && s.inspectorTab === "transcript") {

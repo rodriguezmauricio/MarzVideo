@@ -133,6 +133,7 @@ const PATHS = {
     </>
   ),
   check: <path d="M5 12.5l4.5 4.5L19 7" />,
+  list: <path d="M4 6h3v3H4zM4 15h3v3H4zM11 7.5h9M11 16.5h9" />,
   pen: <path d="M4 20l1.5-5L16 4.5l3.5 3.5L9 18.5zM14 6.5l3.5 3.5" />,
   highlight: <path d="M8 15l8.5-11L20 7 9 15.5zM8 15l-1 4h4l-2-3.5M4 21h16" />,
   arrow: <path d="M5 19L18 6M10 5h9v9" />,

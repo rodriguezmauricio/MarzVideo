@@ -81,6 +81,11 @@ function buildEvents(durationSec: number): string {
   lines.push({ tUs: at(0.45), type: "draw", op: "clear" });
   lines.push({ tUs: at(0.75), type: "draw", op: "remove", id: "s6" });
   lines.push({ tUs: at(0.85), type: "draw", op: "clear" });
+  // AI checklist: four topics, two ticked live (one by hand), two left open.
+  const topics = ["Pricing page", "Refunds and cancellations", "Show the export button", "Annual plan discount"];
+  lines.push({ tUs: 0, type: "checklist", op: "list", items: topics.map((text, i) => ({ id: `c${i + 1}`, text })) });
+  lines.push({ tUs: at(0.3), type: "checklist", op: "tick", id: "c1", atUs: at(0.25), by: "auto" });
+  lines.push({ tUs: at(0.6), type: "checklist", op: "tick", id: "c3", atUs: at(0.6), by: "hand" });
   lines.sort((a, b) => ((a as any).tUs ?? -1) - ((b as any).tUs ?? -1));
   return lines.map((l) => JSON.stringify(l)).join("\n") + "\n";
 }

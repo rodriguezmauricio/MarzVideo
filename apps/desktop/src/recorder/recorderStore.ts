@@ -1,6 +1,7 @@
 // Recorder setup state: mode, region, zoom presets, mic and cursor. Persisted to localStorage per
 // monitor so the last setup comes back. The overlay and the bar are two windows of the same
 // origin; each keeps its own store and reloads it when the other one saves (`storage` event).
+import { splitTopics } from "@marz/format";
 import { lockAspect } from "@marz/timeline";
 import { create } from "zustand";
 import { OUTPUT_ASPECT, type NormRect, type PxRect } from "./regionMath";
@@ -27,6 +28,8 @@ export type Setup = {
   cameraId: string | null;
   /** Record the camera into `camera.mp4`. Off by default. */
   cameraOn: boolean;
+  /** The AI checklist as typed: one topic per line. */
+  checklist: string;
 };
 
 export const MAX_PRESETS = 9;
@@ -47,6 +50,7 @@ export function defaultSetup(m: Monitor): Setup {
     systemAudio: false,
     cameraId: null,
     cameraOn: false,
+    checklist: "",
   };
 }
 
@@ -87,6 +91,7 @@ export function loadSetup(storage: Storage, m: Monitor): Setup {
       systemAudio: o.systemAudio === true,
       cameraId: typeof o.cameraId === "string" ? o.cameraId : null,
       cameraOn: o.cameraOn === true,
+      checklist: typeof o.checklist === "string" ? o.checklist : "",
     };
   } catch {
     return fallback;
@@ -140,6 +145,7 @@ const pick = (s: Setup): Setup => ({
   systemAudio: s.systemAudio,
   cameraId: s.cameraId,
   cameraOn: s.cameraOn,
+  checklist: s.checklist,
 });
 
 export const useRecorder = create<State>((set, get) => ({
@@ -175,6 +181,8 @@ export type RecordOptions = {
   cameraId: string | null;
   cursorHidden: boolean;
   presets: Preset[];
+  /** The AI checklist topics (recording.rs `RecordOptionsDto.checklist`). */
+  checklist: string[];
 };
 
 /** The session preset id for a setup preset ("1" -> "p1"); Ctrl+n zooms into "pn". */
@@ -195,5 +203,6 @@ export function recordOptions(s: Setup, m: Monitor): RecordOptions {
     presets: [...s.presets]
       .sort((a, b) => a.id.localeCompare(b.id))
       .map((p) => ({ id: sessionPresetId(p.id), name: p.name, rect: lockAspect(p.rect, OUTPUT_ASPECT, source) })),
+    checklist: splitTopics(s.checklist),
   };
 }

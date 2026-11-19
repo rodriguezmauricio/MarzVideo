@@ -5,3 +5,4 @@ export * from "./audio";
 export * from "./vertical";
 export * from "./drawings";
 export * from "./cursor";
+export * from "./checklist";

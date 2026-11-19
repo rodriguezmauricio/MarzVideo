@@ -1,4 +1,6 @@
 import { AudioBlock } from "./AudioBlock";
+import { hasChecklist } from "@marz/format";
+import { ChecklistPanel } from "../checklist/ChecklistPanel";
 import { CursorBlock, CursorInspector } from "./CursorPanel";
 import { useEffect, useState } from "react";
 import { aiEdits, BORDER_COLOR_NAMES, cursorKind, cursorSections, drawingStrokes, STROKE_COLORS, strokeWidths, type Stroke, type StrokeColor, cameraBorder, cameraEdits, cameraScenes, captionEdits, LAYOUT_KINDS, PIP_CORNERS, PIP_SIZES, type BorderColor, type Corner, type Cut, type PipShape, type Project, type Scene, type Word, type Zoom } from "@marz/format";
@@ -554,7 +556,8 @@ export function Inspector({ compact = false }: { compact?: boolean }) {
   const curSec = selection?.kind === "cursor" ? cursorSections(project).find((x) => x.id === selection.id) : undefined;
   const tab = useEditorStore((s) => s.inspectorTab);
   const setTab = useEditorStore((s) => s.setInspectorTab);
-  const tabs = words.length > 0;
+  const checklist = hasChecklist(project);
+  const tabs = words.length > 0 || checklist;
 
   const edit = zoom ? (
         <ZoomInspector zoom={zoom} title={zoomLabels(project.edits.zooms).get(zoom.id) ?? "Zoom"} durationUs={project.durationUs} />
@@ -584,6 +587,8 @@ export function Inspector({ compact = false }: { compact?: boolean }) {
         </div>
       );
 
+  // A tab whose content is gone (no transcript, no checklist) shows Edit.
+  const shown = (tab === "transcript" && words.length === 0) || (tab === "checklist" && !checklist) ? "edit" : tab;
   if (!tabs)
     return (
       <aside className="insp on-paper" aria-label="Inspector">
@@ -593,21 +598,24 @@ export function Inspector({ compact = false }: { compact?: boolean }) {
   return (
     <aside className="insp insp-tabbed on-paper" aria-label="Inspector">
       {/* Edit and Transcript tabs (DESIGN-SYSTEM.md Inspector, "Tabs"). */}
-      <div className="insp-tabs" role="tablist" aria-label="Inspector view">
+      <div className={`insp-tabs${words.length > 0 && checklist ? " three" : ""}`} role="tablist" aria-label="Inspector view">
         {(
           [
-            ["edit", "Edit", "cursor"],
-            ["transcript", "Transcript", "captions"],
+            ["edit", "Edit", "cursor", words.length > 0 ? "T" : "K", true],
+            ["transcript", "Transcript", "captions", "T", words.length > 0],
+            ["checklist", "Checklist", "list", "K", checklist],
           ] as const
-        ).map(([id, label, icon]) => (
-          <button key={id} type="button" role="tab" aria-selected={tab === id} className={tab === id ? "on" : ""} data-tip={`${label} / T`} onClick={() => setTab(id)}>
-            <Icon name={icon} size={14} />
-            {label}
-            <span className="tab-key">T</span>
-          </button>
-        ))}
+        )
+          .filter((t) => t[4])
+          .map(([id, label, icon, key]) => (
+            <button key={id} type="button" role="tab" aria-selected={shown === id} className={shown === id ? "on" : ""} data-tip={`${label} / ${key}`} onClick={() => setTab(id)}>
+              <Icon name={icon} size={14} />
+              {label}
+              <span className="tab-key">{key}</span>
+            </button>
+          ))}
       </div>
-      <div className="insp-body">{tab === "transcript" ? <TranscriptPanel /> : edit}</div>
+      <div className="insp-body">{shown === "transcript" ? <TranscriptPanel /> : shown === "checklist" ? <ChecklistPanel /> : edit}</div>
     </aside>
   );
 }

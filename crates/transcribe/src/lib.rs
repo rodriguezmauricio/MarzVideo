@@ -2,6 +2,7 @@
 //! `transcript.json` in the project folder. The raw `mic.wav` is only read; Whisper gets a 16 kHz
 //! copy in a temp folder.
 
+pub mod live;
 pub mod models;
 pub mod run;
 pub mod sections;

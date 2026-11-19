@@ -78,6 +78,16 @@ Windows-first screen recorder + non-destructive editor (Tauri 2, Rust, React/TS)
   click effects per section, click effects Ripple, Pulse, Ring with token colour and size, in preview and export.
   Code: `packages/format/src/cursor.ts`, `packages/timeline/src/cursor.ts`, `packages/compositor/src/cursor.ts` and `cursorShapes.ts`,
   `crates/capture/src/win/cursor.rs`, `apps/desktop/src/components/CursorPanel.tsx`.
+- **Built on branch `claude/ai-checklist-b03ab4` (2026-11-19, not merged):** AI checklist (design
+  `docs/superpowers/specs/2026-11-19-ai-checklist-design.md`, plan `docs/superpowers/plans/2026-11-19-ai-checklist.md`).
+  Topics typed on the setup bar (Checklist panel), a capture-excluded overlay panel ticks them while he talks: the growing
+  `mic.wav` is read in 6 s chunks (1 s overlap, silence skipped) and run through the same whisper.cpp at below-normal priority,
+  the overlay page matches the words locally (keywords, stems, typos) and asks Claude Code (haiku, text only, at most once a
+  minute) about topics still open. Ctrl+Shift+K ticks the next topic by hand. `checklist` lines in `events.jsonl`,
+  `edits.checklist` in `project.json`, inspector Checklist tab (K) that opens after Stop when a topic is open, Mark here / Clear,
+  the AI pass re-checks open topics against the full transcript. `MARZ_CHECKLIST_FEED=<wav>` replaces the mic for tests.
+  Code: `packages/autoedit/src/checklist.ts`, `packages/format/src/checklist.ts`, `packages/timeline/src/checklist.ts`,
+  `crates/transcribe/src/live.rs`, `src-tauri/src/checklist.rs`, `apps/desktop/src/checklist`.
 - **Not checked by hand yet:** the owner checks in `docs/spikes/2026-11-17-owner-checks.md` (clean 3-minute run,
   flash and beep sync, clicks, static screen, mic unplug, 60 Hz, real hotkeys), plus: open New recording once and
   look at the overlay, play an export in Windows Media Player, upload one export of each preset privately and

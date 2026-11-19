@@ -78,6 +78,19 @@ describe("recordOptions", () => {
     systemAudio: true,
     cameraId: "cam",
     cameraOn: true,
+    checklist: "  Pricing page\n\nRefunds  ",
+  });
+
+  it("sends the checklist as topics, and reads older saved setups as empty", () => {
+    expect(recordOptions(setup("region"), MON).checklist).toEqual(["Pricing page", "Refunds"]);
+    expect(recordOptions({ ...setup("region"), checklist: " \n " }, MON).checklist).toEqual([]);
+    const st = new Map<string, string>();
+    const storage = { getItem: (k: string) => st.get(k) ?? null, setItem: (k: string, v: string) => void st.set(k, v) } as unknown as Storage;
+    saveSetup(storage, MON, setup("region"));
+    expect(loadSetup(storage, MON).checklist).toBe("  Pricing page\n\nRefunds  ");
+    const { checklist: _drop, ...older } = setup("region");
+    st.set(setupKey(MON), JSON.stringify(older));
+    expect(loadSetup(storage, MON).checklist).toBe("");
   });
 
   it("sends the camera only when it is on, and reads older saved setups as off", () => {

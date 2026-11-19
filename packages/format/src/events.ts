@@ -43,6 +43,18 @@ const DrawEventSchema = z.discriminatedUnion("op", [
   z.object({ ...Base, type: z.literal("draw"), op: z.literal("remove"), id: z.string() }),
   z.object({ ...Base, type: z.literal("draw"), op: z.literal("clear") }),
 ]);
+/** AI checklist: `list` once at the start (the topics), `tick` when a topic was covered (`atUs`). */
+const ChecklistEventSchema = z.discriminatedUnion("op", [
+  z.object({ ...Base, type: z.literal("checklist"), op: z.literal("list"), items: z.array(z.object({ id: z.string(), text: z.string() })) }),
+  z.object({
+    ...Base,
+    type: z.literal("checklist"),
+    op: z.literal("tick"),
+    id: z.string(),
+    atUs: z.number().int(),
+    by: z.enum(["auto", "ai", "hand"]),
+  }),
+]);
 const PauseSchema = z.object({ ...Base, type: z.literal("pause") });
 const ResumeSchema = z.object({ ...Base, type: z.literal("resume") });
 
@@ -53,6 +65,7 @@ const KNOWN = {
   zoom: ZoomEventSchema,
   layout: LayoutEventSchema,
   draw: DrawEventSchema,
+  checklist: ChecklistEventSchema,
   pause: PauseSchema,
   resume: ResumeSchema,
 } as const;
@@ -64,9 +77,10 @@ export type ClickEvent = z.infer<typeof ClickSchema>;
 export type ZoomEvent = z.infer<typeof ZoomEventSchema>;
 export type LayoutEvent = z.infer<typeof LayoutEventSchema>;
 export type DrawEvent = z.infer<typeof DrawEventSchema>;
+export type ChecklistEvent = z.infer<typeof ChecklistEventSchema>;
 export type PauseEvent = z.infer<typeof PauseSchema>;
 export type ResumeEvent = z.infer<typeof ResumeSchema>;
-export type MarzEvent = CursorEvent | CursorShapeEvent | ClickEvent | ZoomEvent | LayoutEvent | DrawEvent | PauseEvent | ResumeEvent;
+export type MarzEvent = CursorEvent | CursorShapeEvent | ClickEvent | ZoomEvent | LayoutEvent | DrawEvent | ChecklistEvent | PauseEvent | ResumeEvent;
 
 export function parseEvents(text: string): { header: EventsHeader; events: MarzEvent[] } {
   const lines = text.split(/\r?\n/).filter((l) => l.trim() !== "");

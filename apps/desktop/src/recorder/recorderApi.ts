@@ -2,13 +2,28 @@
 // with sample data for design checks (no Tauri, nothing persisted).
 import { invoke } from "@tauri-apps/api/core";
 import { emitTo, listen } from "@tauri-apps/api/event";
+import type { LiveWord } from "@marz/autoedit";
 import type { NormRect, PxRect } from "./regionMath";
 import type { Monitor, RecordOptions } from "./recorderStore";
 
 export type Mic = { id: string; name: string; default: boolean };
 /** `recorder://state` from Rust (recording.rs `RecState`). `activePreset` is a session id ("p1"). */
-export type RecState = { recording: boolean; paused: boolean; muted: boolean; mic: boolean; activePreset: string | null; recUs: number; drawing: boolean };
-export const IDLE: RecState = { recording: false, paused: false, muted: false, mic: false, activePreset: null, recUs: 0, drawing: false };
+export type RecState = {
+  recording: boolean;
+  paused: boolean;
+  muted: boolean;
+  mic: boolean;
+  activePreset: string | null;
+  recUs: number;
+  drawing: boolean;
+  /** The AI checklist topics and their ticks (empty: no checklist). */
+  checklist: CheckItem[];
+  /** Why topics cannot tick by listening ("No microphone"), or null. */
+  checklistNote: string | null;
+};
+/** One checklist topic (checklist.rs `CheckItem`); `atUs` is recording time, null while open. */
+export type CheckItem = { id: string; text: string; atUs: number | null; by: string | null };
+export const IDLE: RecState = { recording: false, paused: false, muted: false, mic: false, activePreset: null, recUs: 0, drawing: false, checklist: [], checklistNote: null };
 /** A finished live stroke as the engine logs it: points and width in physical pixels from the monitor's top-left. */
 export type LiveStroke = { tool: string; color: string; width: number; points: [number, number][]; text?: string };
 /** One live drawing change (recording.rs `DrawOpDto`). */
@@ -61,6 +76,12 @@ export interface RecorderApi {
   drawOp(op: DrawOp): void;
   /** Start dragging the bar window (a press on its empty parts). */
   dragBar(): void;
+  /** Tick a checklist topic (null: the next open one) at a recording time (null: now). */
+  checklistTick(id: string | null, atUs: number | null, by: "auto" | "ai" | "hand"): Promise<void>;
+  /** Ask Claude Code which topics a transcript covered (text only). Rejects with `{ kind }`. */
+  checklistAi(prompt: string, schema: string): Promise<string>;
+  /** Words from the live transcription (overlay window). */
+  onChecklistWords(cb: (words: LiveWord[]) => void): () => void;
   /** Stop: Rust closes the recorder and opens the project in the main window. */
   stop(): Promise<void>;
   /** Bar to overlay: show (true) or release (false) the setup camera preview. Resolves once the
@@ -119,6 +140,9 @@ function tauriApi(): RecorderApi {
     hits: (rects, grab) =>
       void invoke("overlay_hits", { rects: rects.map((r) => ({ x: px(r.x), y: px(r.y), w: px(r.w), h: px(r.h) })), grab }).catch(() => undefined),
     dragBar: () => void invoke("drag_bar").catch(() => undefined),
+    checklistTick: (id, atUs, by) => invoke<void>("checklist_tick", { id, atUs, by }),
+    checklistAi: (prompt, schema) => invoke<string>("checklist_ai", { prompt, schema }),
+    onChecklistWords: (cb) => unlistenLater(listen<{ words: LiveWord[] }>("checklist://words", (e) => cb(e.payload.words))),
     toggleDraw: (on) => invoke<void>("toggle_draw", { on: on ?? null }),
     drawOp: (op) => void invoke("draw_op", { op }).catch(() => undefined),
     stop: () => invoke<string>("stop_recording").then(() => undefined),
@@ -153,14 +177,35 @@ function tauriApi(): RecorderApi {
 export const FAKE_MONITOR: Monitor = { index: 0, name: "Fake display", x: 0, y: 0, width: 2880, height: 1800, scale: 2 };
 
 /** Fake recording state (`?fake&state=recording`): the mockup's 02:41 with "Cart total" live. */
-const FAKE_RECORDING: RecState = { recording: true, paused: false, muted: false, mic: true, activePreset: "p1", recUs: 161_000_000, drawing: false };
+const FAKE_RECORDING: RecState = {
+  recording: true,
+  paused: false,
+  muted: false,
+  mic: true,
+  activePreset: "p1",
+  recUs: 161_000_000,
+  drawing: false,
+  checklist: [],
+  checklistNote: null,
+};
+
+/** `?fake&state=recording&checklist`: two topics ticked, two open (`&note=` sets the note). */
+export const FAKE_CHECKLIST: CheckItem[] = [
+  { id: "c1", text: "Pricing page", atUs: 38_100_000, by: "auto" },
+  { id: "c2", text: "Refunds and cancellations", atUs: 96_400_000, by: "ai" },
+  { id: "c3", text: "Show the export button", atUs: null, by: null },
+  { id: "c4", text: "Annual plan discount for teams with more than ten seats", atUs: null, by: null },
+];
 
 function fakeApi(): RecorderApi {
   const p = params();
   const error = p.get("error");
   const record = new EventTarget();
   // `?fake&state=recording&draw` starts in draw mode (design check of the tool strip).
-  let rec: RecState = p.get("state") === "recording" ? { ...FAKE_RECORDING, drawing: p.has("draw") } : IDLE;
+  let rec: RecState =
+    p.get("state") === "recording"
+      ? { ...FAKE_RECORDING, drawing: p.has("draw"), checklist: p.has("checklist") ? FAKE_CHECKLIST : [], checklistNote: p.get("note") }
+      : IDLE;
   const states = new EventTarget();
   const set = async (patch: Partial<RecState>) => {
     rec = { ...rec, ...patch };
@@ -207,6 +252,12 @@ function fakeApi(): RecorderApi {
     setPresetRect: async () => undefined,
     hits: () => undefined,
     dragBar: () => undefined,
+    checklistTick: async (id) => {
+      const at = rec.checklist.find((i) => (id === null ? i.atUs === null : i.id === id && i.atUs === null));
+      if (at) await set({ checklist: rec.checklist.map((i) => (i === at ? { ...i, atUs: rec.recUs, by: "hand" } : i)) });
+    },
+    checklistAi: () => Promise.reject({ kind: "notInstalled" }),
+    onChecklistWords: () => () => undefined,
     toggleDraw: (on) => set({ drawing: on ?? !rec.drawing }),
     drawOp: () => undefined,
     stop: async () => undefined,

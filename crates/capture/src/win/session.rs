@@ -758,6 +758,36 @@ impl Session {
         self.log(|l| l.draw_remove(t, id));
     }
 
+    /// Recording time now, pauses excluded, also while paused (the time of the pause). None before t0.
+    fn rec_us_any(&self) -> Option<i64> {
+        let now = qpc_hns();
+        self.clock.lock().ok().and_then(|g| g.as_ref().map(|c| c.duration_us(now)))
+    }
+
+    /// The checklist topics (a `list` line). Call once, right after the start.
+    pub fn checklist_list(&self, items: &[crate::events::ChecklistTopic]) {
+        let Some(t) = self.rec_us_any() else { return };
+        self.log(|l| l.checklist_list(t, items));
+    }
+
+    /// Topic `id` was covered at `at_us` (recording time); `by` is one of `events::CHECKLIST_BY`.
+    /// Works while paused (the tick gets the pause time).
+    pub fn checklist_tick(&self, id: &str, at_us: i64, by: &str) {
+        let Some(t) = self.rec_us_any() else { return };
+        self.log(|l| l.checklist_tick(t, id, at_us, by));
+    }
+
+    /// Recording time now, pauses excluded (the clock stands still while paused).
+    pub fn rec_us(&self) -> Option<i64> {
+        self.rec_us_any()
+    }
+
+    /// Recording time of the first sample in `mic.wav`; None without a mic or before it delivered.
+    /// File sample n is at `first + n / 48 kHz` (the mic drops samples while paused).
+    pub fn mic_first_rec_us(&self) -> Option<i64> {
+        self.mic_sh.as_ref().and_then(|m| m.first_rec_us())
+    }
+
     /// Every stroke on screen goes. Also call it just before a pause (the clock stops then).
     pub fn draw_clear(&self) {
         let Some(t) = self.rec_us_now() else { return };
