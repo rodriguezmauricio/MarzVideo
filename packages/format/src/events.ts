@@ -20,6 +20,22 @@ const ClickSchema = z.object({
 });
 const ZoomEventSchema = z.object({ ...Base, type: z.literal("zoom"), presetId: z.string(), action: z.enum(["in", "out"]) });
 const LayoutEventSchema = z.object({ ...Base, type: z.literal("layout"), layout: z.enum(["pip", "side", "camera", "screen"]) });
+const DrawPoint = z.tuple([z.number(), z.number()]);
+/** Live drawing: `add` when a stroke is finished (`startUs` is the press), `remove` (eraser), `clear`. */
+const DrawEventSchema = z.discriminatedUnion("op", [
+  z.object({
+    ...Base,
+    type: z.literal("draw"),
+    op: z.literal("add"),
+    id: z.string(),
+    startUs: z.number().int(),
+    stroke: z
+      .object({ tool: z.string(), color: z.string(), width: z.number(), points: z.array(DrawPoint), text: z.string().optional() })
+      .passthrough(),
+  }),
+  z.object({ ...Base, type: z.literal("draw"), op: z.literal("remove"), id: z.string() }),
+  z.object({ ...Base, type: z.literal("draw"), op: z.literal("clear") }),
+]);
 const PauseSchema = z.object({ ...Base, type: z.literal("pause") });
 const ResumeSchema = z.object({ ...Base, type: z.literal("resume") });
 
@@ -28,6 +44,7 @@ const KNOWN = {
   click: ClickSchema,
   zoom: ZoomEventSchema,
   layout: LayoutEventSchema,
+  draw: DrawEventSchema,
   pause: PauseSchema,
   resume: ResumeSchema,
 } as const;
@@ -37,9 +54,10 @@ export type CursorEvent = z.infer<typeof CursorSchema>;
 export type ClickEvent = z.infer<typeof ClickSchema>;
 export type ZoomEvent = z.infer<typeof ZoomEventSchema>;
 export type LayoutEvent = z.infer<typeof LayoutEventSchema>;
+export type DrawEvent = z.infer<typeof DrawEventSchema>;
 export type PauseEvent = z.infer<typeof PauseSchema>;
 export type ResumeEvent = z.infer<typeof ResumeSchema>;
-export type MarzEvent = CursorEvent | ClickEvent | ZoomEvent | LayoutEvent | PauseEvent | ResumeEvent;
+export type MarzEvent = CursorEvent | ClickEvent | ZoomEvent | LayoutEvent | DrawEvent | PauseEvent | ResumeEvent;
 
 export function parseEvents(text: string): { header: EventsHeader; events: MarzEvent[] } {
   const lines = text.split(/\r?\n/).filter((l) => l.trim() !== "");

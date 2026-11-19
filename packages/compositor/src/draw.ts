@@ -1,6 +1,7 @@
 import type { Box } from "./camera";
 import { coverCrop } from "./layout";
 import type { FrameSpec } from "./frame";
+import { drawStrokes, type DrawLayer } from "./drawings";
 
 type Ctx = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
 
@@ -21,13 +22,22 @@ export type CameraLayer = {
 };
 
 /** Draw one frame: the cropped source scaled to `out` (into the layout's screen box, see
- *  `frameAt`), then the cursor sprite, then the camera. Same code for preview and export. */
-export function drawFrame(ctx: Ctx, source: CanvasImageSource, spec: FrameSpec, out: { width: number; height: number }, camera?: CameraLayer | null): void {
+ *  `frameAt`), then the live drawing strokes, the cursor sprite, then the camera. Same code for
+ *  preview and export. */
+export function drawFrame(
+  ctx: Ctx,
+  source: CanvasImageSource,
+  spec: FrameSpec,
+  out: { width: number; height: number },
+  camera?: CameraLayer | null,
+  drawings?: DrawLayer | null,
+): void {
   const { sx, sy, sw, sh } = spec.srcRect;
   const { dx, dy, dw, dh } = spec.dstRect;
   ctx.fillStyle = "#000000";
   ctx.fillRect(0, 0, out.width, out.height);
   ctx.drawImage(source, sx, sy, sw, sh, dx, dy, dw, dh);
+  if (drawings) drawStrokes(ctx, drawings.items, spec, drawings.colors, drawings.family);
   if (spec.cursor) drawCursor(ctx, spec.cursor, out);
   if (camera) drawCamera(ctx, camera);
 }
