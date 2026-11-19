@@ -1,12 +1,15 @@
-import { cameraScenes, type Cut, type Zoom } from "@marz/format";
+import { cameraScenes, cursorKind, cursorSections, type Cut, type Zoom } from "@marz/format";
 import {
+  addCursorSection,
   addCut,
   addScene,
   addZoom,
   lockAspect,
+  removeCursorSection,
   removeCut,
   removeHold,
   removeScene,
+  removeStroke,
   removeZoom,
   replaceAutoZooms,
   suggestZooms,
@@ -57,6 +60,17 @@ export function addLayoutAtPlayhead(): void {
   if (cameraScenes(useEditorStore.getState().project!).some((s) => s.id === id)) select({ kind: "layout", id });
 }
 
+/** H: a 4 s "Cursor off" block at the playhead, in the free time after it ("No clicks" for a recording
+ *  with the cursor in the picture, which cannot hide it). */
+export function addCursorBlockAtPlayhead(): void {
+  const { project, playheadUs, apply, select } = useEditorStore.getState();
+  if (!project) return;
+  const id = newId("cursor");
+  const baked = cursorKind(project) === "baked";
+  apply(addCursorSection({ id, startUs: playheadUs, endUs: playheadUs + 4_000_000, hide: !baked, clicks: false }));
+  if (cursorSections(useEditorStore.getState().project!).some((s) => s.id === id)) select({ kind: "cursor", id });
+}
+
 export function runAutoZoom(): void {
   const { project, events, apply } = useEditorStore.getState();
   if (!project) return;
@@ -71,11 +85,15 @@ export function deleteSelection(): void {
   apply(
     selection.kind === "frame"
       ? removeHold(selection.id)
-      : selection.kind === "layout"
-        ? removeScene(selection.id)
-        : selection.kind === "zoom"
-          ? removeZoom(selection.id)
-          : removeCut(selection.id),
+      : selection.kind === "cursor"
+        ? removeCursorSection(selection.id)
+        : selection.kind === "layout"
+          ? removeScene(selection.id)
+          : selection.kind === "drawing"
+            ? removeStroke(selection.id)
+            : selection.kind === "zoom"
+              ? removeZoom(selection.id)
+              : removeCut(selection.id),
   );
   select(null);
 }

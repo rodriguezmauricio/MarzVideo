@@ -21,6 +21,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
     WM_TIMER,
 };
 
+use super::cursor::ShapeReader;
 use super::qpc::qpc_hns;
 use super::{rec_hns, set_dpi_awareness, SharedClock, Warnings};
 use crate::events::{Button, EventLog};
@@ -46,6 +47,8 @@ pub enum Hotkey {
     ZoomOut,
     /// Ctrl+Shift+1 .. Ctrl+Shift+4: camera layout n (`events::LAYOUTS[n - 1]`).
     Layout(u8),
+    /// Ctrl+Shift+D: enter or leave draw mode.
+    Draw,
 }
 
 impl Hotkey {
@@ -55,6 +58,7 @@ impl Hotkey {
         v.extend((1..=9).map(Hotkey::Preset));
         v.push(Hotkey::ZoomOut);
         v.extend((1..=4).map(Hotkey::Layout));
+        v.push(Hotkey::Draw);
         v
     }
 
@@ -67,6 +71,7 @@ impl Hotkey {
             Hotkey::Preset(n) => format!("Ctrl+{n}"),
             Hotkey::ZoomOut => "Ctrl+0".into(),
             Hotkey::Layout(n) => format!("Ctrl+Shift+{n}"),
+            Hotkey::Draw => "Ctrl+Shift+D".into(),
         }
     }
 
@@ -78,6 +83,7 @@ impl Hotkey {
             Hotkey::Preset(n) => 3 + i32::from(n),
             Hotkey::ZoomOut => 13,
             Hotkey::Layout(n) => 13 + i32::from(n),
+            Hotkey::Draw => 18,
         }
     }
 
@@ -95,6 +101,7 @@ impl Hotkey {
             Hotkey::Preset(n) => (ctrl, u32::from(b'0' + n)),
             Hotkey::ZoomOut => (ctrl, u32::from(b'0')),
             Hotkey::Layout(n) => (ctrl_shift, u32::from(b'0' + n)),
+            Hotkey::Draw => (ctrl_shift, u32::from(b'D')),
         }
     }
 }
@@ -204,6 +211,7 @@ fn input_thread(sh: Arc<InputShared>, hotkeys_on: bool, ready: mpsc::Sender<Resu
         };
         CTX.with(|c| *c.borrow_mut() = Some(sh.clone()));
         let timer = SetTimer(None, 0, POLL_MS, None);
+        let mut shapes = ShapeReader::new();
         let mut registered = Vec::new();
         let _ = ready.send(Ok(GetCurrentThreadId()));
         set_hotkeys(hotkeys_on, &mut registered, &sh);
@@ -213,8 +221,14 @@ fn input_thread(sh: Arc<InputShared>, hotkeys_on: bool, ready: mpsc::Sender<Resu
             match msg.message {
                 WM_TIMER => {
                     let mut p = POINT::default();
+                    let shape = shapes.read();
                     if GetCursorPos(&mut p).is_ok() {
-                        sh.with_log(|log, t| log.cursor(t, p.x, p.y));
+                        sh.with_log(|log, t| {
+                            if let Some((name, px)) = shape {
+                                log.cursor_shape(t, name, px);
+                            }
+                            log.cursor(t, p.x, p.y);
+                        });
                     }
                 }
                 WM_HOTKEY => {

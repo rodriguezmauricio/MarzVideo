@@ -11,7 +11,7 @@ import { Toolbar } from "./components/Toolbar";
 import { WarningBar } from "./components/WarningBar";
 import { keptSegments } from "@marz/timeline";
 import { refuseEmpty } from "./export/outputFrames";
-import { addCutAtPlayhead, addLayoutAtPlayhead, addZoomAtPlayhead, deleteSelection, runAutoZoom } from "./state/actions";
+import { addCursorBlockAtPlayhead, addCutAtPlayhead, addLayoutAtPlayhead, addZoomAtPlayhead, deleteSelection, runAutoZoom } from "./state/actions";
 import { abortAiPass, answerModelAsk, loadTranscriptWords, startAiPass } from "./ai/aiActions";
 import { statusText } from "./ai/runAiPass";
 import { setCaptionStartAt } from "./captions/captionActions";
@@ -176,6 +176,7 @@ function Editor({ dir }: { dir: string }) {
       } else if (e.code === "KeyZ") addZoomAtPlayhead();
       else if (e.code === "KeyC") addCutAtPlayhead();
       else if (e.code === "KeyL") addLayoutAtPlayhead();
+      else if (e.code === "KeyH") addCursorBlockAtPlayhead();
       else if (e.code === "KeyA") runAutoZoom();
       else if (e.code === "KeyV") s.toggleVerticalPreview();
       else if (e.code === "KeyF") holdFrameHere();

@@ -7,8 +7,6 @@ Checked 2026-11-16 with 1440 x 900 Edge screenshots of the four M1 editor states
 
 - **"Keep as my own" button (zoom inspector).** Not built: it would turn a live or suggested zoom into a manual one, which is new behaviour. Only "Delete zoom" is shown.
 - **Origin row shows "Live, Ctrl+1" as "Live".** A zoom in `project.marz` stores only its origin, not the preset it came from. Showing the hotkey needs a format change.
-- **"Click highlight" toggle is read-only.** It shows the stored `edits.clicks.effect` (off in the sample, so it shows off, the mockup shows on). Switching click effects is not built and the compositor does not draw them yet.
-- **Click ring on the preview.** The 34px accent ring under the cursor is preview content from click effects, which do not exist yet.
 - **Mic volume in the expanded lanes is display only** (bar + "100%"). Changing the volume is not built.
 
 ## Adjusted
@@ -144,3 +142,20 @@ Checked in Edge (Playwright) at 1440 x 900 and 1280 x 720 on `samples/demo.marz`
 - **The Aim view reuses the zoom area rectangle** (dashed accent, `dim` shadow) for the 9:16 window, without corner handles: only its sideways position can change.
 - **A fourth strip item** (Vertical preview button) sits between the size text and Export MP4. At 1280 wide the strip still fits on one line.
 - **Vertical lane marks**: the automatic moves are shown as 2 px faint marks along the lane bottom; they are information only.
+
+## Live drawing (2026-11-19)
+
+Checked in Edge (Playwright) at 1440 x 900 and 1280 x 720 on `samples/demo.marz` (simulated live strokes) and the fake recorder (`recorder.html?fake&state=recording&draw&bar`). No mockup exists; DESIGN-SYSTEM.md was updated first (rule 12, "Drawing lane", "Drawing on the preview", "Recorder: draw mode", hotkeys, icons `pen`, `highlight`, `arrow`, `box`, `oval`, `text`, `erase`).
+
+- **Red as a stroke colour**: `rec` is one of the four drawing colours (with accent, paper and ink). Red arrows and circles are what people draw to point at things; it is content on their own screen, not interface. The UI itself still uses red only for recording and cuts (the colour swatch is the one red control).
+- **Round caps and joins on strokes**: video content, like the round camera masks; the UI stays square.
+- **Overlapping Drawing lane blocks**: strokes overlap in time (several on screen at once), so blocks overlap on the 22 px lane; labels of covered blocks are cut. The inspector names the selected one.
+- **No left grip on Drawing blocks**: the colour square takes its place; trimming the start still works from the left 8 px.
+- **Tool strip is wider than the mode picker** (about 1060 px): ten segments. It fits 1280 px wide screens; below about 1100 px CSS width it would be cut.
+
+## Cursor and clicks (2026-11-19)
+
+- **"Click highlight" toggle became the Cursor block** (Hide cursor, Cursor size, Click effects with style, colour and size). The mockup's single read-only toggle could not hold the new settings. Click effects are off by default (old and new projects), so the mockup's "on" is not the default.
+- **The zoom area mockup's 34px click ring** is now a real click effect in the video (Ring style, accent), not a fixed overlay; its size follows the recorded cursor size and the Effect size.
+- **"Hide cursor here" (H) is a button in the inspector's Cursor block, not a ledger row.** A tenth ledger row does not fit above the timeline at 1440 x 900 without shrinking the giant timecode for every project (the camera's Add layout row already uses the spare room).
+- **Inspector with tabs: no negative right margin on the scroll area.** With the Transcript tab, a focused switch scrolled the clipped panel 12px left and cut off the labels. The scrollbar now sits inside the panel.

@@ -21,6 +21,8 @@ test("generates a valid project", async () => {
   expect(header.source).toEqual(project.source);
   expect(events.filter((e) => e.type === "click").length).toBeGreaterThanOrEqual(2);
   expect(events.filter((e) => e.type === "cursor").length).toBeGreaterThanOrEqual(1);
+  expect(events.filter((e) => e.type === "draw" && e.op === "add").length).toBe(6);
+  expect(events.filter((e) => e.type === "cursorShape").map((e) => (e as { shape: string }).shape)).toContain("hand");
 
   const vDur = Number(probe(join(dir, "screen.mp4"), ["-show_entries", "format=duration"]));
   expect(Math.abs(vDur - 3)).toBeLessThan(0.2);

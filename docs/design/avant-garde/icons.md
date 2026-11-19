@@ -48,3 +48,10 @@ Template:
 | `split` | `<path d="M12 3v18M3 8h5v8H3M21 8h-5v8h5"/>` (Split here, captions) |
 | `join` | `<rect x="3" y="8" width="18" height="8"/><path d="M9 12h6"/>` (Join with previous, captions) |
 | `redo` | `<path d="M15 14l5-5-5-5"/><path d="M20 9H10a6 6 0 000 12h4"/>` |
+| `pen` | `<path d="M4 20l1.5-5L16 4.5l3.5 3.5L9 18.5zM14 6.5l3.5 3.5"/>` (Pen (live drawing), Draw button) |
+| `highlight` | `<path d="M8 15l8.5-11L20 7 9 15.5zM8 15l-1 4h4l-2-3.5M4 21h16"/>` (Highlight (live drawing)) |
+| `arrow` | `<path d="M5 19L18 6M10 5h9v9"/>` (Arrow (live drawing)) |
+| `box` | `<rect x="4" y="6" width="16" height="12"/>` (Box (live drawing)) |
+| `oval` | `<ellipse cx="12" cy="12" rx="9" ry="6"/>` (Oval (live drawing)) |
+| `text` | `<path d="M5 6V4h14v2M12 4v16M9 20h6"/>` (Text (live drawing)) |
+| `erase` | `<path d="M8 20l-4-4L14 6l6 6-8 8zM9 11l5 5M12 20h8"/>` (Erase (live drawing)) |

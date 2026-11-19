@@ -4,3 +4,6 @@ export * from "./camera";
 export * from "./captions";
 export * from "./layout";
 export * from "./vertical";
+export * from "./drawings";
+export * from "./cursor";
+export * from "./cursorShapes";

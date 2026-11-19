@@ -12,6 +12,7 @@ import {
   type CaptionBlock,
   type CaptionLookOpts,
   type CaptionStyle,
+  type DrawLayer,
   type Measure,
 } from "@marz/compositor";
 import { verticalEdits, type MarzEvent, type Project } from "@marz/format";
@@ -31,8 +32,10 @@ export type VerticalDrawOpts = {
   screen: CanvasImageSource;
   /** The camera frame and its size, or null (no camera, or not ready). */
   camera: { source: CanvasImageSource; size: Size } | null;
-  /** paper, ink and accent from tokens.css. */
-  colors: Record<"paper" | "ink" | "accent", string>;
+  /** paper, ink, accent and rec from tokens.css (camera border, click effects). */
+  colors: Record<"paper" | "ink" | "accent" | "rec", string>;
+  /** Live drawing strokes (screen coordinates), drawn through the same window as the screen. */
+  drawings?: DrawLayer | null;
   captions: VerticalCaptions | null;
   /** "follow" or "fit"; the project's setting when left out. */
   framing?: "follow" | "fit";
@@ -55,7 +58,7 @@ export function drawVertical(ctx: Ctx, o: VerticalDrawOpts): { crop: Box | null 
     ctx.scale(rect.w / src.width, rect.h / src.height);
     const lay = layoutAt(o.project, o.srcUs, src);
     const cam = o.camera && lay.camera ? cameraLayerFor(o.project, lay, src, o.camera.source, o.camera.size, o.colors) : null;
-    drawFrame(ctx, o.screen, frameAt(o.project, o.events, o.srcUs, lay.screen), src, cam);
+    drawFrame(ctx, o.screen, frameAt(o.project, o.events, o.srcUs, lay.screen), src, cam, o.colors, o.drawings ?? null);
     ctx.restore();
     if (o.captions) {
       const c = o.captions;
@@ -66,7 +69,7 @@ export function drawVertical(ctx: Ctx, o: VerticalDrawOpts): { crop: Box | null 
   }
   const { spec, layout, crop } = verticalFrameAt(o.project, o.events, aimPathFor(o.project, o.events), o.srcUs, out);
   const cam = o.camera && layout.camera ? cameraLayerFor(o.project, layout, out, o.camera.source, o.camera.size, o.colors) : null;
-  drawFrame(ctx, o.screen, spec, out, cam);
+  drawFrame(ctx, o.screen, spec, out, cam, o.colors, o.drawings ?? null);
   if (o.captions) {
     const c = o.captions;
     const full = { x: 0, y: 0, w: out.width, h: out.height };

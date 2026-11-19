@@ -82,7 +82,7 @@ export function VerticalBlock({ project }: { project: Project }) {
     <div className="insp-vert">
       <div className="mut insp-sec">Vertical</div>
       <Segmented
-        group="Vertical"
+        aria="Vertical framing"
         label="Framing"
         options={[
           ["follow", "Follow"],
@@ -93,7 +93,7 @@ export function VerticalBlock({ project }: { project: Project }) {
       />
       {camShown && (
         <Segmented
-          group="Vertical"
+          aria="Vertical camera slot"
           label="Camera"
           options={[
             ["top", "Top"],

@@ -135,6 +135,42 @@ pub struct RecState {
     pub active_preset: Option<String>,
     /// Recording time, pauses excluded.
     pub rec_us: i64,
+    /// Draw mode is on: the overlay takes the mouse and the keyboard (Ctrl+Shift+D).
+    pub drawing: bool,
+}
+
+/// One live drawing change from the overlay. Points and width are physical pixels from the
+/// monitor's top-left (the overlay's); `ago_us` is how long before now the stroke was pressed.
+#[derive(Deserialize, Debug, Clone, PartialEq)]
+#[serde(tag = "op", rename_all = "camelCase")]
+pub enum DrawOpDto {
+    #[serde(rename_all = "camelCase")]
+    Add { id: String, ago_us: i64, stroke: marz_capture::events::DrawStroke },
+    Remove { id: String },
+    Clear,
+}
+
+/// Enter (true), leave (false) or toggle (None) draw mode while recording. Not while paused.
+#[tauri::command]
+pub fn toggle_draw(app: tauri::AppHandle, on: Option<bool>) -> Result<(), String> {
+    imp::draw_mode(&app, on)
+}
+
+/// Log a live drawing change (only in draw mode; points are moved from monitor to screen pixels).
+#[tauri::command]
+pub fn draw_op(app: tauri::AppHandle, op: DrawOpDto) -> Result<(), String> {
+    let mon = crate::recorder::current_monitor(&app)?;
+    let op = match op {
+        DrawOpDto::Add { id, ago_us, mut stroke } => {
+            for p in &mut stroke.points {
+                p[0] += f64::from(mon.x);
+                p[1] += f64::from(mon.y);
+            }
+            DrawOpDto::Add { id, ago_us, stroke }
+        }
+        other => other,
+    };
+    imp::draw_op(&app, op)
 }
 
 /// Sent to the main window when a stop could not finish the files (the recover banner has it).
@@ -351,6 +387,8 @@ mod imp {
         mic: bool,
         /// The live camera layout (`events::LAYOUTS`), so a repeat press is not logged again.
         layout: &'static str,
+        /// Draw mode is on.
+        drawing: bool,
     }
 
     /// Lock order: `slot` alone, or `keys` alone; never both. Nothing that emits or touches a
@@ -401,6 +439,7 @@ mod imp {
             mic: l.mic,
             active_preset: l.active.clone(),
             rec_us: p.rec_us,
+            drawing: l.drawing,
         }
     }
 
@@ -461,6 +500,9 @@ mod imp {
             Hotkey::Layout(n) => {
                 let _ = layout(app, n);
             }
+            Hotkey::Draw => {
+                let _ = draw_mode(app, None);
+            }
         }
     }
 
@@ -516,7 +558,7 @@ mod imp {
             }
         };
         let generation = st.generation.fetch_add(1, Ordering::SeqCst) + 1;
-        let early = lock(&st.slot).attach(attempt, Live { session, presets, active: None, mic, layout: LAYOUTS[0] });
+        let early = lock(&st.slot).attach(attempt, Live { session, presets, active: None, mic, layout: LAYOUTS[0], drawing: false });
         if let Some((live, msg)) = early {
             // The engine failed between its start and here: handle it as any failure.
             after_failure(app, live, msg);
@@ -636,7 +678,16 @@ mod imp {
     pub fn pause(app: &AppHandle, to: Option<bool>) -> Result<(), String> {
         with_live(app, |l| {
             let pause = to.unwrap_or(!l.session.is_paused());
-            if pause { l.session.pause() } else { l.session.resume() }
+            if pause {
+                // Pause leaves draw mode; the strokes end before the clock stops.
+                if l.drawing {
+                    l.session.draw_clear();
+                    l.drawing = false;
+                }
+                l.session.pause()
+            } else {
+                l.session.resume()
+            }
         })
     }
 
@@ -677,6 +728,39 @@ mod imp {
             l.session.layout(name);
             l.layout = name;
         })
+    }
+
+    /// Draw mode on, off or toggled. Leaving clears the strokes (logged). Entering gives the overlay
+    /// the keyboard focus; the page takes the mouse itself (`overlay_hits` grab).
+    pub fn draw_mode(app: &AppHandle, to: Option<bool>) -> Result<(), String> {
+        let on = with_live(app, |l| {
+            let on = to.unwrap_or(!l.drawing) && !l.session.is_paused();
+            if l.drawing && !on {
+                l.session.draw_clear();
+            }
+            l.drawing = on;
+            on
+        })?;
+        if on && let Some(w) = app.get_webview_window(OVERLAY) {
+            let _ = w.set_focus();
+        }
+        Ok(())
+    }
+
+    /// Log a drawing change, only while draw mode is on.
+    pub fn draw_op(app: &AppHandle, op: DrawOpDto) -> Result<(), String> {
+        let st = state(app);
+        let g = lock(&st.slot);
+        let l = g.live().ok_or(NOT_RECORDING)?;
+        if !l.drawing {
+            return Ok(());
+        }
+        match &op {
+            DrawOpDto::Add { id, ago_us, stroke } => l.session.draw_add(id, *ago_us, stroke),
+            DrawOpDto::Remove { id } => l.session.draw_remove(id),
+            DrawOpDto::Clear => l.session.draw_clear(),
+        }
+        Ok(())
     }
 
     /// On closing the recorder (`open` already cleared): free the setup hotkeys and stop a running
@@ -728,6 +812,12 @@ mod imp {
         Err(NOT_RECORDING.into())
     }
     pub fn set_preset_rect(_app: &AppHandle, _id: &str, _rect: NormRect) -> Result<(), String> {
+        Err(NOT_RECORDING.into())
+    }
+    pub fn draw_mode(_app: &AppHandle, _to: Option<bool>) -> Result<(), String> {
+        Err(NOT_RECORDING.into())
+    }
+    pub fn draw_op(_app: &AppHandle, _op: DrawOpDto) -> Result<(), String> {
         Err(NOT_RECORDING.into())
     }
     pub fn shutdown(_app: &AppHandle) -> Shutdown {

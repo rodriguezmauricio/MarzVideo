@@ -1,7 +1,8 @@
 import { AudioBlock } from "./AudioBlock";
+import { CursorBlock, CursorInspector } from "./CursorPanel";
 import { useEffect, useState } from "react";
-import { aiEdits, BORDER_COLOR_NAMES, cameraBorder, cameraEdits, cameraScenes, captionEdits, LAYOUT_KINDS, PIP_CORNERS, PIP_SIZES, type BorderColor, type Corner, type Cut, type PipShape, type Project, type Scene, type Word, type Zoom } from "@marz/format";
-import { setCaptionHidden, setCaptionText, setCursorHidden, updateCamera, updateCut, updateScene, updateZoom } from "@marz/timeline";
+import { aiEdits, BORDER_COLOR_NAMES, cursorKind, cursorSections, drawingStrokes, STROKE_COLORS, strokeWidths, type Stroke, type StrokeColor, cameraBorder, cameraEdits, cameraScenes, captionEdits, LAYOUT_KINDS, PIP_CORNERS, PIP_SIZES, type BorderColor, type Corner, type Cut, type PipShape, type Project, type Scene, type Word, type Zoom } from "@marz/format";
+import { setCaptionHidden, setCaptionText, updateCamera, updateCut, updateScene, updateStroke, updateZoom, type StrokePatch } from "@marz/timeline";
 import { setKind, setPace } from "../ai/aiActions";
 import { CaptionsBlock } from "../captions/CaptionsBlock";
 import { setCaptionStartAt, useCaptionFacts, wordCaptionState } from "../captions/captionActions";
@@ -10,7 +11,7 @@ import { deleteSelection, MIN_US } from "../state/actions";
 import { useEditorStore } from "../state/editorStore";
 import { Icon } from "./Icon";
 import { mmsst, parseTimeUs, seconds1 } from "./timecode";
-import { cutCapLabel, LAYOUT_LABEL, zoomLabels } from "./zoomLabels";
+import { cutCapLabel, LAYOUT_LABEL, STROKE_LABEL, zoomLabels } from "./zoomLabels";
 import { verticalEdits } from "@marz/format";
 import { FrameInspector, frameLabels, VerticalBlock } from "../vertical/VerticalPanels";
 
@@ -258,17 +259,18 @@ const BORDERS: Array<[number, string]> = [
 const COLOR_NAMES: Record<BorderColor, string> = { paper: "Paper", ink: "Ink", accent: "Accent" };
 
 /** A row with the Motion row's segmented control. */
-export function Segmented<T extends string | number>(props: { label: string; options: Array<[T, string]>; value: T; onPick: (v: T) => void; group?: string }) {
+export function Segmented<T extends string | number>(props: { label: string; options: Array<[T, string]>; value: T; onPick: (v: T) => void; aria?: string; disabled?: boolean }) {
   return (
-    <div className="irow">
+    <div className={`irow${props.disabled ? " off" : ""}`}>
       <span>{props.label}</span>
-      <span className={props.options.length > 3 ? "seg seg-4" : "seg"} role="radiogroup" aria-label={`${props.group ?? "Camera"} ${props.label.toLowerCase()}`}>
+      <span className={props.options.length > 3 ? "seg seg-4" : "seg"} role="radiogroup" aria-label={props.aria ?? `Camera ${props.label.toLowerCase()}`}>
         {props.options.map(([v, text]) => (
           <button
             key={String(v)}
             type="button"
             role="radio"
             aria-checked={props.value === v}
+            disabled={props.disabled}
             className={props.value === v ? "on" : ""}
             onClick={() => props.value !== v && props.onPick(v)}
           >
@@ -323,6 +325,96 @@ function LayoutInspector({ scene, durationUs }: { scene: Scene; durationUs: numb
         <button type="button" className="fb fb-line" onClick={deleteSelection}>
           <Icon name="trash" size={14} />
           Delete layout
+        </button>
+      </div>
+    </div>
+  );
+}
+
+const STROKE_COLOR_NAMES: Record<StrokeColor, string> = { accent: "Accent", rec: "Red", paper: "Paper", ink: "Ink" };
+
+/** Drawing stroke selected: start, end, colour, width (size for text), text, delete. */
+function DrawingInspector({ stroke, project }: { stroke: Stroke; project: Project }) {
+  const apply = useEditorStore((s) => s.apply);
+  const patch = (p: StrokePatch) => apply(updateStroke(stroke.id, p));
+  const widths = strokeWidths(project.source.height);
+  const text = stroke.tool === "text";
+  const sizes: Array<[number, string]> = text
+    ? [[widths.thin, "S"], [widths.medium, "M"], [widths.thick, "L"]]
+    : [[widths.thin, "Thin"], [widths.medium, "Medium"], [widths.thick, "Thick"]];
+  return (
+    <div className="insp-scroll">
+      <div className="insp-head">
+        <h2 className="insp-title">Drawing</h2>
+        <span className={`badge ${stroke.origin === "live" ? "badge-live" : "badge-manual"}`}>{stroke.origin === "live" ? "Live" : "Manual"}</span>
+      </div>
+      <div className="mut insp-sub">{STROKE_LABEL[stroke.tool]}</div>
+      <div className="cells">
+        <Cell label="Start" text={mmsst(stroke.startUs)} onCommit={(us) => patch({ startUs: Math.max(0, Math.min(us, stroke.endUs - MIN_US)) })} />
+        <Cell label="End" text={mmsst(stroke.endUs)} onCommit={(us) => patch({ endUs: Math.min(project.durationUs, Math.max(us, stroke.startUs + MIN_US)) })} />
+      </div>
+      {text && (
+        <label className="cell cell-wide">
+          <span className="k">Text</span>
+          <input
+            key={`${stroke.id}|${stroke.text}`}
+            className="word-input"
+            type="text"
+            spellCheck={false}
+            defaultValue={stroke.text}
+            aria-label="Drawing text"
+            onBlur={(e) => {
+              const v = e.currentTarget.value.trim();
+              if (!v) e.currentTarget.value = stroke.text ?? "";
+              else if (v !== stroke.text) patch({ text: v });
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") leaveField(e.currentTarget);
+              if (e.key === "Escape") {
+                e.currentTarget.value = stroke.text ?? "";
+                leaveField(e.currentTarget);
+              }
+            }}
+          />
+        </label>
+      )}
+      <div className="irow">
+        <span>Colour</span>
+        <span className="swatches" role="radiogroup" aria-label="Drawing colour">
+          {STROKE_COLORS.map((c) => (
+            <button
+              key={c}
+              type="button"
+              role="radio"
+              aria-checked={stroke.color === c}
+              aria-label={STROKE_COLOR_NAMES[c]}
+              data-tip={STROKE_COLOR_NAMES[c]}
+              className={`sw-${c}${stroke.color === c ? " on" : ""}`}
+              onClick={() => stroke.color !== c && patch({ color: c })}
+            />
+          ))}
+        </span>
+      </div>
+      <div className="irow">
+        <span>{text ? "Size" : "Width"}</span>
+        <span className="seg" role="radiogroup" aria-label={text ? "Text size" : "Line width"}>
+          {sizes.map(([w, label]) => (
+            <button key={label} type="button" role="radio" aria-checked={stroke.width === w} className={stroke.width === w ? "on" : ""}
+              onClick={() => stroke.width !== w && patch({ width: w })}>
+              {label}
+            </button>
+          ))}
+        </span>
+      </div>
+      <div className="irow irow-last">
+        <span className="mut">Length</span>
+        <span>{seconds1(stroke.endUs - stroke.startUs)}</span>
+      </div>
+      <p className="insp-note">Drawn live. Drag it on the preview to move it, pull a corner to resize.</p>
+      <div className="btns">
+        <button type="button" className="fb fb-line" onClick={deleteSelection}>
+          <Icon name="trash" size={14} />
+          Delete drawing
         </button>
       </div>
     </div>
@@ -458,6 +550,8 @@ export function Inspector({ compact = false }: { compact?: boolean }) {
   const scene = selection?.kind === "layout" ? cameraScenes(project).find((x) => x.id === selection.id) : undefined;
   const holds = verticalEdits(project).holds;
   const hold = selection?.kind === "frame" ? holds.find((h) => h.id === selection.id) : undefined;
+  const stroke = selection?.kind === "drawing" ? drawingStrokes(project).find((x) => x.id === selection.id) : undefined;
+  const curSec = selection?.kind === "cursor" ? cursorSections(project).find((x) => x.id === selection.id) : undefined;
   const tab = useEditorStore((s) => s.inspectorTab);
   const setTab = useEditorStore((s) => s.setInspectorTab);
   const tabs = words.length > 0;
@@ -470,17 +564,17 @@ export function Inspector({ compact = false }: { compact?: boolean }) {
         <LayoutInspector scene={scene} durationUs={project.durationUs} />
       ) : hold ? (
         <FrameInspector hold={hold} title={frameLabels(holds).get(hold.id) ?? "Frame"} durationUs={project.durationUs} />
+      ) : stroke ? (
+        <DrawingInspector stroke={stroke} project={project} />
+      ) : curSec ? (
+        <CursorInspector section={curSec} durationUs={project.durationUs} baked={cursorKind(project) === "baked"} />
       ) : word ? (
         <WordInspector word={word} project={project} />
       ) : (
         <div className="insp-scroll">
           <h2 className="insp-title">Project</h2>
           <div className="mut insp-sub">Nothing selected</div>
-          <div className="toggles">
-            <Toggle label="Hide cursor" on={project.edits.cursor.hidden} onChange={(on) => apply(setCursorHidden(on))} />
-            {/* Shows the stored setting; switching click effects is not built yet (see DEVIATIONS.md). */}
-            <Toggle label="Click highlight" on={project.edits.clicks.effect !== "none"} />
-          </div>
+          <CursorBlock project={project} />
           {project.tracks.camera && <CameraBlock project={project} />}
           <VerticalBlock project={project} />
           <AudioBlock project={project} />
