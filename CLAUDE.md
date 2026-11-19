@@ -42,18 +42,18 @@ Windows-first screen recorder + non-destructive editor (Tauri 2, Rust, React/TS)
   Whisper is looked up in `MARZ_WHISPER`, beside the exe, the app data folder `whisper` (`%APPDATA%/com.marz.recorder/whisper`), then PATH;
   models live in the app data folder `models` (downloaded after his yes). Ran end to end on this laptop on a copy of his 19.35 take.
   Open: his three test takes and the quality check (list at the end of the spike doc).
-- **Done (branch `claude/audio-cleanup-23a566`, not merged yet):** audio cleanup (design `docs/superpowers/specs/2026-11-19-audio-cleanup-design.md`,
+- **Done (merged 2026-11-19, not checked by ear or by hand yet):** audio cleanup (design `docs/superpowers/specs/2026-11-19-audio-cleanup-design.md`,
   plan `docs/superpowers/plans/2026-11-19-audio-cleanup.md`). Inspector Audio block: volume, mute and fade per track (mic, computer sound),
   "Remove mic noise" (FFmpeg `highpass` + `afftdn`, cached `cache/mic.clean.wav`, played in preview, read by export; RNNoise when
   `rnnoise.rnnn` is in the app data `models` folder) and "Even loudness at export" (`ebur128` measure, `loudnorm` to -14 LUFS). Optional
   `edits.audio`. App exports of the copy "Audio test": -14.8 LUFS, true peak -1.2 dB, both presets. Not listened to yet.
-- **Done (branch `claude/camera-layouts-826937`, not merged yet):** camera layouts (design
+- **Done (merged 2026-11-19, not checked by ear or by hand yet):** camera layouts (design
   `docs/superpowers/specs/2026-11-19-camera-layouts-design.md`, plan `docs/superpowers/plans/2026-11-19-camera-layouts.md`).
   Masks (plain, round, circle, square) and border on the corner bubble; layout scenes (corner, side column, camera
   fullscreen, screen only) on the Layout lane (L adds, drag, trim, delete, undo); 0.4 s eased switches drawn by
   `packages/compositor/src/layout.ts` in preview and export; live hotkeys Ctrl+Shift+1..4 logged as `layout` events
   and turned into Live blocks when the take first opens (`importLiveLayouts`).
-- **Done (branch `claude/captions-editor-2649be`, not merged yet):** captions editor (design
+- **Done (merged 2026-11-19, not checked by ear or by hand yet):** captions editor (design
   `docs/superpowers/specs/2026-11-19-captions-editor-design.md`, plan `docs/superpowers/plans/2026-11-19-captions-editor.md`).
   Inspector Edit / Transcript tabs (T), click a word to jump, fix it in place, Split here (S), Join with previous (J),
   caption style per export preset (Ink, Paper, Accent band, Plain; S/M/L; top/middle/bottom; word highlight), `.vtt`
