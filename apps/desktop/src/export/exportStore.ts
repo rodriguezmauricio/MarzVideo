@@ -8,6 +8,7 @@ import { exportProject } from "./exportVideo";
 import { failureText, panelKey, percent, readBurn, readLastPreset, writeBurn, writeLastPreset, type PanelState } from "./exportUi";
 import { blockSpans, captionLines, toSrt } from "@marz/autoedit";
 import { captionStyle, loadCaptionFont } from "../ai/captionStyle";
+import { cleanMicForExport } from "../audio/cleanMic";
 import { createMemorySink } from "./memorySink";
 import { PRESETS, type ExportPresetId } from "./presets";
 import { asFailure, cancelLeftoverExports, createTauriSink } from "./tauriSink";
@@ -129,8 +130,11 @@ export const useExportStore = create<ExportState>((set, get) => ({
         await loadCaptionFont(style.family);
         captions = { blocks: blockSpans(captionLines(project, words, look)), look, style };
       }
+      // Noise removal: make (or find) the cleaned mic copy first; without it the export uses mic.wav.
+      const cleanMic = isTauri() ? await cleanMicForExport(project, dir) : false;
       const report = await exportProject({
         project,
+        cleanMic,
         events,
         storage: files,
         sink: isTauri() ? createTauriSink() : createMemorySink(),

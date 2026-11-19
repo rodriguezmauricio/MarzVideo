@@ -1,7 +1,7 @@
 //! The running export: FFmpeg fed H.264 chunks on stdin, writing `<out>.part`, renamed on success.
 
 use crate::ExportJob;
-use crate::args::{ffmpeg_args, part_path};
+use crate::args::{ffmpeg_args_loud, part_path};
 use crate::tools::command;
 use std::collections::VecDeque;
 use std::io::{self, BufRead, BufReader, Write};
@@ -59,9 +59,19 @@ fn lock(child: &Mutex<Child>) -> MutexGuard<'_, Child> {
 }
 
 impl ExportProcess {
+    /// Start the muxer. When the job asks for loudness normalization the mix is measured first (a
+    /// short audio-only FFmpeg run); if that measure fails the export goes on without normalization.
     pub fn start(ffmpeg: &Path, job: ExportJob) -> io::Result<Self> {
         let part = part_path(&job.out_path);
-        let mut child = command(ffmpeg).args(ffmpeg_args(&job)).stdin(Stdio::piped()).stdout(Stdio::null()).stderr(Stdio::piped()).spawn()?;
+        let loud = if job.normalize.is_some() {
+            crate::loudness::measure(ffmpeg, &job).unwrap_or_else(|e| {
+                eprintln!("[export] {e}");
+                None
+            })
+        } else {
+            None
+        };
+        let mut child = command(ffmpeg).args(ffmpeg_args_loud(&job, loud.as_ref())).stdin(Stdio::piped()).stdout(Stdio::null()).stderr(Stdio::piped()).spawn()?;
         let stdin = child.stdin.take();
         // Drain stderr on its own thread so the pipe never fills and stalls FFmpeg; keep the tail.
         let stderr = child.stderr.take().map(|pipe| {
@@ -232,11 +242,12 @@ mod tests {
             mic,
             system: None,
             output_duration_us: 2_000_000,
+            ..Default::default()
         }
     }
 
     fn mic(offset_us: i64) -> Option<MicJob> {
-        Some(MicJob { file: "mic.wav".into(), offset_us, volume: 1.0, muted: false })
+        Some(MicJob { file: "mic.wav".into(), offset_us, volume: 1.0, muted: false, ..Default::default() })
     }
 
     fn probe(ffprobe: &Path, file: &Path) -> (Vec<String>, f64) {
@@ -325,7 +336,7 @@ mod tests {
                 .unwrap();
             assert!(st.success());
             let mut j = job(&dir, if with_mic { mic(12_400) } else { None });
-            j.system = Some(MicJob { file: "system.wav".into(), offset_us: 0, volume: 1.0, muted: false });
+            j.system = Some(MicJob { file: "system.wav".into(), offset_us: 0, volume: 1.0, muted: false, ..Default::default() });
             let out = j.out_path.clone();
             let mut p = ExportProcess::start(&ffmpeg, j).unwrap();
             for chunk in h264.chunks(4096) {
@@ -337,6 +348,55 @@ mod tests {
             assert!((dur - 2.0).abs() <= 1.0 / 30.0, "{tag} duration {dur}");
             assert!(max_volume_db(&ffmpeg, &out) > -20.0, "{tag}: computer sound must be audible");
         }
+    }
+
+    /// Integrated loudness of the export's audio, LUFS.
+    fn integrated_lufs(ffmpeg: &Path, file: &Path) -> f64 {
+        let out = command(ffmpeg).args(["-hide_banner", "-nostats", "-i"]).arg(file).args(["-vn", "-af", "ebur128=peak=true:framelog=quiet", "-f", "null", "-"]).output().unwrap();
+        crate::loudness::parse_ebur128(&String::from_utf8_lossy(&out.stderr)).expect("ebur128 summary").i
+    }
+
+    /// Mean level of the export's audio between `from` and `to` seconds, dB.
+    fn mean_db(ffmpeg: &Path, file: &Path, from: f64, to: f64) -> f64 {
+        let out = command(ffmpeg).args(["-hide_banner", "-nostats", "-i"]).arg(file).args(["-vn", "-af", &format!("atrim={from}:{to},volumedetect"), "-f", "null", "-"]).output().unwrap();
+        let text = String::from_utf8_lossy(&out.stderr).to_string();
+        text.lines().find_map(|l| l.split("mean_volume:").nth(1)).and_then(|v| v.trim().trim_end_matches(" dB").parse().ok()).unwrap_or(-91.0)
+    }
+
+    #[test]
+    fn normalized_export_lands_near_the_target_and_fades_in() {
+        let (ffmpeg, ffprobe) = tools_or_skip!("normalized_export");
+        let dir = temp_dir("loud");
+        let h264 = fixtures(&ffmpeg, &dir);
+        let plain_out = {
+            let j = job(&dir, mic(0));
+            let out = dir.join("plain.mp4");
+            let mut j = j;
+            j.out_path = out.clone();
+            let mut p = ExportProcess::start(&ffmpeg, j).unwrap();
+            for chunk in h264.chunks(4096) {
+                p.write_chunk(chunk).unwrap();
+            }
+            p.finish().unwrap();
+            out
+        };
+        let mut j = job(&dir, Some(MicJob { file: "mic.wav".into(), volume: 1.0, fade_in_us: 500_000, ..Default::default() }));
+        j.normalize = Some(crate::Normalize { target_lufs: -14.0 });
+        let out = j.out_path.clone();
+        let mut p = ExportProcess::start(&ffmpeg, j).unwrap();
+        for chunk in h264.chunks(4096) {
+            p.write_chunk(chunk).unwrap();
+        }
+        p.finish().unwrap();
+        let (_, dur) = probe(&ffprobe, &out);
+        assert!((dur - 2.0).abs() <= 1.0 / 30.0, "duration {dur}");
+        let before = integrated_lufs(&ffmpeg, &plain_out);
+        let after = integrated_lufs(&ffmpeg, &out);
+        assert!(before < -17.0, "the plain sine is quieter than the target: {before}");
+        assert!((after + 14.0).abs() <= 1.5, "normalized to about -14 LUFS: {after} (plain {before})");
+        let start = mean_db(&ffmpeg, &out, 0.0, 0.1);
+        let middle = mean_db(&ffmpeg, &out, 1.0, 1.1);
+        assert!(start < middle - 10.0, "fade in: start {start} dB, middle {middle} dB");
     }
 
     #[test]
@@ -352,7 +412,7 @@ mod tests {
         assert!(max_volume_db(&ffmpeg, &with_mic) > -20.0);
         let late = run(&ffmpeg, &ffprobe, "loudlate", mic(1_000_000));
         assert!(max_volume_db(&ffmpeg, &late) > -20.0, "the part after the mic starts must be audible");
-        let muted = run(&ffmpeg, &ffprobe, "quiet", Some(MicJob { file: "mic.wav".into(), offset_us: 0, volume: 1.0, muted: true }));
+        let muted = run(&ffmpeg, &ffprobe, "quiet", Some(MicJob { file: "mic.wav".into(), offset_us: 0, volume: 1.0, muted: true, ..Default::default() }));
         assert!(max_volume_db(&ffmpeg, &muted) < -60.0);
         let none = run(&ffmpeg, &ffprobe, "quiet2", None);
         assert!(max_volume_db(&ffmpeg, &none) < -60.0);
@@ -383,7 +443,7 @@ mod tests {
     #[test]
     fn muted_mic_still_has_an_audio_track() {
         let (ffmpeg, ffprobe) = tools_or_skip!("muted");
-        run(&ffmpeg, &ffprobe, "muted", Some(MicJob { file: "mic.wav".into(), offset_us: 0, volume: 1.0, muted: true }));
+        run(&ffmpeg, &ffprobe, "muted", Some(MicJob { file: "mic.wav".into(), offset_us: 0, volume: 1.0, muted: true, ..Default::default() }));
     }
 
     #[test]

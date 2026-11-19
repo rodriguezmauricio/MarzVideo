@@ -1,3 +1,4 @@
+import { AudioBlock } from "./AudioBlock";
 import { useEffect, useState } from "react";
 import { aiEdits, cameraEdits, captionEdits, PIP_CORNERS, PIP_SIZES, type Corner, type Cut, type Project, type Word, type Zoom } from "@marz/format";
 import { setCaptionHidden, setCaptionText, setCursorHidden, updateCamera, updateCut, updateZoom } from "@marz/timeline";
@@ -137,7 +138,7 @@ function CutInspector({ cut, durationUs }: { cut: Cut; durationUs: number }) {
   );
 }
 
-function Toggle(props: { label: string; on: boolean; onChange?: (on: boolean) => void; compact?: boolean }) {
+export function Toggle(props: { label: string; on: boolean; onChange?: (on: boolean) => void; compact?: boolean }) {
   const disabled = !props.onChange;
   return (
     <div className={`irow${disabled ? " off" : ""}${props.compact ? " k34" : ""}`}>
@@ -339,6 +340,7 @@ export function Inspector({ compact = false }: { compact?: boolean }) {
             <Toggle label="Click highlight" on={project.edits.clicks.effect !== "none"} />
           </div>
           {project.tracks.camera && <CameraBlock project={project} />}
+          <AudioBlock project={project} />
           <AiBlock project={project} />
           {!compact && <p className="insp-note">Select a zoom or a cut on the timeline to edit it.</p>}
         </div>

@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useRef } from "react";
 import { canvasMeasure, captionLayout, cameraLayout, cameraMediaUs, drawCaptions, drawFrame, frameAt, type CaptionStyle } from "@marz/compositor";
-import { keptSegments, outputToSource, sourceToOutput } from "@marz/timeline";
+import { keptSegments, outputDurationUs, outputToSource, sourceToOutput, trackGain } from "@marz/timeline";
+import { audioEdits } from "@marz/format";
+import { ensureCleanMic, previewMicFile, useCleanMic } from "../audio/cleanMic";
+import { useAppStore } from "../state/appStore";
 import { captionBlocks, captionStyle, loadCaptionFont } from "../ai/captionStyle";
 import { useEditorStore } from "../state/editorStore";
 import { mediaTimeUs, nextPlaybackTime, playbackEnded, sourceTimeUs, startTimeForPlay } from "../playback/clock";
@@ -45,6 +48,34 @@ export function Preview() {
         [sysRef.current, sys],
       ] as const
     ).filter((p): p is [HTMLAudioElement, AudioTrack] => !!p[0] && !!p[1]);
+
+  // Noise removal: the app makes a cleaned mic copy and the preview plays it once it is ready.
+  const dir = useAppStore((s) => s.dir);
+  const audio = audioEdits(project);
+  const clean = useCleanMic((s) => s.state);
+  const micFile = mic ? previewMicFile(clean, dir, mic.file, audio.denoise) : null;
+  useEffect(() => {
+    if (dir && mic && audio.denoise) void ensureCleanMic(dir, mic.file);
+  }, [dir, mic?.file, audio.denoise]);
+
+  /** Volume, mute and fades of each track at source time `srcUs` (output time for the fades), the
+   *  same envelope the export's `afade` applies. The element volume caps at 100%. */
+  const applyGains = (srcUs: number) => {
+    const { project: p, segs: sg } = live.current;
+    const a = audioEdits(p);
+    const tOut = sourceToOutput(sg, srcUs) ?? 0;
+    const dur = outputDurationUs(sg);
+    const pairs: [HTMLAudioElement | null, AudioTrack | undefined, typeof a.mic][] = [
+      [audioRef.current, p.tracks.mic, a.mic],
+      [sysRef.current, p.tracks.system, a.system],
+    ];
+    for (const [el, t, fade] of pairs) {
+      if (!el || !t) continue;
+      el.muted = t.muted;
+      const g = Math.min(1, Math.max(0, trackGain(t.volume, t.muted, fade, tOut, dur)));
+      if (Math.abs(el.volume - g) > 0.001) el.volume = g;
+    }
+  };
 
   const words = useEditorStore((s) => s.words);
   const look = useEditorStore((s) => s.captionLook);
@@ -215,6 +246,7 @@ export function Preview() {
         if (!cv.ended && Math.abs(gap) > CAMERA_SEEK_S) cv.currentTime = want;
         else cv.playbackRate = Math.abs(gap) <= CAMERA_LOCK_S ? 1 : gap > 0 ? 1.1 : 0.9;
       }
+      applyGains(next);
       useEditorStore.getState().tick(next);
       draw();
       raf = requestAnimationFrame(loop);
@@ -228,18 +260,19 @@ export function Preview() {
     };
   }, [playing]);
 
+  // Volume, mute and fades follow edits at once, also while paused; a new mic source (the cleaned copy)
+  // lands where the playhead is.
+  useEffect(() => applyGains(useEditorStore.getState().playheadUs), [project]);
   useEffect(() => {
-    if (audioRef.current && mic) {
-      audioRef.current.volume = Math.min(1, Math.max(0, mic.volume));
-      audioRef.current.muted = mic.muted;
-    }
-  }, [mic?.volume, mic?.muted]);
-  useEffect(() => {
-    if (sysRef.current && sys) {
-      sysRef.current.volume = Math.min(1, Math.max(0, sys.volume));
-      sysRef.current.muted = sys.muted;
-    }
-  }, [sys?.volume, sys?.muted]);
+    const el = audioRef.current;
+    if (!el || !mic) return;
+    const at = () => {
+      el.currentTime = Math.max(0, (useEditorStore.getState().playheadUs - mic.offsetUs) / 1e6);
+      applyGains(useEditorStore.getState().playheadUs);
+    };
+    el.addEventListener("loadedmetadata", at, { once: true });
+    return () => el.removeEventListener("loadedmetadata", at);
+  }, [micFile]);
 
   const selectedCut = selection?.kind === "cut" ? project.edits.cuts.find((c) => c.id === selection.id) : undefined;
   const caption = selectedZoom
@@ -271,7 +304,7 @@ export function Preview() {
         preload="auto"
         style={{ position: "absolute", width: 1, height: 1, opacity: 0, pointerEvents: "none" }}
       />
-      {mic && <audio ref={audioRef} src={storage.fileUrl(mic.file)} preload="auto" />}
+      {mic && micFile && <audio ref={audioRef} src={storage.fileUrl(micFile)} preload="auto" data-testid="mic-audio" />}
       {sys && <audio ref={sysRef} src={storage.fileUrl(sys.file)} preload="auto" />}
       {cam && (
         <video

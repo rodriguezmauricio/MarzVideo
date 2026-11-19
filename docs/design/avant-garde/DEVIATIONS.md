@@ -109,3 +109,12 @@ Checked in Edge (built-in browser) at 1440 x 900 and 1280 x 720 on `samples/demo
 - **The AI tag** is a 14 px outlined "AI" after the block or cap label; labels and tags are hidden on blocks and caps too narrow to hold them (most short silence cuts at Fit), which also hides the label of very short manual zooms.
 - **Caption word blocks** show no text at Fit on normal speech (words are 2 to 5 px wide); the text appears when the timeline is zoomed in.
 - **The model download ask** uses the Warning bar with two underlined text buttons (not the 34 px banner buttons) so it keeps the bar's 24 px height.
+
+## Audio cleanup (2026-11-19)
+
+Checked in Edge (Playwright) at 1440 x 900 on a copy of the sample project with a computer-sound track. No mockup exists; the block follows DESIGN-SYSTEM.md (Inspector, "Audio block", written first).
+
+- **Audio block in the Project panel** between Camera and AI edit: not in `Editor-Avant-Garde.dc.html`. It makes the panel scroll sooner (the AI edit block starts below the fold at 1440 x 900 when the recording has both tracks).
+- **Volume sliders have no side words** (the Pace slider has "Tight" and "Loose"); the value on the right says it ("80%", "Muted").
+- **One fade length for in and out**: the format stores them apart (`fadeInUs`, `fadeOutUs`); the control sets both. A project with two different lengths shows no fade option selected.
+- **The timeline lanes have no audio controls**: the expanded Mic lane keeps its read-only "80%" bar; volume, mute and fades live in the inspector only.

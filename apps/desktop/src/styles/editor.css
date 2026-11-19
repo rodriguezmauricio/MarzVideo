@@ -259,3 +259,8 @@ input { font: inherit; color: inherit; letter-spacing: inherit; text-transform: 
 .export-panel .tg i { background: var(--ink); }
 .export-panel .tg.on { background: var(--ink); }
 .export-panel .tg.on i { background: var(--accent); }
+
+/* Audio block of the Project panel (DESIGN-SYSTEM.md "Inspector", Audio block): the AI edit block's rows. */
+.insp-audio { margin-top: 18px; border-top: 1px solid var(--ink); }
+.insp-audio .irow { border-top: 0; border-bottom: 1px solid var(--ink); }
+.insp-audio .irow.k34 { min-height: 34px; }

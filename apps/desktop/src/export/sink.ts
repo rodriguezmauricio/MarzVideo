@@ -1,4 +1,4 @@
-import type { Project } from "@marz/format";
+import { audioEdits, TARGET_LUFS, type Project } from "@marz/format";
 import { keptSegments, outputDurationUs } from "@marz/timeline";
 import type { ExportPreset } from "./presets";
 
@@ -10,10 +10,24 @@ export interface ExportJobDto {
   height: number;
   fps: number;
   segments: { srcStartUs: number; srcEndUs: number; outStartUs: number }[];
-  mic: { file: string; offsetUs: number; volume: number; muted: boolean } | null;
+  mic: AudioTrackDto | null;
   /** The computer's sound, mixed with the mic. */
-  system: { file: string; offsetUs: number; volume: number; muted: boolean } | null;
+  system: AudioTrackDto | null;
   outputDurationUs: number;
+  /** Bring the mix to this loudness (absent: leave it as it is). */
+  normalize?: { targetLufs: number };
+}
+
+/** Same JSON as the Rust `MicJob`. Fades are in output time. */
+export interface AudioTrackDto {
+  file: string;
+  offsetUs: number;
+  volume: number;
+  muted: boolean;
+  fadeInUs: number;
+  fadeOutUs: number;
+  /** Read the noise-cleaned copy `cache/mic.clean.wav` (mic only, set when it was just made). */
+  clean: boolean;
 }
 
 /** Same fields as the Rust `ExportReport`. */
@@ -32,11 +46,22 @@ export interface ExportSink {
 }
 
 /** The muxer job for a project and preset. Rust reads whole integers for every time (Math.round). */
-export function buildExportJob(opts: { project: Project; preset: ExportPreset; projectDir: string; outPath: string }): ExportJobDto {
+export function buildExportJob(opts: { project: Project; preset: ExportPreset; projectDir: string; outPath: string; cleanMic?: boolean }): ExportJobDto {
   const { project, preset } = opts;
   const segs = keptSegments(project.durationUs, project.edits.cuts);
   const mic = project.tracks.mic;
   const sys = project.tracks.system;
+  const audio = audioEdits(project);
+  type Track = NonNullable<Project["tracks"]["mic"]>;
+  const track = (t: Track, fade: { fadeInUs: number; fadeOutUs: number }, clean: boolean): AudioTrackDto => ({
+    file: t.file,
+    offsetUs: Math.round(t.offsetUs),
+    volume: t.volume,
+    muted: t.muted,
+    fadeInUs: Math.round(fade.fadeInUs),
+    fadeOutUs: Math.round(fade.fadeOutUs),
+    clean,
+  });
   return {
     projectDir: opts.projectDir,
     outPath: opts.outPath,
@@ -48,8 +73,9 @@ export function buildExportJob(opts: { project: Project; preset: ExportPreset; p
       srcEndUs: Math.round(s.srcEndUs),
       outStartUs: Math.round(s.outStartUs),
     })),
-    mic: mic ? { file: mic.file, offsetUs: Math.round(mic.offsetUs), volume: mic.volume, muted: mic.muted } : null,
-    system: sys ? { file: sys.file, offsetUs: Math.round(sys.offsetUs), volume: sys.volume, muted: sys.muted } : null,
+    mic: mic ? track(mic, audio.mic, audio.denoise && !!opts.cleanMic) : null,
+    system: sys ? track(sys, audio.system, false) : null,
     outputDurationUs: Math.round(outputDurationUs(segs)),
+    ...(audio.normalize ? { normalize: { targetLufs: TARGET_LUFS } } : {}),
   };
 }

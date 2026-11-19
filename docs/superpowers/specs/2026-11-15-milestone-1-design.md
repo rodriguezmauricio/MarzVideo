@@ -78,6 +78,7 @@ MyRecording.marz/
   camera.mp4       optional (2026-11-18): the webcam, fragmented MP4, H.264, 30 fps constant
   proxies/         optional, later
   transcript.json  optional (M2, 2026-11-19): words from mic.wav, written only by the transcription step
+  cache/           optional (2026-11-19): derived files, e.g. mic.clean.wav (noise removed); safe to delete
 ```
 
 **Time:** every timestamp is an integer number of **microseconds since recording start** (`tUs`),
@@ -120,6 +121,15 @@ for timed layouts and kept as is. Preview and export draw the camera last, aspec
 - Tolerant readers: an unknown zoom or cut `origin` reads as `"manual"`, an unknown `easing` as
   `"easeInOutCubic"`, an unknown cut `reason` as none; the original value is written back on save unless the
   editor changed that field. Older projects open as before; `version` stays 1.
+
+**Audio cleanup (added 2026-11-19, owner's overnight pre-approval; design `2026-11-19-audio-cleanup-design.md`):**
+`tracks.mic` / `tracks.system` `volume` (gain, 1 = 100%) and `muted` are edited in the inspector. `edits.audio` is
+optional: `{ "denoise": true, "normalize": true, "mic": { "fadeInUs": 0, "fadeOutUs": 0 }, "system": { "fadeInUs": 0,
+"fadeOutUs": 0 } }`; a missing block or key means these defaults (noise removal and -14 LUFS loudness on, no fades), a
+broken value reads as its default. Fades are in output time (from the start / to the end of the export), linear, per
+track, after the volume. Derived and regenerable, may be deleted: `cache/mic.clean.wav` (the mic after noise removal,
+same length, mono 16-bit 48 kHz) and `cache/mic.clean.json` (`{ "version": 1, "filter", "mic": { "bytes", "modifiedMs" } }`,
+the `mic.wav` and filter that made it; a mismatch means it is made again). Raw tracks stay untouched; `version` stays 1.
 
 **Coordinates:** in events, pixels in the captured source frame (origin top-left). In edits,
 normalized 0–1 relative to the source frame, so edits survive resolution/proxy changes.

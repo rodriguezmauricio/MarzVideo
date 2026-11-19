@@ -42,6 +42,11 @@ Windows-first screen recorder + non-destructive editor (Tauri 2, Rust, React/TS)
   Whisper is looked up in `MARZ_WHISPER`, beside the exe, the app data folder `whisper` (`%APPDATA%/com.marz.recorder/whisper`), then PATH;
   models live in the app data folder `models` (downloaded after his yes). Ran end to end on this laptop on a copy of his 19.35 take.
   Open: his three test takes and the quality check (list at the end of the spike doc).
+- **Done (branch `claude/audio-cleanup-23a566`, not merged yet):** audio cleanup (design `docs/superpowers/specs/2026-11-19-audio-cleanup-design.md`,
+  plan `docs/superpowers/plans/2026-11-19-audio-cleanup.md`). Inspector Audio block: volume, mute and fade per track (mic, computer sound),
+  "Remove mic noise" (FFmpeg `highpass` + `afftdn`, cached `cache/mic.clean.wav`, played in preview, read by export; RNNoise when
+  `rnnoise.rnnn` is in the app data `models` folder) and "Even loudness at export" (`ebur128` measure, `loudnorm` to -14 LUFS). Optional
+  `edits.audio`. App exports of the copy "Audio test": -14.8 LUFS, true peak -1.2 dB, both presets. Not listened to yet.
 - **Not checked by hand yet:** the owner checks in `docs/spikes/2026-11-17-owner-checks.md` (clean 3-minute run,
   flash and beep sync, clicks, static screen, mic unplug, 60 Hz, real hotkeys), plus: open New recording once and
   look at the overlay, play an export in Windows Media Player, upload one export of each preset privately and

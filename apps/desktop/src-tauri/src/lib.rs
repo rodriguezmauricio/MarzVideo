@@ -1,6 +1,7 @@
 //! Marz Recorder desktop shell: a Tauri 2 window around the editor.
 
 mod ai;
+mod audio;
 mod close;
 mod export;
 mod projects;
@@ -21,6 +22,7 @@ pub fn run() {
         .manage(close::Closing::default())
         .manage(ai::AiRun::default())
         .manage(transcribe::TranscribeRun::default())
+        .manage(audio::Cleaning::default())
         .on_window_event(close::on_window_event)
         .invoke_handler(tauri::generate_handler![
             close::close_main,
@@ -64,6 +66,7 @@ pub fn run() {
             transcribe::transcribe_cancel,
             transcribe::model_status,
             transcribe::download_model,
+            audio::audio_clean_mic,
         ])
         .build(tauri::generate_context!())
         .expect("error while running Marz Recorder")
