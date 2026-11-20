@@ -146,7 +146,7 @@ Windows-first screen recorder + non-destructive editor (Tauri 2, Rust, React/TS)
   Four-screen intro on first start (skippable, "Show the intro again" in Settings). File settings in `settings.json` in the app
   config folder via `src-tauri/src/settings.rs` (archive folder stays in `archive-settings.json`); localStorage ones via
   `apps/desktop/src/settings/localSettings.ts`. Browser: `?settings=1`, `?onboarding=1`.
-- **Built (not merged), branch `claude/live-hide-cursor-199c34`:** live hide cursor (design
+- **Done (merged 2026-11-20, not checked by hand yet):** live hide cursor (design
   `docs/superpowers/specs/2026-11-19-live-hide-cursor-design.md`, plan `docs/superpowers/plans/2026-11-19-live-hide-cursor.md`).
   Ctrl+Shift+H (rebindable, `hideCursor`) or "Hide cursor" on the recording bar hides the cursor in the video from then on; the
   real cursor and the capture never change. `cursorHidden` lines in `events.jsonl`, turned into Cursor lane blocks on first open
@@ -154,13 +154,13 @@ Windows-first screen recorder + non-destructive editor (Tauri 2, Rust, React/TS)
   is wider than the monitor, Draw and Hide cursor show icons only. Checked: a real CLI take on Windows with the hotkey sent by
   simulated input (one block 2.6 s to 6.5 s on first open), fake bar and editor in Edge at 1440 x 900 and 1280 x 720.
   Not checked: the button and hotkey in the Tauri app, an export of a take with a live block.
-- **Built (not merged, branch `claude/bg-image-blur-9ff3af`):** background image, blur and gradient (design
+- **Done (merged 2026-11-20, not checked by hand yet):** background image, blur and gradient (design
   `docs/superpowers/specs/2026-11-19-background-image-blur-design.md`, plan `docs/superpowers/plans/2026-11-19-background-image-blur.md`).
   Background styles Gradient (two brand tokens), Image (JPG/PNG copied to `assets/background-<hash>.<ext>` by the Rust command
   `pick_background_image` in `src-tauri/src/background.rs`; the dev server accepts the same PUT for the sample) and Blur (the screen frame
   blurred on a canvas 1/12 the size). Optional `edits.background.gradient` and `.image`. Checked: Edge at 1440 x 900 and 1280 x 720, browser
   exports of both presets per style (ffprobe and frame grabs). Not checked: the Tauri app (Pick image dialog, app export).
-- **Built (not merged, branch `claude/scene-presets-02a719`):** scene presets ("looks") (design
+- **Done (merged 2026-11-20, not checked by hand yet):** scene presets ("looks") (design
   `docs/superpowers/specs/2026-11-19-scene-presets-design.md`, plan `docs/superpowers/plans/2026-11-19-scene-presets.md`).
   Project panel Look block (first): Save look stores the camera (mirror, shape incl. custom mask, size, corner or free
   position, border, switch presets), the whole `edits.background` and both caption styles under a name; Apply writes them as
@@ -169,7 +169,7 @@ Windows-first screen recorder + non-destructive editor (Tauri 2, Rust, React/TS)
   config folder (`src-tauri/src/looks.rs`), localStorage `marz.looks` in the browser. Code: `packages/timeline/src/looks.ts`,
   `apps/desktop/src/looks`. Checked in Edge at 1440 x 900 and 1280 x 720 on the samples: save, apply, undo, default on a new
   take, older take untouched. Not checked: the Tauri app (`looks.json` on disk).
-- **Built (not merged, branch `claude/keypress-overlay-d8623b`):** keypress log and on-video keys (design
+- **Done (merged 2026-11-20, not checked by hand yet):** keypress log and on-video keys (design
   `docs/superpowers/specs/2026-11-19-keypress-overlay-design.md`, plan `docs/superpowers/plans/2026-11-19-keypress-overlay.md`).
   Opt-in "Log shortcuts" (chip line under the setup bar, Settings Devices; off by default). The capture engine logs only combos
   with Ctrl, Alt or Win, Shift plus a named key, and named keys (Enter, Esc, Tab, arrows, F keys...); never typed text, AltGr,
@@ -181,7 +181,7 @@ Windows-first screen recorder + non-destructive editor (Tauri 2, Rust, React/TS)
   Checked: real take in a test copy of the app with simulated combos (all six logged, typed "hello" not), keys in the preview
   and in both exports (`Videos/Marz Recorder/Exports/Keys test`, frame sheets there), browser 1440 x 900 and 1280 x 720.
   Not checked: his real keyboard, AltGr on his layout, a browser password field.
-- **Built (not merged, branch `claude/ai-provider-6b9ced`):** swappable AI provider (design
+- **Done (merged 2026-11-20, not checked by hand yet):** swappable AI provider (design
   `docs/superpowers/specs/2026-11-19-ai-provider-design.md`, plan `docs/superpowers/plans/2026-11-19-ai-provider.md`).
   The AI pass and the checklist both ask through `src-tauri/src/provider.rs`: Claude Code (default, same `claude -p` call),
   Anthropic API (raw HTTP, `claude-opus-5-5` or `claude-sonnet-5-5`, checklist `claude-haiku-5-5`, structured output, key only
