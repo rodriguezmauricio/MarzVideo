@@ -29,6 +29,13 @@ export type AiStatus = {
   whisperDir: string | null;
 };
 
+export type ProviderId = "claude-code" | "anthropic" | "local" | "off";
+/** provider.rs `AiConfig`: what settings.json `ai` holds. Never the key. */
+export type AiConfig = { provider: ProviderId; anthropicModel: string; localUrl: string; localModel: string };
+/** provider.rs `ProviderView`: the config, whether a key is saved (and its last 4 characters), Claude Code's path. */
+export type ProviderView = AiConfig & { keySaved: boolean; keyLast4: string | null; claude: string | null };
+export type TestResult = { ok: boolean; text: string };
+
 export type Device = { id: string; name: string; default?: boolean };
 export type Devices = { mics: Device[]; cameras: Device[] };
 
@@ -45,6 +52,14 @@ export interface SettingsApi {
   /** Downloads the transcription models (only after his click). */
   downloadModels(onPct: (pct: number) => void): Promise<void>;
   devices(): Promise<Devices>;
+  aiProvider(): Promise<ProviderView>;
+  /** Rejects with the sentence when refused (an address without http://). */
+  setAiProvider(config: AiConfig): Promise<ProviderView>;
+  /** Saves the key in Windows Credential Manager. The key never comes back. */
+  saveAiKey(key: string): Promise<ProviderView>;
+  removeAiKey(): Promise<ProviderView>;
+  /** Checks the saved provider without spending anything. */
+  testAiProvider(): Promise<TestResult>;
   /** Level meter 0..1 for `micId` (null = default) while on; returns a stop function. */
   meter(micId: string | null, onLevel: (level: number) => void): Promise<() => void>;
 }
@@ -71,6 +86,11 @@ const tauriApi: SettingsApi = {
     }
   },
   devices: () => invoke<Devices>("settings_devices"),
+  aiProvider: () => invoke<ProviderView>("ai_provider_get"),
+  setAiProvider: (config) => invoke<ProviderView>("ai_provider_set", { config }),
+  saveAiKey: (key) => invoke<ProviderView>("ai_key_save", { key }),
+  removeAiKey: () => invoke<ProviderView>("ai_key_remove"),
+  testAiProvider: () => invoke<TestResult>("ai_provider_test"),
   async meter(micId, onLevel) {
     const unlisten = await listen<number>("settings://level", (e) => onLevel(e.payload));
     try {
@@ -99,6 +119,16 @@ export function fakeSettingsApi(): SettingsApi {
     onboardingDone: false,
   };
   let present = false;
+  let ai: ProviderView = {
+    provider: "claude-code",
+    anthropicModel: "claude-opus-5-5",
+    localUrl: "http://localhost:11434",
+    localModel: "",
+    keySaved: false,
+    keyLast4: null,
+    claude: "C:\\Users\\you\\.local\\bin\\claude.exe",
+  };
+  const pause = () => new Promise((r) => setTimeout(r, 120));
   return {
     get: async () => view,
     pickFolder: async (kind) => {
@@ -136,6 +166,28 @@ export function fakeSettingsApi(): SettingsApi {
       ],
       cameras: [{ id: "cam-int", name: "Integrated Webcam" }],
     }),
+    aiProvider: async () => ai,
+    setAiProvider: async (c) => {
+      const url = c.localUrl.trim().replace(/\/+$/, "") || "http://localhost:11434";
+      if (!/^https?:\/\//.test(url)) throw "The address starts with http:// or https://.";
+      return (ai = { ...ai, ...c, localUrl: url, localModel: c.localModel.trim() });
+    },
+    saveAiKey: async (key) => {
+      const k = key.trim();
+      if (!k) throw "Paste the key first.";
+      return (ai = { ...ai, keySaved: true, keyLast4: k.slice(-4) });
+    },
+    removeAiKey: async () => (ai = { ...ai, keySaved: false, keyLast4: null }),
+    testAiProvider: async () => {
+      await pause();
+      if (ai.provider === "off") return { ok: true, text: "AI is off. Nothing is sent." };
+      if (ai.provider === "claude-code") return { ok: true, text: "Claude Code is installed. It uses your Claude subscription." };
+      if (ai.provider === "anthropic") return ai.keySaved ? { ok: true, text: `Connected. ${ai.anthropicModel} is ready.` } : { ok: false, text: "No key saved yet." };
+      if (!ai.localModel) return { ok: false, text: "Connected. Type a model name. Found: llama3.1:latest, qwen2.5:7b." };
+      return ["llama3.1", "qwen2.5:7b"].includes(ai.localModel)
+        ? { ok: true, text: `Connected. ${ai.localModel} is ready.` }
+        : { ok: false, text: `Connected, but there is no model named ${ai.localModel}. Found: llama3.1:latest, qwen2.5:7b.` };
+    },
     meter: async (_micId, onLevel) => {
       let t = 0;
       const id = setInterval(() => onLevel(0.35 + 0.3 * Math.abs(Math.sin((t += 0.4)))), 50);

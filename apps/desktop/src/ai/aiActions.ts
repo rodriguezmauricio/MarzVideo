@@ -91,10 +91,13 @@ async function run(withTranscription: boolean, keepWarning = false): Promise<voi
   const dir = useAppStore.getState().dir;
   s.setAi({ running: true, status: null, ...(keepWarning ? {} : { warning: null }) });
   try {
+    const picked = await pickProvider();
+    if (ac.signal.aborted) return;
     const out = await runAiPass({
       history,
       events: s.events,
-      provider: pickProvider(),
+      provider: picked.provider,
+      providerNote: picked.note,
       transcribe: withTranscription && isTauri() && dir ? (onPct, signal) => transcribeProject(dir, onPct, signal) : null,
       readTranscript: () => readTranscript(storage),
       readLevels,

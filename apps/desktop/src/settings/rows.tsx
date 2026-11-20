@@ -131,8 +131,9 @@ export function DeviceRows({ api }: { api: SettingsApi }) {
 
 const gb = (bytes: number) => `${(bytes / 1e9).toFixed(1)} GB`;
 
-/** Whisper, the models (with the download button: the click is his yes) and Claude Code. */
-export function AiRows({ api }: { api: SettingsApi }) {
+/** Whisper, the models (with the download button: the click is his yes) and Claude Code (left out
+ * in Settings, where the provider rows show it). */
+export function AiRows({ api, claude = true }: { api: SettingsApi; claude?: boolean }) {
   const [s, setS] = useState<AiStatus | null>(null);
   const [pct, setPct] = useState<number | null>(null);
   const [failed, setFailed] = useState<string | null>(null);
@@ -200,7 +201,7 @@ export function AiRows({ api }: { api: SettingsApi }) {
           </div>
         )}
       </div>
-      <div className="st-row">
+      {claude && <div className="st-row">
         <span className="st-label">Claude Code</span>
         <span className="st-value">
           {s.claude ? (
@@ -213,7 +214,7 @@ export function AiRows({ api }: { api: SettingsApi }) {
             </>
           )}
         </span>
-      </div>
+      </div>}
     </>
   );
 }

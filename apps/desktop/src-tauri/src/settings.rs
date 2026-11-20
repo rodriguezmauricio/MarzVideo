@@ -41,6 +41,9 @@ pub struct Stored {
     pub hotkeys: BTreeMap<String, String>,
     #[serde(default)]
     pub onboarding_done: bool,
+    /// The AI provider (`provider.rs`). Never the API key: that is in Credential Manager.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ai: Option<crate::provider::AiConfig>,
     /// Keys a later build wrote: kept as they are.
     #[serde(flatten)]
     pub other: Map<String, Value>,
@@ -68,11 +71,11 @@ fn path(app: &AppHandle) -> Result<PathBuf, String> {
     Ok(app.path().app_config_dir().map_err(err)?.join(FILE))
 }
 
-fn load(app: &AppHandle) -> Stored {
+pub(crate) fn load(app: &AppHandle) -> Stored {
     path(app).map(|p| read(&p)).unwrap_or_default()
 }
 
-fn update(app: &AppHandle, f: impl FnOnce(&mut Stored)) -> Result<Stored, String> {
+pub(crate) fn update(app: &AppHandle, f: impl FnOnce(&mut Stored)) -> Result<Stored, String> {
     let _g = WRITE.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
     let p = path(app)?;
     let mut s = read(&p);
