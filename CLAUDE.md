@@ -146,6 +146,14 @@ Windows-first screen recorder + non-destructive editor (Tauri 2, Rust, React/TS)
   Four-screen intro on first start (skippable, "Show the intro again" in Settings). File settings in `settings.json` in the app
   config folder via `src-tauri/src/settings.rs` (archive folder stays in `archive-settings.json`); localStorage ones via
   `apps/desktop/src/settings/localSettings.ts`. Browser: `?settings=1`, `?onboarding=1`.
+- **Built (not merged), branch `claude/live-hide-cursor-199c34`:** live hide cursor (design
+  `docs/superpowers/specs/2026-11-19-live-hide-cursor-design.md`, plan `docs/superpowers/plans/2026-11-19-live-hide-cursor.md`).
+  Ctrl+Shift+H (rebindable, `hideCursor`) or "Hide cursor" on the recording bar hides the cursor in the video from then on; the
+  real cursor and the capture never change. `cursorHidden` lines in `events.jsonl`, turned into Cursor lane blocks on first open
+  (`importLiveCursor`, `edits.cursor.liveImported`); the live state starts at the setup bar's Hide cursor toggle. When the bar
+  is wider than the monitor, Draw and Hide cursor show icons only. Checked: a real CLI take on Windows with the hotkey sent by
+  simulated input (one block 2.6 s to 6.5 s on first open), fake bar and editor in Edge at 1440 x 900 and 1280 x 720.
+  Not checked: the button and hotkey in the Tauri app, an export of a take with a live block.
 - **Not checked by hand yet:** the owner checks in `docs/spikes/2026-11-17-owner-checks.md` (clean 3-minute run,
   flash and beep sync, clicks, static screen, mic unplug, 60 Hz, real hotkeys), plus: open New recording once and
   look at the overlay, play an export in Windows Media Player, upload one export of each preset privately and

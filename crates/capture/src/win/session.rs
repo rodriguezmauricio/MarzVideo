@@ -740,6 +740,13 @@ impl Session {
         self.log(|l| l.layout(t, layout));
     }
 
+    /// Live hide cursor: logs a `cursorHidden` line. Works while paused (the line gets the pause
+    /// time, so the change starts where the take resumes). Ignored before t0.
+    pub fn cursor_hidden(&self, hidden: bool) {
+        let Some(t) = self.rec_us_any() else { return };
+        self.log(|l| l.cursor_hidden(t, hidden));
+    }
+
     /// Recording time in microseconds now, or None (not started, paused).
     fn rec_us_now(&self) -> Option<i64> {
         let now = qpc_hns();

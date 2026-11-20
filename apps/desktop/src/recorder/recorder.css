@@ -119,7 +119,7 @@ html.bar-page #root { height: 100%; display: flex; flex-direction: column; justi
 .rr-stop { position: relative; display: flex; align-items: center; justify-content: center; gap: 8px; height: 44px; padding: 0 16px; background: var(--rec); color: var(--rec-ink); font-weight: 500; }
 .rr-stop:disabled { cursor: default; }
 .rr-tip { position: absolute; z-index: 30; bottom: 52px; left: 0; padding: 7px 10px; background: var(--paper); color: var(--ink); font-weight: 500; white-space: nowrap; pointer-events: none; }
-.rr-stop .rr-tip { left: auto; right: 0; }
+.rr-stop .rr-tip, .rr-b.tip-end .rr-tip { left: auto; right: 0; }
 
 /* ---- draw mode while recording: DESIGN-SYSTEM.md "Recorder: draw mode" ---- */
 .dr-layer { position: absolute; inset: 0; z-index: 30; pointer-events: auto; }

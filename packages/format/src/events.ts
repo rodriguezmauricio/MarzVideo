@@ -17,6 +17,8 @@ const CursorShapeSchema = z.object({
   shape: z.string().transform((v): CursorShape => ((CURSOR_SHAPES as readonly string[]).includes(v) ? (v as CursorShape) : "other")),
   px: z.number().positive().default(32),
 });
+/** Live hide cursor: the cursor is hidden in the video (`true`) or shown (`false`) from `tUs` on. */
+const CursorHiddenSchema = z.object({ ...Base, type: z.literal("cursorHidden"), hidden: z.boolean() });
 const ClickSchema = z.object({
   ...Base,
   type: z.literal("click"),
@@ -61,6 +63,7 @@ const ResumeSchema = z.object({ ...Base, type: z.literal("resume") });
 const KNOWN = {
   cursor: CursorSchema,
   cursorShape: CursorShapeSchema,
+  cursorHidden: CursorHiddenSchema,
   click: ClickSchema,
   zoom: ZoomEventSchema,
   layout: LayoutEventSchema,
@@ -73,6 +76,7 @@ const KNOWN = {
 export type EventsHeader = Omit<z.infer<typeof HeaderSchema>, "type">;
 export type CursorEvent = z.infer<typeof CursorSchema>;
 export type CursorShapeEvent = z.infer<typeof CursorShapeSchema>;
+export type CursorHiddenEvent = z.infer<typeof CursorHiddenSchema>;
 export type ClickEvent = z.infer<typeof ClickSchema>;
 export type ZoomEvent = z.infer<typeof ZoomEventSchema>;
 export type LayoutEvent = z.infer<typeof LayoutEventSchema>;
@@ -80,7 +84,7 @@ export type DrawEvent = z.infer<typeof DrawEventSchema>;
 export type ChecklistEvent = z.infer<typeof ChecklistEventSchema>;
 export type PauseEvent = z.infer<typeof PauseSchema>;
 export type ResumeEvent = z.infer<typeof ResumeSchema>;
-export type MarzEvent = CursorEvent | CursorShapeEvent | ClickEvent | ZoomEvent | LayoutEvent | DrawEvent | ChecklistEvent | PauseEvent | ResumeEvent;
+export type MarzEvent = CursorEvent | CursorShapeEvent | CursorHiddenEvent | ClickEvent | ZoomEvent | LayoutEvent | DrawEvent | ChecklistEvent | PauseEvent | ResumeEvent;
 
 export function parseEvents(text: string): { header: EventsHeader; events: MarzEvent[] } {
   const lines = text.split(/\r?\n/).filter((l) => l.trim() !== "");

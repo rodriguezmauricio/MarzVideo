@@ -300,6 +300,8 @@ mod cli {
         let ffcpu0 = ff.map_or(0.0, cpu_s);
         let mut paused_since: Option<Instant> = None;
         let mut paused_total = Duration::ZERO;
+        // Live hide cursor (the hotkey toggles it from the setup state).
+        let mut cursor_hidden = a.cursor_hidden;
         let mut next_progress = 10u64;
         let mut failed = false;
         let toggle_pause = |s: &Session, since: &mut Option<Instant>, total: &mut Duration, el: f64| {
@@ -355,6 +357,10 @@ mod cli {
                             Hotkey::Preset(_) => {}
                             Hotkey::ZoomOut => session.zoom(None),
                             Hotkey::Draw | Hotkey::Check => {}
+                            Hotkey::HideCursor => {
+                                cursor_hidden = !cursor_hidden;
+                                session.cursor_hidden(cursor_hidden);
+                            }
                             Hotkey::Layout(n) => {
                                 if let Some(name) = marz_capture::events::LAYOUTS.get(usize::from(n.saturating_sub(1))) {
                                     session.layout(name);

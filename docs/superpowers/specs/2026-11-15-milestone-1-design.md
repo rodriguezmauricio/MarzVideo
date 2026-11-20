@@ -189,6 +189,9 @@ normalized 0–1 relative to the source frame, so edits survive resolution/proxy
 - AI checklist (2026-11-19, `2026-11-19-ai-checklist-design.md`) adds `checklist` lines: once at the start
   `{"tUs":..,"type":"checklist","op":"list","items":[{"id":"c1","text":"Pricing page"}]}`, then per covered topic
   `{"tUs":..,"type":"checklist","op":"tick","id":"c1","atUs":..,"by":"auto"|"ai"|"hand"}` (`atUs`: when it was said).
+- Live hide cursor (2026-11-19, `2026-11-19-live-hide-cursor-design.md`) adds `cursorHidden` lines:
+  `{"tUs":..,"type":"cursorHidden","hidden":true|false}` (the cursor is hidden in the video from `tUs` on; only changes
+  are logged). The editor turns them into Cursor lane blocks once and sets `edits.cursor.liveImported`.
 
 ### `project.json`
 

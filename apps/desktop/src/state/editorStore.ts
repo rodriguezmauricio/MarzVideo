@@ -2,7 +2,7 @@ import { create } from "zustand";
 import { cameraScenes, checklistEdits, checklistItems, cursorSections, EMPTY_ARCHIVE_STATE, parseArchiveState, type ArchiveState, drawingStrokes, parseProject, verticalEdits, serializeProject, type CaptionPresetId, type MarzEvent, type Project, type Section, type Word } from "@marz/format";
 import type { Levels } from "@marz/autoedit";
 import type { AiStatus } from "../ai/runAiPass";
-import { History, importLiveChecklist, importLiveDrawings, importLiveLayouts, type Command } from "@marz/timeline";
+import { History, importLiveChecklist, importLiveCursor, importLiveDrawings, importLiveLayouts, type Command } from "@marz/timeline";
 import { createAutosave, type SaveStatus } from "../storage/autosave";
 import type { ProjectStorage } from "../storage/types";
 import { withMedia } from "../storage/withMedia";
@@ -151,8 +151,8 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       // Optional: no archive.json (or an unreadable one) means the raw files are here.
       const archive = await storage.readText("archive.json").then((t) => parseArchiveState(JSON.parse(t)), () => EMPTY_ARCHIVE_STATE);
       // Layout hotkeys pressed while recording become Live layout blocks the first time the take
-      // opens (not an undo step; saved with the next autosave). Live drawing strokes too.
-      const project = importLiveChecklist(events)(importLiveDrawings(events)(importLiveLayouts(events)(read)));
+      // opens (not an undo step; saved with the next autosave). Live drawing strokes and live hide cursor too.
+      const project = importLiveCursor(events)(importLiveChecklist(events)(importLiveDrawings(events)(importLiveLayouts(events)(read))));
       // The first open of a take with a checklist topic not covered shows the Checklist tab (the flag after Stop).
       const firstCheck = !checklistEdits(read).liveImported && checklistEdits(project).liveImported === true;
       const flagChecklist = firstCheck && checklistItems(project).some((i) => i.atUs === null);

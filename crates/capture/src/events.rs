@@ -95,6 +95,14 @@ struct ZoomLine<'a> {
 }
 
 #[derive(Serialize)]
+struct CursorHiddenLine {
+    #[serde(rename = "tUs")]
+    t_us: i64,
+    r#type: &'static str,
+    hidden: bool,
+}
+
+#[derive(Serialize)]
 struct LayoutLine<'a> {
     #[serde(rename = "tUs")]
     t_us: i64,
@@ -262,6 +270,12 @@ impl<W: Write> EventLog<W> {
     /// A live layout switch (one of `LAYOUTS`); the editor turns these into layout scenes.
     pub fn layout(&mut self, rec_us: i64, layout: &str) {
         self.write_line(rec_us, &LayoutLine { t_us: rec_us, r#type: "layout", layout });
+    }
+
+    /// Live hide cursor: the cursor is hidden in the video (`true`) or shown (`false`) from `rec_us`
+    /// on. The real cursor and the capture are untouched; the editor turns these into Cursor lane blocks.
+    pub fn cursor_hidden(&mut self, rec_us: i64, hidden: bool) {
+        self.write_line(rec_us, &CursorHiddenLine { t_us: rec_us, r#type: "cursorHidden", hidden });
     }
 
     /// A finished stroke, written when it is done; `start_us` is the press (clamped to `rec_us`).
@@ -486,6 +500,22 @@ mod tests {
         log.layout(4_000_000, LAYOUTS[1]);
         let out = text(log);
         assert_eq!(lines(&out), vec![HEADER_LINE, r#"{"tUs":4000000,"type":"layout","layout":"side"}"#]);
+    }
+
+    #[test]
+    fn cursor_hidden_lines() {
+        let mut log = new_log((0, 0));
+        log.cursor_hidden(1_000_000, true);
+        log.cursor_hidden(2_500_000, false);
+        let out = text(log);
+        assert_eq!(
+            lines(&out),
+            vec![
+                HEADER_LINE,
+                r#"{"tUs":1000000,"type":"cursorHidden","hidden":true}"#,
+                r#"{"tUs":2500000,"type":"cursorHidden","hidden":false}"#,
+            ]
+        );
     }
 
     #[test]

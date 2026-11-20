@@ -59,6 +59,11 @@ export function cursorSections(p: Project): CursorSection[] {
     .sort((a, b) => a.startUs - b.startUs || a.endUs - b.endUs);
 }
 
+/** The live hide cursor lines (`cursorHidden` in `events.jsonl`) were turned into blocks already. */
+export function cursorLiveImported(p: Project): boolean {
+  return (p.edits.cursor as { liveImported?: unknown }).liveImported === true;
+}
+
 export function clickSettings(p: Project): ClickSettings {
   const c = p.edits.clicks as { effect?: unknown; style?: unknown; color?: unknown; size?: unknown };
   const effectStyle = (CLICK_STYLE_LIST as readonly unknown[]).includes(c.effect) ? (c.effect as ClickStyle) : null;

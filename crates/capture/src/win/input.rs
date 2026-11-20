@@ -52,6 +52,8 @@ pub enum Hotkey {
     Draw,
     /// Ctrl+Shift+K: tick the next open checklist topic.
     Check,
+    /// Ctrl+Shift+H: hide or show the cursor in the video (logged, the real cursor stays).
+    HideCursor,
 }
 
 impl Hotkey {
@@ -63,6 +65,7 @@ impl Hotkey {
         v.extend((1..=5).map(Hotkey::Layout));
         v.push(Hotkey::Draw);
         v.push(Hotkey::Check);
+        v.push(Hotkey::HideCursor);
         v
     }
 
@@ -82,6 +85,7 @@ impl Hotkey {
             Hotkey::Layout(n) => format!("layout{n}"),
             Hotkey::Draw => "draw".into(),
             Hotkey::Check => "check".into(),
+            Hotkey::HideCursor => "hideCursor".into(),
         }
     }
 
@@ -97,6 +101,7 @@ impl Hotkey {
             Hotkey::Layout(n) => 13 + i32::from(n),
             Hotkey::Draw => 18,
             Hotkey::Check => 19,
+            Hotkey::HideCursor => 21,
         }
     }
 
@@ -323,5 +328,6 @@ mod tests {
             assert_eq!(Hotkey::from_id(h.id()), Some(h));
         }
         assert_eq!(Hotkey::Layout(5).label(), "Ctrl+Shift+5");
+        assert_eq!(Hotkey::HideCursor.label(), "Ctrl+Shift+H");
     }
 }

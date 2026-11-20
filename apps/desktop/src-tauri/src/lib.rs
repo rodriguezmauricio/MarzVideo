@@ -66,6 +66,7 @@ pub fn run() {
             recording::stop_recording,
             recording::recording_state,
             recording::toggle_draw,
+            recording::toggle_cursor,
             recording::draw_op,
             checklist::checklist_tick,
             checklist::checklist_ai,
