@@ -1,6 +1,6 @@
 // The live side of the AI checklist, in the overlay page while recording: words from Rust's live
 // transcription come in, open topics are matched locally and ticked ("auto"); when that leaves
-// topics open, Claude Code is asked now and then (rate-limited, text only) and its finds tick "ai".
+// topics open, the AI provider picked in Settings is asked now and then (rate-limited, text only) and its finds tick "ai".
 // docs/superpowers/specs/2026-11-19-ai-checklist-design.md
 import {
   AI_SEND_MAX_US,
@@ -26,8 +26,8 @@ export type LiveDeps = {
 
 /** Words kept for matching (the matcher only needs 30 s windows; the ask at most 3 min). */
 const KEEP_US = 600_000_000;
-/** Claude errors that will not go away during this recording. */
-const FINAL = new Set(["notInstalled", "notSignedIn", "usageLimit"]);
+/** Provider errors that will not go away during this recording (ai.rs `AiError`). */
+export const FINAL = new Set(["notInstalled", "notSignedIn", "usageLimit", "off", "noKey", "badKey"]);
 
 export class LiveChecklist {
   private words: LiveWord[] = [];

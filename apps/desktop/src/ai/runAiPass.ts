@@ -45,12 +45,18 @@ export const SENTENCES = {
   usageLimit: "Claude usage limit reached. Rerun later.",
   badResult: "AI result looked wrong. Mistakes and AI zooms were skipped.",
   aiFailed: "The AI step failed. Mistakes and AI zooms were skipped.",
+  off: "AI is off in Settings. Only silences and ums were cut.",
+  noKey: "No Anthropic API key saved. Add it in Settings. Mistakes and AI zooms were skipped.",
+  badKey: "The Anthropic API key was refused. Check it in Settings. Mistakes and AI zooms were skipped.",
+  unreachable: "The local AI did not answer. Check its address in Settings. Mistakes and AI zooms were skipped.",
 } as const;
 
 export type AiPassDeps = {
   history: History;
   events: MarzEvent[];
   provider: AiProvider | null;
+  /** Shown when `provider` is null on purpose (AI is off in Settings). */
+  providerNote?: string | null;
   /** Writes `transcript.json` when it is missing or stale (null: no transcription available). */
   transcribe: ((onPct: (pct: number) => void, signal: AbortSignal) => Promise<void>) | null;
   readTranscript: () => Promise<Transcript | null>;
@@ -66,6 +72,10 @@ function providerSentence(e: unknown): string {
     if (e.kind === "notSignedIn") return SENTENCES.notSignedIn;
     if (e.kind === "usageLimit") return SENTENCES.usageLimit;
     if (e.kind === "badResult") return SENTENCES.badResult;
+    if (e.kind === "off") return SENTENCES.off;
+    if (e.kind === "noKey") return SENTENCES.noKey;
+    if (e.kind === "badKey") return SENTENCES.badKey;
+    if (e.kind === "unreachable") return SENTENCES.unreachable;
   }
   return SENTENCES.aiFailed;
 }
@@ -104,6 +114,7 @@ export async function runAiPass(deps: AiPassDeps): Promise<AiOutcome> {
   }
 
   const words = transcript ? cleanWords(transcript.words, levels) : [];
+  if (!provider && deps.providerNote && words.length > 0) warnings.push(deps.providerNote);
   const project = history.current;
   const settings = aiEdits(project);
   const durationUs = project.durationUs;

@@ -75,14 +75,15 @@ pub fn checklist_tick(app: tauri::AppHandle, id: Option<String>, at_us: Option<i
 #[derive(Default)]
 pub struct ChecklistAi(AiRun);
 
-/// Model for the live ask: small and quick (only a few lines of text go in).
+/// Claude Code model for the live ask: small and quick (only a few lines of text go in).
 const AI_MODEL: &str = "haiku";
 
-/// Ask Claude Code which open topics the transcript covered. Only the prompt text goes in.
+/// Ask the provider picked in Settings which open topics the transcript covered. Only the prompt
+/// text goes in.
 #[tauri::command(async)]
-pub fn checklist_ai(run: State<'_, ChecklistAi>, prompt: String, schema: String) -> Result<String, AiError> {
-    let claude = ai::find_claude().ok_or(AiError::NotInstalled)?;
-    ai::run_claude(&run.0, &claude, &prompt, &schema, AI_MODEL, "")
+pub fn checklist_ai(app: tauri::AppHandle, run: State<'_, ChecklistAi>, prompt: String, schema: String) -> Result<String, AiError> {
+    let cfg = crate::provider::config(&app);
+    crate::provider::ask(&run.0, &cfg, crate::provider::Purpose::Checklist, &prompt, &schema, AI_MODEL, "").map(|a| a.text)
 }
 
 pub fn cancel_ai(run: &ChecklistAi) {

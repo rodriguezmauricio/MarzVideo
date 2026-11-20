@@ -19,10 +19,14 @@ export interface AiProvider {
   editPass(input: EditPassInput, signal: AbortSignal): Promise<AiResult>;
 }
 
+/** Why a provider gave no answer. `off`, `noKey`, `badKey` and `unreachable` come from the
+ * swappable providers (src-tauri/src/provider.rs); the rest from Claude Code or the validator. */
+export type AiErrorKind = "notInstalled" | "notSignedIn" | "usageLimit" | "badResult" | "failed" | "cancelled" | "off" | "noKey" | "badKey" | "unreachable";
+
 /** A provider failure the editor shows as one sentence; the rest of the pass still applies. */
 export class AiProviderError extends Error {
   constructor(
-    readonly kind: "notInstalled" | "notSignedIn" | "usageLimit" | "badResult" | "failed" | "cancelled",
+    readonly kind: AiErrorKind,
     message: string,
   ) {
     super(message);

@@ -146,6 +146,16 @@ Windows-first screen recorder + non-destructive editor (Tauri 2, Rust, React/TS)
   Four-screen intro on first start (skippable, "Show the intro again" in Settings). File settings in `settings.json` in the app
   config folder via `src-tauri/src/settings.rs` (archive folder stays in `archive-settings.json`); localStorage ones via
   `apps/desktop/src/settings/localSettings.ts`. Browser: `?settings=1`, `?onboarding=1`.
+- **Built (not merged, branch `claude/ai-provider-6b9ced`):** swappable AI provider (design
+  `docs/superpowers/specs/2026-11-19-ai-provider-design.md`, plan `docs/superpowers/plans/2026-11-19-ai-provider.md`).
+  The AI pass and the checklist both ask through `src-tauri/src/provider.rs`: Claude Code (default, same `claude -p` call),
+  Anthropic API (raw HTTP, `claude-opus-5-5` or `claude-sonnet-5-5`, checklist `claude-haiku-5-5`, structured output, key only
+  in Windows Credential Manager via `src-tauri/src/secret.rs`), a local OpenAI compatible server (Ollama URL + model), or Off.
+  Optional `ai` object in `settings.json` (never the key). Settings > AI: Provider, per-provider rows, Test connection (free:
+  Models API or `/v1/models`), "What is sent". Any failure keeps the rules-only edit and says why on the Warning bar.
+  Checked: HTTP providers against a mock server only (no paid call, no key created), Credential Manager round trip,
+  Settings in Edge at 1440 x 900 and 1280 x 720, Claude Code AI pass end to end in the app on a copy of the 19.35 take
+  ("AI provider test"). Not checked: a real Anthropic key, a real Ollama.
 - **Not checked by hand yet:** the owner checks in `docs/spikes/2026-11-17-owner-checks.md` (clean 3-minute run,
   flash and beep sync, clicks, static screen, mic unplug, 60 Hz, real hotkeys), plus: open New recording once and
   look at the overlay, play an export in Windows Media Player, upload one export of each preset privately and

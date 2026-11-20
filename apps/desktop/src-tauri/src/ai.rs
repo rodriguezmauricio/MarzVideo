@@ -22,11 +22,23 @@ pub enum AiError {
     UsageLimit,
     Failed(String),
     Cancelled,
+    /// AI is off in Settings.
+    Off,
+    /// The Anthropic API is picked but no key is saved.
+    NoKey,
+    /// The Anthropic API refused the key (401, 403).
+    BadKey,
+    /// Nothing answered at the local address.
+    Unreachable(String),
 }
 
-/// The running `claude` child, so `ai_cancel` can kill it.
+/// The running `claude` child, so `ai_cancel` can kill it, and the flag of a running HTTP ask
+/// (`provider.rs`), so `ai_cancel` can stop waiting for it.
 #[derive(Default)]
-pub struct AiRun(Mutex<Option<Child>>);
+pub struct AiRun {
+    child: Mutex<Option<Child>>,
+    pub(crate) http_cancel: Mutex<Option<std::sync::Arc<std::sync::atomic::AtomicBool>>>,
+}
 
 fn exe_names() -> &'static [&'static str] {
     if cfg!(windows) { &["claude.exe", "claude.cmd"] } else { &["claude"] }
@@ -181,11 +193,11 @@ pub fn run_claude(run: &AiRun, claude: &Path, prompt: &str, schema: &str, model:
         }
         drop(stdin);
     });
-    *run.0.lock().unwrap_or_else(std::sync::PoisonError::into_inner) = Some(child);
+    *run.child.lock().unwrap_or_else(std::sync::PoisonError::into_inner) = Some(child);
 
     let started = Instant::now();
     let code = loop {
-        let mut guard = run.0.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut guard = run.child.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
         let Some(child) = guard.as_mut() else {
             // `ai_cancel` took and killed it.
             let _ = in_t.join();
@@ -220,10 +232,12 @@ pub fn run_claude(run: &AiRun, claude: &Path, prompt: &str, schema: &str, model:
     parse_claude_output(&stdout, &stderr, code)
 }
 
+/// The editor's AI pass through the provider picked in Settings (`provider.rs`). `model` and
+/// `effort` are the Claude Code settings; the other providers use their own.
 #[tauri::command(async)]
-pub fn ai_edit_pass(run: State<'_, AiRun>, prompt: String, schema: String, model: String, effort: String) -> Result<String, AiError> {
-    let claude = find_claude().ok_or(AiError::NotInstalled)?;
-    run_claude(&run, &claude, &prompt, &schema, &model, &effort)
+pub fn ai_edit_pass(app: tauri::AppHandle, run: State<'_, AiRun>, prompt: String, schema: String, model: String, effort: String) -> Result<crate::provider::Answer, AiError> {
+    let cfg = crate::provider::config(&app);
+    crate::provider::ask(&run, &cfg, crate::provider::Purpose::Edit, &prompt, &schema, &model, &effort)
 }
 
 #[tauri::command]
@@ -231,9 +245,12 @@ pub fn ai_cancel(run: State<'_, AiRun>) {
     cancel_run(&run);
 }
 
-/// Kill the running `claude` child of `run`, if any.
+/// Kill the running `claude` child of `run`, if any, and stop waiting for an HTTP ask.
 pub fn cancel_run(run: &AiRun) {
-    if let Some(mut child) = run.0.lock().unwrap_or_else(std::sync::PoisonError::into_inner).take() {
+    if let Some(flag) = run.http_cancel.lock().unwrap_or_else(std::sync::PoisonError::into_inner).as_ref() {
+        flag.store(true, std::sync::atomic::Ordering::SeqCst);
+    }
+    if let Some(mut child) = run.child.lock().unwrap_or_else(std::sync::PoisonError::into_inner).take() {
         let _ = child.kill();
         let _ = child.wait();
     }
@@ -316,5 +333,7 @@ mod tests {
     fn errors_serialize_as_kind_and_detail() {
         assert_eq!(serde_json::to_string(&AiError::NotSignedIn).unwrap(), r#"{"kind":"notSignedIn"}"#);
         assert_eq!(serde_json::to_string(&AiError::Failed("x".into())).unwrap(), r#"{"kind":"failed","detail":"x"}"#);
+        assert_eq!(serde_json::to_string(&AiError::NoKey).unwrap(), r#"{"kind":"noKey"}"#);
+        assert_eq!(serde_json::to_string(&AiError::Unreachable("y".into())).unwrap(), r#"{"kind":"unreachable","detail":"y"}"#);
     }
 }

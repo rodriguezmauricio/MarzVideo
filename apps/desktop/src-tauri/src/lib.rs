@@ -8,8 +8,10 @@ mod close;
 mod export;
 mod export_copy;
 mod projects;
+mod provider;
 mod recorder;
 mod recording;
+mod secret;
 mod settings;
 mod thumbs;
 mod transcribe;
@@ -84,6 +86,11 @@ pub fn run() {
             export_copy::export_copy_to,
             ai::ai_edit_pass,
             ai::ai_cancel,
+            provider::ai_provider_get,
+            provider::ai_provider_set,
+            provider::ai_key_save,
+            provider::ai_key_remove,
+            provider::ai_provider_test,
             transcribe::transcribe,
             transcribe::transcribe_cancel,
             transcribe::model_status,

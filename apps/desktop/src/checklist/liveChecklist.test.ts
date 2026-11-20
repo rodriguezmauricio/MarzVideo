@@ -47,8 +47,8 @@ describe("LiveChecklist", () => {
     expect(askAi).toHaveBeenCalledTimes(2);
   });
 
-  it("stops asking for the rest of the recording when Claude is missing or signed out", async () => {
-    const { live, askAi, advance } = setup(() => Promise.reject({ kind: "notInstalled" }));
+  it.each(["notInstalled", "off", "noKey", "badKey"])("stops asking for the rest of the recording on %s", async (kind) => {
+    const { live, askAi, advance } = setup(() => Promise.reject({ kind }));
     const talk = say("a b c d e f g h i j k l m n o p", 0);
     live.onWords(talk, items());
     await live.idle();

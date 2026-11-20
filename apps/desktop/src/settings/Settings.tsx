@@ -5,19 +5,8 @@ import { WarningBar } from "../components/WarningBar";
 import { useAppStore } from "../state/appStore";
 import { ACTIONS, comboFromEvent, comboProblem, DEFAULT_BINDINGS, type ActionId, type Bindings } from "./hotkeyMap";
 import { useHotkeys } from "./hotkeyStore";
-import {
-  AI_MODELS,
-  EXPORT_PRESET_IDS,
-  presetLabel,
-  readAiModel,
-  readBurnCaptions,
-  readDefaultPreset,
-  store,
-  writeAiModel,
-  writeBurnCaptions,
-  writeDefaultPreset,
-  type AiModel,
-} from "./localSettings";
+import { AiProviderRows } from "./AiProviderRows";
+import { EXPORT_PRESET_IDS, presetLabel, readBurnCaptions, readDefaultPreset, store, writeBurnCaptions, writeDefaultPreset } from "./localSettings";
 import { AiRows, DeviceRows, Seg, Toggle } from "./rows";
 import { errorText, settingsApi, type FolderKind, type SettingsView } from "./settingsApi";
 
@@ -140,24 +129,6 @@ function ExportDefaults() {
       </div>
       <p className="st-last">The export panel opens on this preset.</p>
     </>
-  );
-}
-
-function AiModelRow() {
-  const [model, setModel] = useState<AiModel>(() => readAiModel(store()));
-  return (
-    <div className="st-row">
-      <span className="st-label">Model</span>
-      <Seg
-        label="AI model"
-        value={model}
-        options={AI_MODELS.map((m) => ({ id: m, label: m === "opus" ? "Opus" : "Sonnet" }))}
-        onChange={(m) => {
-          writeAiModel(store(), m);
-          setModel(m);
-        }}
-      />
-    </div>
   );
 }
 
@@ -312,8 +283,8 @@ export function Settings() {
               <b>AI</b>
               <span className="st-head-r">Optional. Recording and editing work without it.</span>
             </div>
-            <AiRows api={api} />
-            <AiModelRow />
+            <AiProviderRows api={api} />
+            <AiRows api={api} claude={false} />
           </section>
           <section className="st-sec" id="st-captions">
             <div className="st-head">

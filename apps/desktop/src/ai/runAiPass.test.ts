@@ -107,6 +107,28 @@ describe("runAiPass", () => {
     expect(d.statuses.at(-1)).toMatchObject({ step: "done", captions: true });
   });
 
+  test.each([
+    ["noKey", "No Anthropic API key saved. Add it in Settings. Mistakes and AI zooms were skipped."],
+    ["badKey", "The Anthropic API key was refused. Check it in Settings. Mistakes and AI zooms were skipped."],
+    ["unreachable", "The local AI did not answer. Check its address in Settings. Mistakes and AI zooms were skipped."],
+    ["failed", "The AI step failed. Mistakes and AI zooms were skipped."],
+  ] as const)("a %s provider failure warns and keeps the rule cuts", async (kind, sentence) => {
+    const failing: AiProvider = { name: "anthropic", model: "claude-opus-5-5", editPass: async () => { throw new AiProviderError(kind, "x"); } };
+    const d = deps({ provider: failing });
+    const out = await runAiPass(d);
+    expect(out.warnings).toEqual([sentence]);
+    expect(d.history.current.edits.cuts.map((c) => c.reason)).toContain("silence");
+  });
+
+  test("AI off: rules only, no provider call, the off sentence", async () => {
+    const d = deps({ provider: null, providerNote: "AI is off in Settings. Only silences and ums were cut." });
+    const out = await runAiPass(d);
+    expect(out.warnings).toEqual(["AI is off in Settings. Only silences and ums were cut."]);
+    expect(d.statuses.some((s) => s.step === "editing")).toBe(false);
+    expect(d.history.current.edits.cuts.map((c) => c.reason)).toContain("silence");
+    expect(d.history.current.edits.ai?.lastRun?.provider).toBe("none");
+  });
+
   test("a refused AI answer warns with the bad result sentence", async () => {
     const greedy: AiProvider = {
       name: "x", model: "y",
