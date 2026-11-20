@@ -2,7 +2,7 @@
 //!
 //! ```text
 //! marz-capture record <out.marz> [--secs N] [--fps N] [--encoder E] [--monitor N] [--region x,y,w,h]
-//!                     [--no-mic] [--mic-id ID] [--system-audio] [--camera-id ID] [--hide-cursor] [--report]
+//!                     [--no-mic] [--mic-id ID] [--system-audio] [--camera-id ID] [--hide-cursor] [--log-keys] [--report]
 //!                     [--pause-at a,b,...] [--resume-at a,b,...] [--zoom-at a,b,...]
 //!                     [--simulate-mic-loss-at SECS] [--simulate-static-screen] [--sync-probe]
 //! marz-capture recover <dir>
@@ -20,7 +20,7 @@
 
 const USAGE: &str = "usage:
   marz-capture record <out.marz> [--secs N] [--fps N] [--encoder E] [--monitor N] [--region x,y,w,h]
-                      [--no-mic] [--mic-id ID] [--system-audio] [--camera-id ID] [--hide-cursor] [--report]
+                      [--no-mic] [--mic-id ID] [--system-audio] [--camera-id ID] [--hide-cursor] [--log-keys] [--report]
                       [--pause-at a,b,...] [--resume-at a,b,...] [--zoom-at a,b,...]
                       [--simulate-mic-loss-at SECS] [--simulate-static-screen] [--sync-probe]
   marz-capture recover <dir>
@@ -130,6 +130,7 @@ mod cli {
         no_mic: bool,
         mic_id: Option<String>,
         cursor_hidden: bool,
+        log_keys: bool,
         system_audio: bool,
         camera_id: Option<String>,
         report: bool,
@@ -155,6 +156,7 @@ mod cli {
             no_mic: false,
             mic_id: None,
             cursor_hidden: false,
+            log_keys: false,
             system_audio: false,
             camera_id: None,
             report: false,
@@ -189,6 +191,7 @@ mod cli {
                 "--no-mic" => a.no_mic = true,
                 "--mic-id" => a.mic_id = Some(it.next().ok_or_else(|| usage("--mic-id needs an id".into()))?.clone()),
                 "--hide-cursor" => a.cursor_hidden = true,
+                "--log-keys" => a.log_keys = true,
                 "--system-audio" => a.system_audio = true,
                 "--camera-id" => a.camera_id = Some(it.next().ok_or_else(|| usage("--camera-id needs an id (see --list-cameras)".into()))?.clone()),
                 "--report" => a.report = true,
@@ -247,6 +250,7 @@ mod cli {
             fps: a.fps,
             mic_id,
             cursor_hidden: a.cursor_hidden,
+            log_keys: a.log_keys,
             system_audio: a.system_audio,
             camera_id: a.camera_id.clone(),
             presets: vec![ZoomPreset { id: PRESET_ID.into(), name: "Zoom 1".into(), rect: NormRect { x: 0.25, y: 0.25, w: 0.5, h: 0.5 } }],

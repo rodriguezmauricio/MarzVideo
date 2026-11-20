@@ -6,6 +6,7 @@ import {
   addZoom,
   lockAspect,
   removeCursorSection,
+  removeKeyItem,
   removeCut,
   removeHold,
   removeScene,
@@ -87,6 +88,8 @@ export function deleteSelection(): void {
       ? removeHold(selection.id)
       : selection.kind === "cursor"
         ? removeCursorSection(selection.id)
+        : selection.kind === "key"
+        ? removeKeyItem(selection.id)
         : selection.kind === "layout"
           ? removeScene(selection.id)
           : selection.kind === "drawing"

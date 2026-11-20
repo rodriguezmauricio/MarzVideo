@@ -18,6 +18,7 @@ import {
 import { verticalEdits, type MarzEvent, type Project } from "@marz/format";
 import { PRESETS } from "../export/presets";
 import { aimPathFor } from "./aimPath";
+import { drawKeysAt } from "../keys/keysDraw";
 
 type Ctx = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
 type Size = { width: number; height: number };
@@ -42,7 +43,7 @@ export type VerticalDrawOpts = {
 };
 
 /** Draw one 1080 x 1920 vertical frame on `ctx` (canvas of VERTICAL_SIZE). Follow the action: the aimed
- *  window, the camera in its slot, captions in the safe area. Fit with bars: the 16:9 picture
+ *  window, the camera in its slot, captions and keys in the safe area. Fit with bars: the 16:9 picture
  *  letterboxed on ink, captions in the bars. Returns the window shown (normalized, null for Fit) for
  *  the Aim view. Shared by the preview and the export, so both draw the same picture. */
 export function drawVertical(ctx: Ctx, o: VerticalDrawOpts): { crop: Box | null } {
@@ -65,6 +66,7 @@ export function drawVertical(ctx: Ctx, o: VerticalDrawOpts): { crop: Box | null 
       const d = captionLayout(c.blocks, c.tOutUs, c.look, out, rect, c.measure);
       if (d) drawCaptions(ctx, d, c.style);
     }
+    drawKeysAt(ctx, o.project, o.srcUs, out, true);
     return { crop: null };
   }
   const { spec, layout, crop } = verticalFrameAt(o.project, o.events, aimPathFor(o.project, o.events), o.srcUs, out);
@@ -76,5 +78,6 @@ export function drawVertical(ctx: Ctx, o: VerticalDrawOpts): { crop: Box | null 
     const d = captionLayout(c.blocks, c.tOutUs, c.look, out, full, c.measure, verticalCaptionArea(layout, out));
     if (d) drawCaptions(ctx, d, c.style);
   }
+  drawKeysAt(ctx, o.project, o.srcUs, out, true);
   return { crop };
 }

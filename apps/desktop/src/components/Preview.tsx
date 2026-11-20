@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef } from "react";
+import { drawKeysAt } from "../keys/keysDraw";
 import { canvasMeasure, captionLayout, cameraLayerFor, cameraMediaUs, drawCaptions, drawFrame, frameAt, layoutAt, staticLayout, strokesAt, type CaptionStyle, type VisibleStroke } from "@marz/compositor";
 import { keptSegments, outputDurationUs, outputToSource, sourceToOutput, strokeAtPoint, trackGain } from "@marz/timeline";
 import { audioEdits, cameraEdits, captionStyleFor, drawingStrokes, type Project } from "@marz/format";
@@ -222,6 +223,14 @@ export function Preview() {
         if (d) drawCaptions(ctx, d, st);
       } catch (e) {
         console.warn("captions not drawn", e);
+      }
+    }
+    // Logged shortcuts (DESIGN-SYSTEM.md "Keys in the video"): the export's call. Left out while a zoom is edited.
+    if (!editing) {
+      try {
+        drawKeysAt(ctx, p, srcUs, p.output);
+      } catch (e) {
+        console.warn("keys not drawn", e);
       }
     }
   };

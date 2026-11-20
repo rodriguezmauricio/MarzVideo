@@ -38,13 +38,17 @@ describe("local settings", () => {
     s.setItem("marz.recorder.setup.1.2560x1440", "broken");
     s.setItem("marz.other", "x");
     const d = writeDeviceDefaults(s, { micId: "usb", cameraOn: true });
-    expect(d).toEqual({ micId: "usb", cameraId: null, cameraOn: true, systemAudio: false });
+    expect(d).toEqual({ micId: "usb", cameraId: null, cameraOn: true, systemAudio: false, logKeys: false });
     expect(readDeviceDefaults(s)).toEqual(d);
     expect(JSON.parse(s.getItem("marz.recorder.setup.0.1920x1080")!)).toEqual({ mode: "full", micId: "usb", cameraOn: true, presets: [1] });
     expect(s.getItem("marz.recorder.setup.1.2560x1440")).toBe("broken");
     expect(s.getItem("marz.other")).toBe("x");
     writeDeviceDefaults(s, { systemAudio: true });
     expect(readDeviceDefaults(s)).toEqual({ ...d, systemAudio: true });
+    // Log shortcuts goes into every saved setup too (the setup bar reads it per monitor).
+    writeDeviceDefaults(s, { logKeys: true });
+    expect(readDeviceDefaults(s).logKeys).toBe(true);
+    expect(JSON.parse(s.getItem("marz.recorder.setup.0.1920x1080")!).logKeys).toBe(true);
   });
 
   it("keeps the AI model and burn captions", () => {

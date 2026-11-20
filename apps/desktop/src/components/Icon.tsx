@@ -142,6 +142,12 @@ const PATHS = {
   box: <rect x="4" y="6" width="16" height="12" />,
   oval: <ellipse cx="12" cy="12" rx="9" ry="6" />,
   text: <path d="M5 6V4h14v2M12 4v16M9 20h6" />,
+  keys: (
+    <>
+      <rect x="3" y="6" width="18" height="12" />
+      <path d="M7 10h2M11 10h2M15 10h2M8 14h8" />
+    </>
+  ),
   erase: <path d="M8 20l-4-4L14 6l6 6-8 8zM9 11l5 5M12 20h8" />,
 } as const;
 

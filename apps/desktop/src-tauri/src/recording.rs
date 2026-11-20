@@ -45,6 +45,9 @@ pub struct RecordOptionsDto {
     #[serde(default)]
     pub camera_id: Option<String>,
     pub cursor_hidden: bool,
+    /// Log shortcuts and named keys into `events.jsonl` (`key` lines). Missing from older pages: off.
+    #[serde(default)]
+    pub log_keys: bool,
     /// Ids "p1" to "p9", rects normalized to the region (the monitor in Full screen).
     pub presets: Vec<PresetDto>,
     /// The AI checklist topics, one per entry. Missing from older pages: none.
@@ -60,6 +63,7 @@ pub struct Plan {
     pub system_audio: bool,
     pub camera_id: Option<String>,
     pub cursor_hidden: bool,
+    pub log_keys: bool,
     pub presets: Vec<ZoomPreset>,
     pub checklist: Vec<marz_capture::events::ChecklistTopic>,
 }
@@ -101,7 +105,7 @@ pub fn plan(dto: RecordOptionsDto) -> Result<Plan, String> {
     }
     presets.sort_by(|a, b| a.id.cmp(&b.id));
     let checklist = crate::checklist::topics(&dto.checklist);
-    Ok(Plan { region, mic_id: dto.mic_id, system_audio: dto.system_audio, camera_id: dto.camera_id, cursor_hidden: dto.cursor_hidden, presets, checklist })
+    Ok(Plan { region, mic_id: dto.mic_id, system_audio: dto.system_audio, camera_id: dto.camera_id, cursor_hidden: dto.cursor_hidden, log_keys: dto.log_keys, presets, checklist })
 }
 
 /// `<stamp> Recording`, then `<stamp> Recording 2`, `3`, ... while `taken` says the name is used.
@@ -698,6 +702,7 @@ mod imp {
             system_audio: plan.system_audio,
             camera_id: plan.camera_id,
             cursor_hidden: plan.cursor_hidden,
+            log_keys: plan.log_keys,
             presets: plan.presets,
             encoder: None,
         };
@@ -938,6 +943,7 @@ mod tests {
             system_audio: false,
             camera_id: None,
             cursor_hidden: true,
+            log_keys: false,
             presets,
             checklist: vec![],
         }
@@ -958,6 +964,10 @@ mod tests {
         with_cam.camera_id = Some("cam".into());
         assert_eq!(plan(with_cam).unwrap().camera_id.as_deref(), Some("cam"));
         assert!(pl.cursor_hidden);
+        assert!(!pl.log_keys);
+        let mut with_keys = dto("full", vec![]);
+        with_keys.log_keys = true;
+        assert!(plan(with_keys).unwrap().log_keys);
         assert_eq!(plan(dto("full", vec![])).unwrap().region, None);
         assert!(plan(dto("window", vec![])).is_err());
         let mut with_list = dto("full", vec![]);

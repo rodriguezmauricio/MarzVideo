@@ -12,6 +12,7 @@ Template:
 
 | Name | Inner SVG |
 |---|---|
+| `keys` | `<rect x="3" y="6" width="18" height="12"/><path d="M7 10h2M11 10h2M15 10h2M8 14h8"/>` |
 | `play` | `<path d="M7 4.5v15l12-7.5z"/>` |
 | `zoomadd` | `<circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5L21 21M10.5 8v5M8 10.5h5"/>` |
 | `cut` | `<circle cx="6" cy="6.5" r="2.5"/><circle cx="6" cy="17.5" r="2.5"/><path d="M8 8l12 9M8 16L20 7"/>` |

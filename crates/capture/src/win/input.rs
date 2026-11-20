@@ -1,36 +1,47 @@
 //! Input thread: one message loop runs the low-level mouse hook, a 16 ms `GetCursorPos` poll
 //! (catches `SetCursorPos` and remote-tool moves that raise no hook event) and the recorder
-//! hotkeys, so every line reaches `events.jsonl` in time order.
+//! hotkeys, so every line reaches `events.jsonl` in time order. With `log_keys` on it also runs a
+//! low-level keyboard hook: the hook only names and queues a press (privacy rules in `crate::keys`),
+//! the loop then checks the focused field is not a password field and writes the `key` line with
+//! the press time taken in the hook (`key` lines can sit a few ms after later cursor lines).
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
+use std::collections::VecDeque;
 use std::fs::File;
 use std::io::BufWriter;
 use std::sync::{mpsc, Arc, Mutex};
 use std::thread::{self, JoinHandle};
 
-use windows::Win32::Foundation::{LPARAM, LRESULT, POINT, WPARAM};
+use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, POINT, WPARAM};
+use windows::Win32::System::Com::{CoCreateInstance, CoInitializeEx, CoUninitialize, CLSCTX_INPROC_SERVER, COINIT_APARTMENTTHREADED};
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::System::Threading::GetCurrentThreadId;
+use windows::Win32::UI::Accessibility::{CUIAutomation, IUIAutomation};
 use windows::Win32::UI::Input::KeyboardAndMouse::{
-    RegisterHotKey, UnregisterHotKey, HOT_KEY_MODIFIERS, MOD_ALT, MOD_CONTROL, MOD_NOREPEAT, MOD_SHIFT,
+    GetAsyncKeyState, GetKeyboardLayout, MapVirtualKeyExW, RegisterHotKey, UnregisterHotKey, HOT_KEY_MODIFIERS, MAPVK_VK_TO_CHAR,
+    MOD_ALT, MOD_CONTROL, MOD_NOREPEAT, MOD_SHIFT,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
-    CallNextHookEx, DispatchMessageW, GetCursorPos, GetMessageW, KillTimer, PeekMessageW, PostThreadMessageW, SetTimer,
-    SetWindowsHookExW, TranslateMessage, UnhookWindowsHookEx, MSG, MSLLHOOKSTRUCT, PM_NOREMOVE, WH_MOUSE_LL, WM_APP,
-    WM_HOTKEY, WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MBUTTONDOWN, WM_MBUTTONUP, WM_QUIT, WM_RBUTTONDOWN, WM_RBUTTONUP,
-    WM_TIMER,
+    CallNextHookEx, DispatchMessageW, GetClassNameW, GetCursorPos, GetForegroundWindow, GetGUIThreadInfo, GetMessageW,
+    GetWindowLongW, GetWindowThreadProcessId, KillTimer, PeekMessageW, PostThreadMessageW, SetTimer, SetWindowsHookExW,
+    TranslateMessage, UnhookWindowsHookEx, ES_PASSWORD, GUITHREADINFO, GWL_STYLE, HHOOK, KBDLLHOOKSTRUCT, MSG, MSLLHOOKSTRUCT,
+    PM_NOREMOVE, WH_KEYBOARD_LL, WH_MOUSE_LL, WM_APP, WM_HOTKEY, WM_KEYDOWN, WM_KEYUP, WM_LBUTTONDOWN, WM_LBUTTONUP,
+    WM_MBUTTONDOWN, WM_MBUTTONUP, WM_QUIT, WM_RBUTTONDOWN, WM_RBUTTONUP, WM_SYSKEYDOWN, WM_SYSKEYUP, WM_TIMER,
 };
 
 use super::cursor::ShapeReader;
 use super::qpc::qpc_hns;
 use super::{rec_hns, set_dpi_awareness, SharedClock, Warnings};
 use crate::events::{Button, EventLog};
+use crate::keys::{combo_to_log, is_recorder_hotkey, Mods};
 use crate::CaptureError;
 
 /// Cursor poll period.
 const POLL_MS: u32 = 16;
 /// Thread message: wParam 1 registers the hotkeys, 0 unregisters them.
 const WM_SET_HOTKEYS: u32 = WM_APP + 1;
+/// Thread message posted by the keyboard hook: key presses wait in `KEY_QUEUE`.
+const WM_KEYS_QUEUED: u32 = WM_APP + 2;
 
 /// Recorder hotkeys. `Preset(n)` is 1..=9 (Ctrl+1 .. Ctrl+9), the n-th zoom preset. The comments
 /// name the default combos; Settings can rebind each one (`crate::hotkeys`).
@@ -125,11 +136,19 @@ pub struct InputShared {
     /// Fired hotkeys.
     pub hotkeys: mpsc::Sender<Hotkey>,
     pub warn: Warnings,
+    /// Write `key` lines (keyboard hook installed). Off: no keyboard hook at all.
+    pub log_keys: bool,
 }
 
 impl InputShared {
+    /// Without key logging (no keyboard hook).
     pub fn new(clock: SharedClock, hotkeys: mpsc::Sender<Hotkey>, warn: Warnings) -> Arc<Self> {
-        Arc::new(Self { clock, log: Mutex::new(None), hotkeys, warn })
+        Self::with_keys(clock, hotkeys, warn, false)
+    }
+
+    /// `log_keys` installs the keyboard hook and writes `key` lines (privacy rules in `crate::keys`).
+    pub fn with_keys(clock: SharedClock, hotkeys: mpsc::Sender<Hotkey>, warn: Warnings, log_keys: bool) -> Arc<Self> {
+        Arc::new(Self { clock, log: Mutex::new(None), hotkeys, warn, log_keys })
     }
 
     /// Recording time in microseconds now, or None (before t0, paused).
@@ -145,11 +164,158 @@ impl InputShared {
             f(log, rec_us);
         }
     }
+
+    /// Like `with_log` with a time taken earlier (a key press time from the hook).
+    fn with_log_at(&self, rec_us: i64, f: impl FnOnce(&mut EventLog<BufWriter<File>>, i64)) {
+        if let Ok(mut g) = self.log.lock()
+            && let Some(log) = g.as_mut()
+        {
+            f(log, rec_us);
+        }
+    }
+}
+
+// Generic codes too: keys sent with SendInput can arrive as VK_SHIFT, VK_CONTROL or VK_MENU.
+const VK_SHIFT: u32 = 0x10;
+const VK_CONTROL: u32 = 0x11;
+const VK_MENU: u32 = 0x12;
+const VK_LSHIFT: u32 = 0xA0;
+const VK_RSHIFT: u32 = 0xA1;
+const VK_LCONTROL: u32 = 0xA2;
+const VK_RCONTROL: u32 = 0xA3;
+const VK_LMENU: u32 = 0xA4;
+const VK_RMENU: u32 = 0xA5;
+const VK_LWIN: u32 = 0x5B;
+const VK_RWIN: u32 = 0x5C;
+const MODIFIERS: [u32; 11] = [VK_SHIFT, VK_CONTROL, VK_MENU, VK_LSHIFT, VK_RSHIFT, VK_LCONTROL, VK_RCONTROL, VK_LMENU, VK_RMENU, VK_LWIN, VK_RWIN];
+
+/// Keys held right now, from the keyboard hook's own down and up stream (left/right specific codes).
+struct HeldKeys([bool; 256]);
+
+impl HeldKeys {
+    fn any(&self, vks: &[u32]) -> bool {
+        vks.iter().any(|&v| self.0[v as usize])
+    }
+
+    fn mods(&self) -> Mods {
+        Mods {
+            ctrl: self.any(&[VK_CONTROL, VK_LCONTROL, VK_RCONTROL]),
+            alt: self.any(&[VK_MENU, VK_LMENU, VK_RMENU]),
+            shift: self.any(&[VK_SHIFT, VK_LSHIFT, VK_RSHIFT]),
+            win: self.any(&[VK_LWIN, VK_RWIN]),
+            altgr: self.0[VK_RMENU as usize],
+        }
+    }
+
+    /// Forget modifiers Windows no longer reports as held (a key up the hook never saw, e.g. after
+    /// Ctrl+Alt+Delete or Win+L). A stuck Ctrl would turn typing into "shortcuts", so this errs
+    /// toward fewer modifiers.
+    fn drop_stale_modifiers(&mut self) {
+        for vk in MODIFIERS {
+            if self.0[vk as usize] && (unsafe { GetAsyncKeyState(vk as i32) } as u16) & 0x8000 == 0 {
+                self.0[vk as usize] = false;
+            }
+        }
+    }
 }
 
 thread_local! {
     /// The hook procedure has no user pointer; it runs on the input thread, so a thread-local works.
     static CTX: RefCell<Option<Arc<InputShared>>> = const { RefCell::new(None) };
+    static HELD: RefCell<HeldKeys> = const { RefCell::new(HeldKeys([false; 256])) };
+    /// Presses the keyboard hook let through: (recording time, keys), written by the loop.
+    static KEY_QUEUE: RefCell<VecDeque<(i64, Vec<String>)>> = const { RefCell::new(VecDeque::new()) };
+    static INPUT_TID: Cell<u32> = const { Cell::new(0) };
+}
+
+/// What an OEM symbol key types without Shift on the foreground window's keyboard layout.
+fn key_symbol(vk: u32) -> Option<char> {
+    unsafe {
+        let tid = GetWindowThreadProcessId(GetForegroundWindow(), None);
+        let hkl = GetKeyboardLayout(tid);
+        let v = MapVirtualKeyExW(vk, MAPVK_VK_TO_CHAR, Some(hkl)) & 0xFFFF; // the top bit marks dead keys
+        if v == 0 { None } else { char::from_u32(v) }
+    }
+}
+
+/// Kept fast: track held keys, drop repeats and what the rules forbid, queue the rest with the
+/// press time and wake the loop. Injected keys (SendInput) are treated like real ones.
+unsafe extern "system" fn keyboard_hook(code: i32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
+    if code >= 0 {
+        let k = unsafe { &*(lparam.0 as *const KBDLLHOOKSTRUCT) };
+        let vk = k.vkCode & 0xFF;
+        let msg = wparam.0 as u32;
+        let down = msg == WM_KEYDOWN || msg == WM_SYSKEYDOWN;
+        let up = msg == WM_KEYUP || msg == WM_SYSKEYUP;
+        let press = HELD.with(|h| {
+            let mut h = h.borrow_mut();
+            if up {
+                h.0[vk as usize] = false;
+                return None;
+            }
+            if !down || h.0[vk as usize] {
+                return None; // auto-repeat: the key is already down
+            }
+            h.0[vk as usize] = true;
+            if MODIFIERS.contains(&vk) {
+                return None;
+            }
+            h.drop_stale_modifiers();
+            Some(h.mods())
+        });
+        if let Some(mods) = press
+            && !is_recorder_hotkey(mods, vk)
+            && let Some(keys) = combo_to_log(mods, vk, key_symbol(vk))
+        {
+            let t = CTX.with(|c| c.borrow().as_ref().and_then(|sh| sh.rec_us_now()));
+            if let Some(t) = t {
+                KEY_QUEUE.with(|q| q.borrow_mut().push_back((t, keys)));
+                let tid = INPUT_TID.with(Cell::get);
+                let _ = unsafe { PostThreadMessageW(tid, WM_KEYS_QUEUED, WPARAM(0), LPARAM(0)) };
+            }
+        }
+    }
+    unsafe { CallNextHookEx(None, code, wparam, lparam) }
+}
+
+/// True unless the focused field is known not to be a password field. Fails closed: any error, or
+/// no UI Automation, counts as a password field.
+fn focus_may_be_password(uia: Option<&IUIAutomation>) -> bool {
+    unsafe {
+        // Classic edit box with the password style (GetGUIThreadInfo(0): the foreground thread).
+        let mut gui = GUITHREADINFO { cbSize: std::mem::size_of::<GUITHREADINFO>() as u32, ..Default::default() };
+        if GetGUIThreadInfo(0, &mut gui).is_err() {
+            return true;
+        }
+        if gui.hwndFocus != HWND::default() {
+            let style = GetWindowLongW(gui.hwndFocus, GWL_STYLE);
+            let mut buf = [0u16; 128];
+            let n = GetClassNameW(gui.hwndFocus, &mut buf).max(0) as usize;
+            let class = String::from_utf16_lossy(&buf[..n]).to_ascii_lowercase();
+            if style & ES_PASSWORD != 0 && class.contains("edit") {
+                return true;
+            }
+        }
+        // UI Automation: browsers and modern apps.
+        let Some(uia) = uia else { return true };
+        match uia.GetFocusedElement().and_then(|e| e.CurrentIsPassword()) {
+            Ok(is_password) => is_password.as_bool(),
+            Err(_) => true,
+        }
+    }
+}
+
+/// Write the queued presses unless a password field has the focus.
+fn write_queued_keys(sh: &InputShared, uia: Option<&IUIAutomation>) {
+    // Take the queue first: the UI Automation call below pumps messages, so the hook can run again.
+    let queued = KEY_QUEUE.with(|q| std::mem::take(&mut *q.borrow_mut()));
+    if queued.is_empty() || focus_may_be_password(uia) {
+        return;
+    }
+    for (t, keys) in queued {
+        let names: Vec<&str> = keys.iter().map(String::as_str).collect();
+        sh.with_log_at(t, |log, t| log.key(t, &names));
+    }
 }
 
 unsafe extern "system" fn mouse_hook(code: i32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
@@ -220,6 +386,24 @@ fn input_thread(sh: Arc<InputShared>, hotkeys_on: bool, ready: mpsc::Sender<Resu
             }
         };
         CTX.with(|c| *c.borrow_mut() = Some(sh.clone()));
+        INPUT_TID.with(|t| t.set(GetCurrentThreadId()));
+        // Keyboard hook and UI Automation only when key logging is on.
+        let mut com = false;
+        let mut uia: Option<IUIAutomation> = None;
+        let mut kb_hook: Option<HHOOK> = None;
+        if sh.log_keys {
+            com = CoInitializeEx(None, COINIT_APARTMENTTHREADED).is_ok();
+            uia = CoCreateInstance(&CUIAutomation, None, CLSCTX_INPROC_SERVER).ok();
+            if uia.is_none() {
+                let _ = sh.warn.send("Shortcuts are not logged: the password field check is not available.".to_string());
+            }
+            match SetWindowsHookExW(WH_KEYBOARD_LL, Some(keyboard_hook), Some(hinst.into()), 0) {
+                Ok(h) => kb_hook = Some(h),
+                Err(_) => {
+                    let _ = sh.warn.send("Shortcuts are not logged: the keyboard hook failed.".to_string());
+                }
+            }
+        }
         let timer = SetTimer(None, 0, POLL_MS, None);
         let mut shapes = ShapeReader::new();
         let mut registered = Vec::new();
@@ -247,6 +431,7 @@ fn input_thread(sh: Arc<InputShared>, hotkeys_on: bool, ready: mpsc::Sender<Resu
                     }
                 }
                 WM_SET_HOTKEYS => set_hotkeys(msg.wParam.0 != 0, &mut registered, &sh),
+                WM_KEYS_QUEUED => write_queued_keys(&sh, uia.as_ref()),
                 _ => {}
             }
             let _ = TranslateMessage(&msg);
@@ -256,6 +441,15 @@ fn input_thread(sh: Arc<InputShared>, hotkeys_on: bool, ready: mpsc::Sender<Resu
         set_hotkeys(false, &mut registered, &sh);
         let _ = KillTimer(None, timer);
         let _ = UnhookWindowsHookEx(hook);
+        if let Some(h) = kb_hook {
+            let _ = UnhookWindowsHookEx(h);
+        }
+        KEY_QUEUE.with(|q| q.borrow_mut().clear());
+        HELD.with(|h| h.borrow_mut().0 = [false; 256]);
+        drop(uia);
+        if com {
+            CoUninitialize();
+        }
         CTX.with(|c| *c.borrow_mut() = None);
     }
 }

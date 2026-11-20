@@ -4,14 +4,14 @@ import { readBurn, readLastPreset, writeBurn, writeLastPreset } from "../export/
 import { PRESETS, type ExportPresetId } from "../export/presets";
 
 /** Defaults for new recordings; the setup bar can still change them per recording. */
-export type DeviceDefaults = { micId: string | null; cameraId: string | null; cameraOn: boolean; systemAudio: boolean };
+export type DeviceDefaults = { micId: string | null; cameraId: string | null; cameraOn: boolean; systemAudio: boolean; logKeys: boolean };
 
 export const DEVICE_DEFAULTS_KEY = "marz.recorder.defaults";
 /** Per-monitor setups (recorderStore `setupKey`). */
 const SETUP_PREFIX = "marz.recorder.setup.";
 const AI_MODEL_KEY = "marz.ai.model";
 
-export const NO_DEVICE_DEFAULTS: DeviceDefaults = { micId: null, cameraId: null, cameraOn: false, systemAudio: false };
+export const NO_DEVICE_DEFAULTS: DeviceDefaults = { micId: null, cameraId: null, cameraOn: false, systemAudio: false, logKeys: false };
 
 /** Safe access to window.localStorage (can throw in locked-down contexts). */
 export function store(): Storage | null {
@@ -32,6 +32,7 @@ export function readDeviceDefaults(storage: Storage | null | undefined): DeviceD
       cameraId: typeof o.cameraId === "string" ? o.cameraId : null,
       cameraOn: o.cameraOn === true,
       systemAudio: o.systemAudio === true,
+      logKeys: o.logKeys === true,
     };
   } catch {
     return NO_DEVICE_DEFAULTS;

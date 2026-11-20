@@ -5,6 +5,9 @@ import { meterLit, METER_BARS } from "../recorder/regionMath";
 import { readDeviceDefaults, store, writeDeviceDefaults, type DeviceDefaults } from "./localSettings";
 import { errorText, type AiStatus, type Devices, type SettingsApi } from "./settingsApi";
 
+/** What "Log shortcuts" records, in plain words (setup bar tooltip and Settings). */
+export const KEYS_PRIVACY = "Logs shortcuts like Ctrl+S and keys like Enter or Esc, to show them on the video. Never letters you type, never in password fields.";
+
 export function Toggle({ on, label, disabled, onChange }: { on: boolean; label: string; disabled?: boolean; onChange: (on: boolean) => void }) {
   return (
     <button type="button" className="st-tog" role="switch" aria-checked={on} disabled={disabled} onClick={() => onChange(!on)}>
@@ -116,6 +119,11 @@ export function DeviceRows({ api }: { api: SettingsApi }) {
       <div className="st-row">
         <span className="st-label">Computer sound</span>
         <Toggle label="Record what the computer plays" on={d.systemAudio} onChange={(on) => change({ systemAudio: on })} />
+      </div>
+      <div className="st-row">
+        <span className="st-label">Shortcuts</span>
+        <Toggle label="Log shortcuts" on={d.logKeys} onChange={(on) => change({ logKeys: on })} />
+        <span className="st-why">{KEYS_PRIVACY}</span>
       </div>
     </>
   );

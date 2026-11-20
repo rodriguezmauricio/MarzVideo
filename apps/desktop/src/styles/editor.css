@@ -226,6 +226,9 @@ input { font: inherit; color: inherit; letter-spacing: inherit; text-transform: 
 /* Layout lane blocks: DESIGN-SYSTEM.md "Layout lane". */
 .blk-lay { background: var(--paper); color: var(--ink); }
 .blk-cur { background: var(--paper); color: var(--ink); }
+/* Keys lane blocks: DESIGN-SYSTEM.md "Keys lane". Hidden: no fill, dashed `later` border. */
+.blk-key { background: var(--paper); color: var(--ink); }
+.blk-key.hid { background: transparent; color: var(--later); border: 1px dashed var(--later); }
 .blk-lay.live { background: var(--accent); color: var(--accent-ink); }
 /* Drawing lane blocks: DESIGN-SYSTEM.md "Drawing lane". */
 .blk-draw { background: var(--ink); color: var(--paper); border: 1px solid var(--paper); padding-left: 18px; }
