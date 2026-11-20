@@ -167,3 +167,8 @@ Checked in Edge (Playwright) at 1440 x 900 and 1280 x 720 on `samples/demo.marz`
 - **Lanes are no longer always visible.** Product spec section 11 asks for a hybrid timeline: the editor now opens on one main track (Screen, Edits, Mic), and "Show lanes" (G) switches to the lanes view, which is the old expanded screen with every lane. The approved mockup shows the lanes in the normal screen; that state is gone (two views instead of three). DESIGN-SYSTEM.md "Timeline" was updated first. The choice is remembered per user.
 - **Blocks of different kinds share one track** in the main view, stacked in rows when they overlap in time. Manual layout and cursor blocks look the same (paper fill); their labels tell them apart ("Corner", "Cursor off").
 - **The camera bubble is selectable on the preview** (DESIGN-SYSTEM.md "Camera on the preview"): the drawing box look, no new style. A bubble dropped away from a corner sits at a free position (`edits.camera.pip.x/y`, optional).
+
+## Keypress log and on-video keys (2026-11-19)
+
+- **"Log shortcuts" sits on the chip line under the setup bar**, right of "Both bars are never captured in the recording", not in the bar. The bar was already 1387 px of a 1440 px wide screen; a fifth toggle in it made it 1579 px. The mockup has no such switch. DESIGN-SYSTEM.md "Recorder: bar BEFORE recording" was updated first.
+- **Keys lane shows only in takes with logged shortcuts.** The other Later lanes show a dashed "Later" placeholder when empty; logging is opt-in, so an empty Keys lane would only add height to every take.

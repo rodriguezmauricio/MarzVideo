@@ -146,6 +146,18 @@ Windows-first screen recorder + non-destructive editor (Tauri 2, Rust, React/TS)
   Four-screen intro on first start (skippable, "Show the intro again" in Settings). File settings in `settings.json` in the app
   config folder via `src-tauri/src/settings.rs` (archive folder stays in `archive-settings.json`); localStorage ones via
   `apps/desktop/src/settings/localSettings.ts`. Browser: `?settings=1`, `?onboarding=1`.
+- **Built (not merged, branch `claude/keypress-overlay-d8623b`):** keypress log and on-video keys (design
+  `docs/superpowers/specs/2026-11-19-keypress-overlay-design.md`, plan `docs/superpowers/plans/2026-11-19-keypress-overlay.md`).
+  Opt-in "Log shortcuts" (chip line under the setup bar, Settings Devices; off by default). The capture engine logs only combos
+  with Ctrl, Alt or Win, Shift plus a named key, and named keys (Enter, Esc, Tab, arrows, F keys...); never typed text, AltGr,
+  the recorder hotkeys, or keys while a password field has focus (classic edit box or UI Automation, fails closed). `key` lines
+  in `events.jsonl`, `edits.keys` blocks on first open, Keys lane and main track blocks (hide, retime, delete), Project panel
+  Keys section (show, position, size, Ink/Paper/Accent), keycaps drawn by `packages/compositor/src/keys.ts` in preview and both
+  exports. Code: `crates/capture/src/keys.rs`, `crates/capture/src/win/input.rs`, `packages/format/src/keys.ts`,
+  `packages/timeline/src/keys.ts`, `apps/desktop/src/keys`, `apps/desktop/src/components/KeysPanel.tsx`.
+  Checked: real take in a test copy of the app with simulated combos (all six logged, typed "hello" not), keys in the preview
+  and in both exports (`Videos/Marz Recorder/Exports/Keys test`, frame sheets there), browser 1440 x 900 and 1280 x 720.
+  Not checked: his real keyboard, AltGr on his layout, a browser password field.
 - **Not checked by hand yet:** the owner checks in `docs/spikes/2026-11-17-owner-checks.md` (clean 3-minute run,
   flash and beep sync, clicks, static screen, mic unplug, 60 Hz, real hotkeys), plus: open New recording once and
   look at the overlay, play an export in Windows Media Player, upload one export of each preset privately and

@@ -189,6 +189,9 @@ normalized 0–1 relative to the source frame, so edits survive resolution/proxy
 - AI checklist (2026-11-19, `2026-11-19-ai-checklist-design.md`) adds `checklist` lines: once at the start
   `{"tUs":..,"type":"checklist","op":"list","items":[{"id":"c1","text":"Pricing page"}]}`, then per covered topic
   `{"tUs":..,"type":"checklist","op":"tick","id":"c1","atUs":..,"by":"auto"|"ai"|"hand"}` (`atUs`: when it was said).
+- Keypress log (2026-11-19, opt-in "Log shortcuts", `2026-11-19-keypress-overlay-design.md`) adds `key` lines:
+  `{"tUs":..,"type":"key","keys":["Ctrl","Shift","S"]}` (held modifiers in the order Ctrl, Alt, Shift, Win, then the key).
+  Only shortcuts and named keys (Enter, Esc, Tab, arrows...), never typed text, never in a password field.
 
 ### `project.json`
 
@@ -234,6 +237,10 @@ normalized 0–1 relative to the source frame, so edits survive resolution/proxy
 - Optional `edits.checklist` (AI checklist, 2026-11-19): `{ "items": [{ "id", "text", "atUs" (null while open),
   "by"? ("auto", "ai", "hand", "transcript", "editor") }], "liveImported": true }`. Imported from the `checklist`
   lines the first time the take opens. Details in `2026-11-19-ai-checklist-design.md`.
+- Optional `edits.keys` (keypress log, 2026-11-19): `{ "show": true, "position": "bottomLeft", "size": "M", "style": "ink",
+  "items": [{ "id", "startUs", "endUs", "keys": ["Ctrl", "S"], "count", "hidden" }], "liveImported": true }`. Imported from the
+  `key` lines the first time the take opens; unknown values read as the defaults and are kept. Details in
+  `2026-11-19-keypress-overlay-design.md`.
 
 ## Technical calls (Claude's, open to correction)
 
