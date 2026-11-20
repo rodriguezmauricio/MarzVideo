@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { clickSettings, cursorKind, cursorSections, cursorSize } from "./cursor";
+import { clickSettings, cursorKind, cursorLiveImported, cursorSections, cursorSize } from "./cursor";
 import { parseEvents } from "./events";
 import { parseProject, serializeProject } from "./project";
 
@@ -78,5 +78,29 @@ describe("cursorShape events", () => {
       { tUs: 10, type: "cursorShape", shape: "other", px: 32 },
       { tUs: 20, type: "cursorShape", shape: "ibeam", px: 32 },
     ]);
+  });
+});
+
+describe("cursorHidden events (live hide cursor)", () => {
+  const head = '{"type":"header","version":1,"source":{"width":1920,"height":1080,"fps":60},"startedAt":"2026-11-19T00:00:00Z"}';
+  test("parses on and off lines; odd ones are skipped", () => {
+    const { events } = parseEvents(
+      [
+        head,
+        '{"tUs":1000000,"type":"cursorHidden","hidden":true}',
+        '{"tUs":2000000,"type":"cursorHidden","hidden":"yes"}',
+        '{"tUs":3000000,"type":"cursorHidden","hidden":false}',
+      ].join("\n"),
+    );
+    expect(events).toEqual([
+      { tUs: 1_000_000, type: "cursorHidden", hidden: true },
+      { tUs: 3_000_000, type: "cursorHidden", hidden: false },
+    ]);
+  });
+  test("liveImported is read and kept on save", () => {
+    expect(cursorLiveImported(parseProject(base({ cursor: { hidden: false } })))).toBe(false);
+    const p = parseProject(base({ cursor: { hidden: false, liveImported: true } }));
+    expect(cursorLiveImported(p)).toBe(true);
+    expect(cursorLiveImported(parseProject(JSON.parse(serializeProject(p))))).toBe(true);
   });
 });

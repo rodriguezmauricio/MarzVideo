@@ -16,6 +16,10 @@ export type RecState = {
   activePreset: string | null;
   recUs: number;
   drawing: boolean;
+  /** The cursor is hidden in the video from now on (live hide cursor). The real cursor stays. */
+  cursorHidden: boolean;
+  /** The picture has the cursor in it, so it cannot be hidden (never today: the capture leaves it out). */
+  cursorBaked: boolean;
   /** The AI checklist topics and their ticks (empty: no checklist). */
   checklist: CheckItem[];
   /** Why topics cannot tick by listening ("No microphone"), or null. */
@@ -23,7 +27,7 @@ export type RecState = {
 };
 /** One checklist topic (checklist.rs `CheckItem`); `atUs` is recording time, null while open. */
 export type CheckItem = { id: string; text: string; atUs: number | null; by: string | null };
-export const IDLE: RecState = { recording: false, paused: false, muted: false, mic: false, activePreset: null, recUs: 0, drawing: false, checklist: [], checklistNote: null };
+export const IDLE: RecState = { recording: false, paused: false, muted: false, mic: false, activePreset: null, recUs: 0, drawing: false, cursorHidden: false, cursorBaked: false, checklist: [], checklistNote: null };
 /** A finished live stroke as the engine logs it: points and width in physical pixels from the monitor's top-left. */
 export type LiveStroke = { tool: string; color: string; width: number; points: [number, number][]; text?: string };
 /** One live drawing change (recording.rs `DrawOpDto`). */
@@ -72,6 +76,8 @@ export interface RecorderApi {
   hits(rects: PxRect[], grab: boolean): void;
   /** Enter (true), leave (false) or toggle (undefined) draw mode while recording (Ctrl+Shift+D). */
   toggleDraw(on?: boolean): Promise<void>;
+  /** Hide (true), show (false) or toggle the cursor in the video (a `cursorHidden` line; the real cursor stays). */
+  toggleCursor(hidden?: boolean): Promise<void>;
   /** Log a live drawing change (engine side: only in draw mode). */
   drawOp(op: DrawOp): void;
   /** Start dragging the bar window (a press on its empty parts). */
@@ -144,6 +150,7 @@ function tauriApi(): RecorderApi {
     checklistAi: (prompt, schema) => invoke<string>("checklist_ai", { prompt, schema }),
     onChecklistWords: (cb) => unlistenLater(listen<{ words: LiveWord[] }>("checklist://words", (e) => cb(e.payload.words))),
     toggleDraw: (on) => invoke<void>("toggle_draw", { on: on ?? null }),
+    toggleCursor: (hidden) => invoke<void>("toggle_cursor", { hidden: hidden ?? null }),
     drawOp: (op) => void invoke("draw_op", { op }).catch(() => undefined),
     stop: () => invoke<string>("stop_recording").then(() => undefined),
     cameraPreview: (on) =>
@@ -185,6 +192,8 @@ const FAKE_RECORDING: RecState = {
   activePreset: "p1",
   recUs: 161_000_000,
   drawing: false,
+  cursorHidden: false,
+  cursorBaked: false,
   checklist: [],
   checklistNote: null,
 };
@@ -201,10 +210,11 @@ function fakeApi(): RecorderApi {
   const p = params();
   const error = p.get("error");
   const record = new EventTarget();
-  // `?fake&state=recording&draw` starts in draw mode (design check of the tool strip).
+  // `?fake&state=recording&draw` starts in draw mode (design check of the tool strip); `&hidden` with the
+  // cursor hidden, `&baked` with a cursor in the picture.
   let rec: RecState =
     p.get("state") === "recording"
-      ? { ...FAKE_RECORDING, drawing: p.has("draw"), checklist: p.has("checklist") ? FAKE_CHECKLIST : [], checklistNote: p.get("note") }
+      ? { ...FAKE_RECORDING, drawing: p.has("draw"), cursorHidden: p.has("hidden"), cursorBaked: p.has("baked"), checklist: p.has("checklist") ? FAKE_CHECKLIST : [], checklistNote: p.get("note") }
       : IDLE;
   const states = new EventTarget();
   const set = async (patch: Partial<RecState>) => {
@@ -259,6 +269,7 @@ function fakeApi(): RecorderApi {
     checklistAi: () => Promise.reject({ kind: "notInstalled" }),
     onChecklistWords: () => () => undefined,
     toggleDraw: (on) => set({ drawing: on ?? !rec.drawing }),
+    toggleCursor: (hidden) => (rec.cursorBaked ? Promise.resolve() : set({ cursorHidden: hidden ?? !rec.cursorHidden })),
     drawOp: () => undefined,
     stop: async () => undefined,
     cameraPreview: async () => undefined,

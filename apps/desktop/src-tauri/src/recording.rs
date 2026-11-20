@@ -142,6 +142,11 @@ pub struct RecState {
     pub rec_us: i64,
     /// Draw mode is on: the overlay takes the mouse and the keyboard (Ctrl+Shift+D).
     pub drawing: bool,
+    /// The cursor is hidden in the video from now on (live hide cursor, Ctrl+Shift+H). The real cursor stays.
+    pub cursor_hidden: bool,
+    /// The picture has the cursor in it, so it cannot be hidden. Always false today: the capture
+    /// records without the cursor (`source.cursor` "layer").
+    pub cursor_baked: bool,
     /// The AI checklist topics and their ticks (empty: no checklist).
     pub checklist: Vec<crate::checklist::CheckItem>,
     /// Why the topics cannot tick by listening ("No microphone"), or None.
@@ -163,6 +168,13 @@ pub enum DrawOpDto {
 #[tauri::command]
 pub fn toggle_draw(app: tauri::AppHandle, on: Option<bool>) -> Result<(), String> {
     imp::draw_mode(&app, on)
+}
+
+/// Hide (true), show (false) or toggle (None) the cursor in the video while recording. Logged as a
+/// `cursorHidden` line; the real cursor and the capture do not change.
+#[tauri::command]
+pub fn toggle_cursor(app: tauri::AppHandle, hidden: Option<bool>) -> Result<(), String> {
+    imp::hide_cursor(&app, hidden)
 }
 
 /// Log a live drawing change (only in draw mode; points are moved from monitor to screen pixels).
@@ -403,6 +415,8 @@ mod imp {
         layout: &'static str,
         /// Draw mode is on.
         drawing: bool,
+        /// Live hide cursor state (starts at the setup's Hide cursor toggle).
+        cursor_hidden: bool,
         checklist: Vec<crate::checklist::CheckItem>,
         checklist_note: Option<String>,
     }
@@ -456,6 +470,8 @@ mod imp {
             active_preset: l.active.clone(),
             rec_us: p.rec_us,
             drawing: l.drawing,
+            cursor_hidden: l.cursor_hidden,
+            cursor_baked: false,
             checklist: l.checklist.clone(),
             checklist_note: l.checklist_note.clone(),
         }
@@ -524,6 +540,9 @@ mod imp {
             Hotkey::Check => {
                 let _ = checklist_tick(app, None, None, "hand");
             }
+            Hotkey::HideCursor => {
+                let _ = hide_cursor(app, None);
+            }
         }
     }
 
@@ -571,6 +590,7 @@ mod imp {
         let attempt = st.attempts.fetch_add(1, Ordering::SeqCst) + 1;
         lock(&st.slot).begin_start(attempt)?;
         let topics = plan.checklist.clone();
+        let cursor_hidden = plan.cursor_hidden;
         let (session, presets, mic) = match open_session(app, attempt, plan) {
             Ok(s) => s,
             Err(e) => {
@@ -595,7 +615,7 @@ mod imp {
             _ => None,
         };
         let checklist = crate::checklist::items_of(&topics);
-        let early = lock(&st.slot).attach(attempt, Live { session, presets, active: None, mic, layout: LAYOUTS[0], drawing: false, checklist, checklist_note });
+        let early = lock(&st.slot).attach(attempt, Live { session, presets, active: None, mic, layout: LAYOUTS[0], drawing: false, cursor_hidden, checklist, checklist_note });
         if let Some((live, msg)) = early {
             // The engine failed between its start and here: handle it as any failure.
             after_failure(app, live, msg);
@@ -845,6 +865,18 @@ mod imp {
         Ok(())
     }
 
+    /// Hide or show the cursor in the video (None toggles). Only a change is logged; works while
+    /// paused (the line gets the pause time).
+    pub fn hide_cursor(app: &AppHandle, to: Option<bool>) -> Result<(), String> {
+        with_live(app, |l| {
+            let hidden = to.unwrap_or(!l.cursor_hidden);
+            if hidden != l.cursor_hidden {
+                l.session.cursor_hidden(hidden);
+                l.cursor_hidden = hidden;
+            }
+        })
+    }
+
     /// Log a drawing change, only while draw mode is on.
     pub fn draw_op(app: &AppHandle, op: DrawOpDto) -> Result<(), String> {
         let st = state(app);
@@ -916,6 +948,9 @@ mod imp {
         Err(NOT_RECORDING.into())
     }
     pub fn draw_op(_app: &AppHandle, _op: DrawOpDto) -> Result<(), String> {
+        Err(NOT_RECORDING.into())
+    }
+    pub fn hide_cursor(_app: &AppHandle, _to: Option<bool>) -> Result<(), String> {
         Err(NOT_RECORDING.into())
     }
     pub fn checklist_tick(_app: &AppHandle, _id: Option<&str>, _at_us: Option<i64>, _by: &str) -> Result<(), String> {

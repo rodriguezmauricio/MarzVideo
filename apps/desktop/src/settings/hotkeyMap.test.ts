@@ -11,7 +11,7 @@ const ev = (code: string, mods: { ctrl?: boolean; alt?: boolean; shift?: boolean
 
 describe("hotkey map", () => {
   it("has the 20 recorder hotkeys with distinct valid defaults", () => {
-    expect(ACTIONS).toHaveLength(20);
+    expect(ACTIONS).toHaveLength(21);
     for (const a of ACTIONS) expect(comboProblem(a.id, a.combo, DEFAULT_BINDINGS)).toBeNull();
   });
 

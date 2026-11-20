@@ -1,11 +1,14 @@
 import {
   clickSettings,
+  cursorKind,
+  cursorLiveImported,
   cursorSections,
   cursorSize,
   rawCursorSections,
   type ClickSettings,
   type CursorSection,
   type CursorSize,
+  type MarzEvent,
   type Project,
 } from "@marz/format";
 import type { Command } from "./commands";
@@ -83,4 +86,38 @@ export const setClicks =
     if (next.on === cur.on && next.style === cur.style && next.color === cur.color && next.size === cur.size) return p;
     const clicks = { ...p.edits.clicks, effect: next.on ? next.style : "none", style: next.style, color: next.color, size: next.size };
     return { ...p, edits: { ...p.edits, clicks } };
+  };
+
+/** Turn the live hide cursor presses (`cursorHidden` lines) into Cursor lane blocks, once per project
+ *  (`edits.cursor.liveImported`). The live state starts at the whole-video setting (the setup bar's
+ *  Hide cursor toggle); every stretch where it differs becomes a block with that `hide`, the video's
+ *  click effects copied in. A stretch still open at Stop runs to the end; repeats are ignored; a
+ *  baked cursor gets no blocks. Returns `p` when there is nothing to mark. */
+export const importLiveCursor =
+  (events: MarzEvent[]): Command =>
+  (p) => {
+    if (cursorLiveImported(p)) return p;
+    const D = p.durationUs;
+    const lines = events
+      .filter((e): e is Extract<MarzEvent, { type: "cursorHidden" }> => e.type === "cursorHidden" && e.tUs >= 0 && e.tUs < D)
+      .sort((a, b) => a.tUs - b.tUs);
+    if (lines.length === 0) return p;
+    const base = p.edits.cursor.hidden;
+    const clicks = clickSettings(p).on;
+    const stretches: { startUs: number; endUs: number; hide: boolean }[] = [];
+    let state = base;
+    let since = 0;
+    for (const e of [...lines, { tUs: D, hidden: base }]) {
+      if (e.hidden === state) continue;
+      if (state !== base) stretches.push({ startUs: since, endUs: e.tUs, hide: state });
+      state = e.hidden;
+      since = e.tUs;
+    }
+    const cursor: Project["edits"]["cursor"] = { ...p.edits.cursor, liveImported: true };
+    let out: Project = { ...p, edits: { ...p.edits, cursor } };
+    if (cursorKind(p) === "baked") return out;
+    stretches.forEach((s, i) => {
+      out = addCursorSection({ id: `live-cursor-${i + 1}`, ...s, clicks })(out);
+    });
+    return out;
   };

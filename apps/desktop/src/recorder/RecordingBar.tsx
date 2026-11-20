@@ -1,5 +1,5 @@
 // The bar while recording: rec square and timer, Pause, Mute mic with meter, one button per zoom
-// preset, Zoom out, Stop. DESIGN-SYSTEM.md section 6 "Recorder: bar WHILE recording", mockup
+// preset, Zoom out, Draw, Hide cursor, Stop. DESIGN-SYSTEM.md section 6 "Recorder: bar WHILE recording", mockup
 // Recorder-Recording.dc.html. Every button calls the same Rust function as its global hotkey.
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Icon } from "../components/Icon";
@@ -14,6 +14,8 @@ import { formatTimer } from "./timer";
 const BAR_HEIGHTS = [8, 11, 14, 17];
 /** The bar's top edge while recording, at 1440 x 900. */
 const BAR_TOP = 716;
+/** Room kept free on each side of the bar on the monitor. */
+const BAR_GUTTER = 16;
 
 /** The bar window's content: the setup until Rust reports Recording, then the recording bar. */
 export function Bar({ placed = false }: { placed?: boolean }) {
@@ -42,6 +44,10 @@ export function RecordingBar({ placed = false }: { placed?: boolean }) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const barRef = useRef<HTMLDivElement>(null);
   const [top, setTop] = useState(0);
+  // Wider than the monitor (many presets, long names, a 1280 screen): Draw and Hide cursor show
+  // their icons only, the labels move into the tooltips. Latched for the recording (nothing on the
+  // bar changes width afterwards), so it cannot flip back and forth.
+  const [compact, setCompact] = useState(false);
 
   useEffect(() => api.onLevel(setLevel), [api]);
 
@@ -61,6 +67,8 @@ export function RecordingBar({ placed = false }: { placed?: boolean }) {
     if (!wrap || !bar) return;
     const fit = () => {
       setTop(bar.offsetTop);
+      const room = (api.fake ? window.innerWidth : api.monitor.width / window.devicePixelRatio) - 2 * BAR_GUTTER;
+      if (bar.offsetWidth > room) setCompact(true);
       if (!placed) void api.fitBar(wrap.offsetWidth, wrap.offsetHeight, bar.offsetTop, true).catch(() => undefined);
     };
     fit();
@@ -177,15 +185,45 @@ export function RecordingBar({ placed = false }: { placed?: boolean }) {
             className={`rr-b${rec.drawing ? " on" : ""}`}
             aria-pressed={rec.drawing}
             disabled={rec.paused}
+            aria-label={compact ? (rec.drawing ? "Stop drawing" : "Draw on screen") : undefined}
             onClick={() => void api.toggleDraw(!rec.drawing).catch(() => undefined)}
             {...hover("draw")}
           >
             <Icon name="pen" size={16} />
-            <span className="rr-swap">
-              <span className={rec.drawing ? "off" : undefined}>Draw</span>
-              <span className={rec.drawing ? undefined : "off"}>Drawing</span>
-            </span>
+            {!compact && (
+              <span className="rr-swap">
+                <span className={rec.drawing ? "off" : undefined}>Draw</span>
+                <span className={rec.drawing ? undefined : "off"}>Drawing</span>
+              </span>
+            )}
             <Tip id="draw" text={rec.paused ? "Resume to draw" : rec.drawing ? `Stop drawing / ${keys.draw}` : `Draw on screen / ${keys.draw}`} {...tipProps} />
+          </button>
+          {/* Live hide cursor: logged for the editor; the real cursor and the capture do not change. */}
+          <button
+            type="button"
+            className={`rr-b tip-end${rec.cursorHidden && !rec.cursorBaked ? " on" : ""}`}
+            aria-pressed={rec.cursorHidden && !rec.cursorBaked}
+            disabled={rec.cursorBaked}
+            aria-label={compact ? (rec.cursorHidden && !rec.cursorBaked ? "Show cursor" : "Hide cursor") : undefined}
+            onClick={() => void api.toggleCursor(!rec.cursorHidden).catch(() => undefined)}
+            {...hover("cursor")}
+          >
+            <Icon name="cursor" size={16} />
+            {!compact && (
+              <span className="rr-swap">
+                <span className={rec.cursorHidden && !rec.cursorBaked ? "off" : undefined}>Hide cursor</span>
+                <span className={rec.cursorHidden && !rec.cursorBaked ? undefined : "off"}>Show cursor</span>
+              </span>
+            )}
+            <Tip
+              id="cursor"
+              text={
+                rec.cursorBaked
+                  ? "Cursor is in the picture. It cannot be hidden."
+                  : `${rec.cursorHidden ? "Show" : "Hide"} cursor in the video / ${keys.hideCursor}`
+              }
+              {...tipProps}
+            />
           </button>
           <i className="rb-sep" />
           <button type="button" className="rr-stop" disabled={stopping} onClick={stop} {...hover("stop")}>
