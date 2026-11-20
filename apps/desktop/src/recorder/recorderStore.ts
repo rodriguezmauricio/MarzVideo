@@ -31,6 +31,8 @@ export type Setup = {
   cameraOn: boolean;
   /** The AI checklist as typed: one topic per line. */
   checklist: string;
+  /** Log shortcuts (key combos and named keys, never typed text) into events.jsonl. Off by default. */
+  logKeys: boolean;
 };
 
 export const MAX_PRESETS = 9;
@@ -52,6 +54,7 @@ export function defaultSetup(m: Monitor): Setup {
     cameraId: null,
     cameraOn: false,
     checklist: "",
+    logKeys: false,
   };
 }
 
@@ -94,6 +97,8 @@ export function loadSetup(storage: Storage, m: Monitor): Setup {
       cameraId: typeof o.cameraId === "string" ? o.cameraId : null,
       cameraOn: o.cameraOn === true,
       checklist: typeof o.checklist === "string" ? o.checklist : "",
+      // Missing in setups saved before the option existed: the Settings default (off unless he turned it on).
+      logKeys: typeof o.logKeys === "boolean" ? o.logKeys : fallback.logKeys,
     };
   } catch {
     return fallback;
@@ -148,6 +153,7 @@ const pick = (s: Setup): Setup => ({
   cameraId: s.cameraId,
   cameraOn: s.cameraOn,
   checklist: s.checklist,
+  logKeys: s.logKeys,
 });
 
 export const useRecorder = create<State>((set, get) => ({
@@ -185,6 +191,8 @@ export type RecordOptions = {
   presets: Preset[];
   /** The AI checklist topics (recording.rs `RecordOptionsDto.checklist`). */
   checklist: string[];
+  /** Log shortcuts (recording.rs `RecordOptionsDto.log_keys`). */
+  logKeys: boolean;
 };
 
 /** The session preset id for a setup preset ("1" -> "p1"); Ctrl+n zooms into "pn". */
@@ -206,5 +214,6 @@ export function recordOptions(s: Setup, m: Monitor): RecordOptions {
       .sort((a, b) => a.id.localeCompare(b.id))
       .map((p) => ({ id: sessionPresetId(p.id), name: p.name, rect: lockAspect(p.rect, OUTPUT_ASPECT, source) })),
     checklist: splitTopics(s.checklist),
+    logKeys: s.logKeys,
   };
 }

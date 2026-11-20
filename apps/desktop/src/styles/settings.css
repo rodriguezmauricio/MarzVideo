@@ -54,7 +54,7 @@
 .st-meter { display: flex; gap: 2px; align-items: center; }
 .st-meter i { width: 5px; background: var(--thumb-line); }
 .st-meter i.lit { background: var(--accent); }
-.st-tog { display: flex; align-items: center; gap: 10px; }
+.st-tog { display: flex; align-items: center; gap: 10px; white-space: nowrap; flex: none; }
 .st-tog:disabled { color: var(--faint); cursor: default; }
 .st-tg { position: relative; width: 34px; height: 18px; border: 1px solid var(--paper); flex: none; }
 .st-tg > i { position: absolute; top: 2px; left: 2px; width: 12px; height: 12px; background: var(--paper); }

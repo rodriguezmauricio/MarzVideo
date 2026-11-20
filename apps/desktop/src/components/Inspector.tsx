@@ -4,8 +4,9 @@ import { LookBlock } from "../looks/LookBlock";
 import { hasChecklist } from "@marz/format";
 import { ChecklistPanel } from "../checklist/ChecklistPanel";
 import { CursorBlock, CursorInspector } from "./CursorPanel";
+import { KeysBlock, KeysInspector } from "./KeysPanel";
 import { useEffect, useState } from "react";
-import { aiEdits, BORDER_COLOR_NAMES, cursorKind, cursorSections, drawingStrokes, STROKE_COLORS, strokeWidths, type Stroke, type StrokeColor, cameraBorder, cameraEdits, cameraScenes, captionEdits, LAYOUT_KINDS, PIP_CORNERS, PIP_SIZES, type BorderColor, type Corner, type Cut, type PipShape, type Project, type Scene, type Word, type Zoom } from "@marz/format";
+import { aiEdits, BORDER_COLOR_NAMES, cursorKind, cursorSections, keyItems, drawingStrokes, STROKE_COLORS, strokeWidths, type Stroke, type StrokeColor, cameraBorder, cameraEdits, cameraScenes, captionEdits, LAYOUT_KINDS, PIP_CORNERS, PIP_SIZES, type BorderColor, type Corner, type Cut, type PipShape, type Project, type Scene, type Word, type Zoom } from "@marz/format";
 import { setCaptionHidden, setCaptionText, updateCamera, updateCut, updateScene, updateStroke, updateZoom, type StrokePatch } from "@marz/timeline";
 import { setKind, setPace } from "../ai/aiActions";
 import { CaptionsBlock } from "../captions/CaptionsBlock";
@@ -550,6 +551,7 @@ export function Inspector({ compact = false }: { compact?: boolean }) {
   const hold = selection?.kind === "frame" ? holds.find((h) => h.id === selection.id) : undefined;
   const stroke = selection?.kind === "drawing" ? drawingStrokes(project).find((x) => x.id === selection.id) : undefined;
   const curSec = selection?.kind === "cursor" ? cursorSections(project).find((x) => x.id === selection.id) : undefined;
+  const keyItem = selection?.kind === "key" ? keyItems(project).find((x) => x.id === selection.id) : undefined;
   const tab = useEditorStore((s) => s.inspectorTab);
   const setTab = useEditorStore((s) => s.setInspectorTab);
   const checklist = hasChecklist(project);
@@ -567,6 +569,8 @@ export function Inspector({ compact = false }: { compact?: boolean }) {
         <DrawingInspector stroke={stroke} project={project} />
       ) : curSec ? (
         <CursorInspector section={curSec} durationUs={project.durationUs} baked={cursorKind(project) === "baked"} />
+      ) : keyItem ? (
+        <KeysInspector item={keyItem} durationUs={project.durationUs} />
       ) : word ? (
         <WordInspector word={word} project={project} />
       ) : (
@@ -575,6 +579,7 @@ export function Inspector({ compact = false }: { compact?: boolean }) {
           <div className="mut insp-sub">{selection?.kind === "camera" ? "Camera bubble selected" : "Nothing selected"}</div>
           <LookBlock project={project} />
           <CursorBlock project={project} />
+          {keyItems(project).length > 0 && <KeysBlock project={project} />}
           {project.tracks.camera && <CameraBlock project={project} />}
           <VerticalBlock project={project} />
           <BackgroundBlock project={project} />

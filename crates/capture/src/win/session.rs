@@ -71,6 +71,9 @@ pub struct RecordOptions {
     /// Media Foundation camera id (`camera::list_cameras`); None records without a camera.
     pub camera_id: Option<String>,
     pub cursor_hidden: bool,
+    /// Log shortcuts and named keys (`key` lines in `events.jsonl`) under the privacy rules of
+    /// `crate::keys`. Off: the keyboard hook is not installed.
+    pub log_keys: bool,
     pub presets: Vec<ZoomPreset>,
     /// FFmpeg encoder name; None probes (nvenc, amf, qsv, then libx264).
     pub encoder: Option<String>,
@@ -425,7 +428,7 @@ impl Session {
         let clock = new_clock();
         let (warn_tx, warn_rx) = mpsc::channel::<String>();
         let (hk_tx, hk_rx) = mpsc::channel::<Hotkey>();
-        let input_sh = InputShared::new(clock.clone(), hk_tx, warn_tx.clone());
+        let input_sh = InputShared::with_keys(clock.clone(), hk_tx, warn_tx.clone(), opts.log_keys);
         p.input = Some(or_abort!(p, input::start(input_sh.clone(), true)));
         let mic_sh = opts.mic_id.as_ref().map(|_| MicShared::new(clock.clone(), warn_tx.clone()));
         if let (Some(id), Some(sh)) = (opts.mic_id.as_deref(), &mic_sh) {

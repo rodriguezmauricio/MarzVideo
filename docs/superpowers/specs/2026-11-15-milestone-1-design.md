@@ -197,6 +197,9 @@ normalized 0–1 relative to the source frame, so edits survive resolution/proxy
 - Live hide cursor (2026-11-19, `2026-11-19-live-hide-cursor-design.md`) adds `cursorHidden` lines:
   `{"tUs":..,"type":"cursorHidden","hidden":true|false}` (the cursor is hidden in the video from `tUs` on; only changes
   are logged). The editor turns them into Cursor lane blocks once and sets `edits.cursor.liveImported`.
+- Keypress log (2026-11-19, opt-in "Log shortcuts", `2026-11-19-keypress-overlay-design.md`) adds `key` lines:
+  `{"tUs":..,"type":"key","keys":["Ctrl","Shift","S"]}` (held modifiers in the order Ctrl, Alt, Shift, Win, then the key).
+  Only shortcuts and named keys (Enter, Esc, Tab, arrows...), never typed text, never in a password field.
 
 ### `project.json`
 
@@ -242,6 +245,10 @@ normalized 0–1 relative to the source frame, so edits survive resolution/proxy
 - Optional `edits.checklist` (AI checklist, 2026-11-19): `{ "items": [{ "id", "text", "atUs" (null while open),
   "by"? ("auto", "ai", "hand", "transcript", "editor") }], "liveImported": true }`. Imported from the `checklist`
   lines the first time the take opens. Details in `2026-11-19-ai-checklist-design.md`.
+- Optional `edits.keys` (keypress log, 2026-11-19): `{ "show": true, "position": "bottomLeft", "size": "M", "style": "ink",
+  "items": [{ "id", "startUs", "endUs", "keys": ["Ctrl", "S"], "count", "hidden" }], "liveImported": true }`. Imported from the
+  `key` lines the first time the take opens; unknown values read as the defaults and are kept. Details in
+  `2026-11-19-keypress-overlay-design.md`.
 
 ## Technical calls (Claude's, open to correction)
 

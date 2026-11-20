@@ -104,6 +104,10 @@ html.bar-page, html.bar-page body { height: 100%; }
 html.bar-page #root { height: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; }
 .rb-wrap.tipping { padding-top: 28px; }
 .rb-wrap.rec .rb-chip { margin-top: 4px; }
+/* The chip line: the never-captured chip, then the Log shortcuts switch (DESIGN-SYSTEM.md "Recorder: bar BEFORE recording"). */
+.rb-chips { display: flex; align-items: stretch; gap: 8px; }
+.rb-keys { color: var(--paper); gap: 10px; cursor: pointer; }
+.rb-keys:disabled { cursor: default; }
 .rec-ov.recording .rb-wrap { pointer-events: auto; }
 .rr-bar { gap: 10px; padding: 10px; }
 .rr-time { display: flex; align-items: center; gap: 10px; padding: 0 14px 0 6px; }

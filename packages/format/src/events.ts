@@ -57,6 +57,8 @@ const ChecklistEventSchema = z.discriminatedUnion("op", [
     by: z.enum(["auto", "ai", "hand"]),
   }),
 ]);
+/** A logged shortcut (opt-in): held modifiers then the key, e.g. ["Ctrl","Shift","S"]. */
+const KeySchema = z.object({ ...Base, type: z.literal("key"), keys: z.array(z.string().min(1)).min(1) });
 const PauseSchema = z.object({ ...Base, type: z.literal("pause") });
 const ResumeSchema = z.object({ ...Base, type: z.literal("resume") });
 
@@ -69,6 +71,7 @@ const KNOWN = {
   layout: LayoutEventSchema,
   draw: DrawEventSchema,
   checklist: ChecklistEventSchema,
+  key: KeySchema,
   pause: PauseSchema,
   resume: ResumeSchema,
 } as const;
@@ -82,9 +85,10 @@ export type ZoomEvent = z.infer<typeof ZoomEventSchema>;
 export type LayoutEvent = z.infer<typeof LayoutEventSchema>;
 export type DrawEvent = z.infer<typeof DrawEventSchema>;
 export type ChecklistEvent = z.infer<typeof ChecklistEventSchema>;
+export type KeyEvent = z.infer<typeof KeySchema>;
 export type PauseEvent = z.infer<typeof PauseSchema>;
 export type ResumeEvent = z.infer<typeof ResumeSchema>;
-export type MarzEvent = CursorEvent | CursorShapeEvent | CursorHiddenEvent | ClickEvent | ZoomEvent | LayoutEvent | DrawEvent | ChecklistEvent | PauseEvent | ResumeEvent;
+export type MarzEvent = CursorEvent | CursorShapeEvent | CursorHiddenEvent | ClickEvent | ZoomEvent | LayoutEvent | DrawEvent | ChecklistEvent | KeyEvent | PauseEvent | ResumeEvent;
 
 export function parseEvents(text: string): { header: EventsHeader; events: MarzEvent[] } {
   const lines = text.split(/\r?\n/).filter((l) => l.trim() !== "");

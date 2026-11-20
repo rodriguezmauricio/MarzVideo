@@ -1,6 +1,7 @@
 import { exportBackgroundImage } from "../background/backgroundImage";
 import { canvasMeasure, captionLayout, cameraLayerFor, cameraMediaUs, drawCaptions, drawFrame, frameAt, layoutAt, strokesAt, verticalLayoutAt, type CaptionBlock, type CaptionLookOpts, type CaptionStyle } from "@marz/compositor";
-import { cameraEdits, drawingStrokes, verticalEdits, type MarzEvent, type Project } from "@marz/format";
+import { drawKeysAt, loadKeysFont } from "../keys/keysDraw";
+import { cameraEdits, drawingStrokes, keyItems, verticalEdits, type MarzEvent, type Project } from "@marz/format";
 import { drawVertical } from "../vertical/drawVertical";
 import { keptSegments } from "@marz/timeline";
 import { mediaTimeUs } from "../playback/clock";
@@ -94,6 +95,7 @@ export async function exportProject(opts: ExportOptions): Promise<ExportReport> 
   const hasStrokes = drawingStrokes(project).length > 0;
   const family = strokeFamily();
   if (drawingStrokes(project).some((s) => s.tool === "text")) await loadDrawingFont();
+  if (keyItems(project).length > 0) await loadKeysFont();
   let encoder: VideoEncoder | null = null;
   let failure: Error | null = null;
   let wake: (() => void) | null = null;
@@ -175,6 +177,8 @@ export async function exportProject(opts: ExportOptions): Promise<ExportReport> 
         const d = captionLayout(caps.blocks, outputFrameUs(k, fps), caps.look, { width: preset.width, height: preset.height }, capsFrame, measure);
         if (d) drawCaptions(encCtx, d, caps.style);
       }
+      // Logged shortcuts over the whole preset picture (the vertical Follow picture draws its own).
+      if (!follow) drawKeysAt(encCtx, project, srcUs, { width: preset.width, height: preset.height }, preset.id === "vertical");
 
       while (encoder.encodeQueueSize >= MAX_ENCODE_QUEUE && !failure) await new Promise<void>((r) => (wake = r));
       await writes.room();

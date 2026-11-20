@@ -1,5 +1,6 @@
 // The bar before recording: mic picker and meter, camera picker and toggle, Computer sound, Hide cursor, Record, and the
 // "never captured" chip. DESIGN-SYSTEM.md section 6 "Recorder: bar BEFORE recording".
+import { KEYS_PRIVACY } from "../settings/rows";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ChecklistButton, ChecklistPanel } from "../checklist/ChecklistSetup";
 import { Icon } from "../components/Icon";
@@ -244,9 +245,27 @@ export function SetupBar({ placed = false }: { placed?: boolean }) {
           </button>
         </div>
       </div>
-      <div className="rb-chip">
-        <Icon name="eyeoff" size={13} />
-        Both bars are never captured in the recording
+      <div className="rb-chips">
+        <div className="rb-chip">
+          <Icon name="eyeoff" size={13} />
+          Both bars are never captured in the recording
+        </div>
+        {/* Log shortcuts sits on the chip line: the bar itself is full at 1440 wide. */}
+        <button
+          type="button"
+          className="rb-chip rb-keys"
+          role="switch"
+          aria-checked={s.logKeys}
+          disabled={phase !== "setup"}
+          data-tip={KEYS_PRIVACY}
+          onClick={() => s.update({ logKeys: !s.logKeys })}
+        >
+          <Icon name="keys" size={13} />
+          Log shortcuts
+          <i className={`rtg${s.logKeys ? " on" : ""}`}>
+            <i />
+          </i>
+        </button>
       </div>
     </div>
   );

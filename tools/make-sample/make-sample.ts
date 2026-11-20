@@ -78,6 +78,16 @@ function buildEvents(durationSec: number): string {
     [0.7, "s6", 0.69, { tool: "highlighter", color: "accent", width: 6, points: [[300, 980], [700, 980]] }],
   ];
   for (const [t, id, start, stroke] of draws) lines.push({ tUs: at(t), type: "draw", op: "add", id, startUs: at(start), stroke });
+  // Logged shortcuts (the opt-in "Log shortcuts"): a save, three Downs, Enter, then a longer combo.
+  const keys: [number, string[]][] = [
+    [0.1, ["Ctrl", "S"]],
+    [0.3, ["Down"]],
+    [0.33, ["Down"]],
+    [0.36, ["Down"]],
+    [0.45, ["Enter"]],
+    [0.8, ["Ctrl", "Shift", "P"]],
+  ];
+  for (const [t, k] of keys) lines.push({ tUs: at(t), type: "key", keys: k });
   lines.push({ tUs: at(0.45), type: "draw", op: "clear" });
   lines.push({ tUs: at(0.75), type: "draw", op: "remove", id: "s6" });
   lines.push({ tUs: at(0.85), type: "draw", op: "clear" });

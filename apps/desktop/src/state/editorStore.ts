@@ -1,8 +1,8 @@
 import { create } from "zustand";
-import { cameraScenes, checklistEdits, checklistItems, cursorSections, EMPTY_ARCHIVE_STATE, parseArchiveState, type ArchiveState, drawingStrokes, parseProject, verticalEdits, serializeProject, type CaptionPresetId, type MarzEvent, type Project, type Section, type Word } from "@marz/format";
+import { cameraScenes, checklistEdits, checklistItems, cursorSections, keyItems, EMPTY_ARCHIVE_STATE, parseArchiveState, type ArchiveState, drawingStrokes, parseProject, verticalEdits, serializeProject, type CaptionPresetId, type MarzEvent, type Project, type Section, type Word } from "@marz/format";
 import type { Levels } from "@marz/autoedit";
 import type { AiStatus } from "../ai/runAiPass";
-import { applyLook, History, importLiveChecklist, importLiveCursor, importLiveDrawings, importLiveLayouts, type Command } from "@marz/timeline";
+import { applyLook, History, importLiveChecklist, importLiveCursor, importLiveDrawings, importLiveLayouts, importLiveKeys, type Command } from "@marz/timeline";
 import { defaultLookFor } from "../looks/lookFile";
 import { looksApi } from "../looks/looksApi";
 import { createAutosave, type SaveStatus } from "../storage/autosave";
@@ -12,7 +12,7 @@ import { loadEventsOrEmpty } from "./loadEvents";
 
 export type InspectorTab = "edit" | "transcript" | "checklist";
 
-export type Selection = { kind: "zoom" | "cut" | "word" | "layout" | "cursor" | "drawing" | "frame" | "camera"; id: string } | null;
+export type Selection = { kind: "zoom" | "cut" | "word" | "layout" | "cursor" | "key" | "drawing" | "frame" | "camera"; id: string } | null;
 
 /** The AI pass as the editor shows it: status line, warning, the model download ask. */
 export type AiUi = {
@@ -158,8 +158,8 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       // Optional: no archive.json (or an unreadable one) means the raw files are here.
       const archive = await storage.readText("archive.json").then((t) => parseArchiveState(JSON.parse(t)), () => EMPTY_ARCHIVE_STATE);
       // Layout hotkeys pressed while recording become Live layout blocks the first time the take
-      // opens (not an undo step; saved with the next autosave). Live drawing strokes and live hide cursor too.
-      const imported = importLiveCursor(events)(importLiveChecklist(events)(importLiveDrawings(events)(importLiveLayouts(events)(read))));
+      // opens (not an undo step; saved with the next autosave). Live drawing strokes live hide cursor and logged shortcuts too.
+      const imported = importLiveKeys(events)(importLiveCursor(events)(importLiveChecklist(events)(importLiveDrawings(events)(importLiveLayouts(events)(read)))));
       // The default look styles a fresh take the first time it opens (scene presets design), like the
       // live imports: part of the opened state, saved by the next autosave. Never blocks the open.
       const look = await looksApi()
@@ -184,6 +184,8 @@ export const useEditorStore = create<EditorState>((set, get) => ({
             ? cameraScenes(p)
             : sel.kind === "cursor"
               ? cursorSections(p)
+              : sel.kind === "key"
+              ? keyItems(p)
               : sel.kind === "drawing"
                 ? drawingStrokes(p)
                 : sel.kind === "zoom"

@@ -85,6 +85,15 @@ describe("recordOptions", () => {
     cameraId: "cam",
     cameraOn: true,
     checklist: "  Pricing page\n\nRefunds  ",
+    logKeys: true,
+  });
+
+  it("sends Log shortcuts; an older saved setup reads it as off", () => {
+    expect(recordOptions(setup("region"), MON).logKeys).toBe(true);
+    const s = memory();
+    const { logKeys: _drop, ...old } = defaultSetup(MON);
+    s.setItem(setupKey(MON), JSON.stringify(old));
+    expect(loadSetup(s, MON).logKeys).toBe(false);
   });
 
   it("sends the checklist as topics, and reads older saved setups as empty", () => {

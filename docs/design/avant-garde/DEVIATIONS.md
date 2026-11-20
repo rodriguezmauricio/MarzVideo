@@ -173,3 +173,7 @@ Checked in Edge (Playwright) at 1440 x 900 and 1280 x 720 on `samples/demo.marz`
 - **No mockup.** DESIGN-SYSTEM.md "Recorder: bar WHILE recording" was updated first (Hide cursor button after Draw). Checked in Edge (Playwright) at 1440 x 900 and 1280 x 720 on `recorder.html?fake&bar&state=recording` (`&hidden`, `&baked`) and the editor on `samples/demo.marz` with `cursorHidden` lines.
 - **Compact bar.** With the mockup's two presets the new button made the bar 1389 px wide, past a 1280 screen. When the bar is wider than the monitor, Draw and Hide cursor drop their labels (icon only, label in the tooltip). At 1280 the bar is then 1226 px.
 - **Live cursor blocks have no Live badge.** Cursor blocks carry no `origin` field; adding one would change the format.
+## Keypress log and on-video keys (2026-11-19)
+
+- **"Log shortcuts" sits on the chip line under the setup bar**, right of "Both bars are never captured in the recording", not in the bar. The bar was already 1387 px of a 1440 px wide screen; a fifth toggle in it made it 1579 px. The mockup has no such switch. DESIGN-SYSTEM.md "Recorder: bar BEFORE recording" was updated first.
+- **Keys lane shows only in takes with logged shortcuts.** The other Later lanes show a dashed "Later" placeholder when empty; logging is opt-in, so an empty Keys lane would only add height to every take.

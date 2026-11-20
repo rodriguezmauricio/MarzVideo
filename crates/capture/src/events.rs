@@ -189,6 +189,14 @@ struct ChecklistTickLine<'a> {
 pub const CHECKLIST_BY: [&str; 3] = ["auto", "ai", "hand"];
 
 #[derive(Serialize)]
+struct KeyLine<'a> {
+    #[serde(rename = "tUs")]
+    t_us: i64,
+    r#type: &'static str,
+    keys: &'a [&'a str],
+}
+
+#[derive(Serialize)]
 struct MarkerLine {
     #[serde(rename = "tUs")]
     t_us: i64,
@@ -305,6 +313,12 @@ impl<W: Write> EventLog<W> {
     pub fn checklist_tick(&mut self, rec_us: i64, id: &str, at_us: i64, by: &str) {
         let line = ChecklistTickLine { t_us: rec_us, r#type: "checklist", op: "tick", id, at_us: at_us.clamp(0, rec_us.max(0)), by };
         self.write_line(rec_us, &line);
+    }
+
+    /// A shortcut or named key press (`crate::keys` decides what may be written): the held modifiers
+    /// in the order Ctrl, Alt, Shift, Win, then the key name.
+    pub fn key(&mut self, rec_us: i64, keys: &[&str]) {
+        self.write_line(rec_us, &KeyLine { t_us: rec_us, r#type: "key", keys });
     }
 
     pub fn pause(&mut self, rec_us: i64) {
@@ -536,6 +550,22 @@ mod tests {
                 r#"{"tUs":2100000,"type":"draw","op":"add","id":"s2","startUs":2100000,"stroke":{"tool":"text","color":"paper","width":6.0,"points":[[0.0,0.0]],"text":"Hi"}}"#,
                 r#"{"tUs":2500000,"type":"draw","op":"remove","id":"s1"}"#,
                 r#"{"tUs":3000000,"type":"draw","op":"clear"}"#,
+            ]
+        );
+    }
+
+    #[test]
+    fn key_line() {
+        let mut log = new_log((100, 50));
+        log.key(1_250_000, &["Ctrl", "Shift", "S"]);
+        log.key(1_300_000, &["Enter"]);
+        let out = text(log);
+        assert_eq!(
+            lines(&out),
+            vec![
+                HEADER_LINE,
+                r#"{"tUs":1250000,"type":"key","keys":["Ctrl","Shift","S"]}"#,
+                r#"{"tUs":1300000,"type":"key","keys":["Enter"]}"#,
             ]
         );
     }

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { cameraScenes, cursorSections, drawingStrokes, verticalEdits } from "@marz/format";
-import { updateCursorSection, updateCut, updateHold, updateScene, updateStroke, updateZoom } from "@marz/timeline";
+import { cameraScenes, cursorSections, drawingStrokes, keyComboLabel, keyItems, verticalEdits } from "@marz/format";
+import { updateCursorSection, updateKeyItem, updateCut, updateHold, updateScene, updateStroke, updateZoom } from "@marz/timeline";
 import { frameLabels } from "../vertical/VerticalPanels";
 import { aimPathFor } from "../vertical/aimPath";
 import { MIN_US } from "../state/actions";
@@ -16,7 +16,7 @@ import { MAIN_TRACK, packRows, rowGeometry } from "./mainTrack";
 /** Roughly how wide a 10px mono label is, to hide labels that would not fit (micro type). */
 const labelPx = (text: string, ai: boolean) => text.length * 7 + (ai ? 26 : 0) + 8;
 
-type Kind = "zoom" | "cut" | "layout" | "cursor" | "drawing" | "frame";
+type Kind = "zoom" | "cut" | "layout" | "cursor" | "key" | "drawing" | "frame";
 type Mode = "move" | "start" | "end";
 type Range = { startUs: number; endUs: number };
 type Drag = { kind: Kind; id: string; mode: Mode; startX: number; orig: Range };
@@ -76,6 +76,9 @@ export function Timeline({ expanded, onToggleLanes }: { expanded: boolean; onTog
   const events = useEditorStore((s) => s.events);
   const strokes = drawingStrokes(project);
   const curSecs = cursorSections(project);
+  const keyBlocks = keyItems(project);
+  // The Keys lane shows only in takes with logged shortcuts (an opt-in recording option).
+  const laterLanes = keyBlocks.length > 0 ? [...LATER_LANES, "Keys"] : LATER_LANES;
   const width = timelineWidthPx(viewport, zoomFactor);
   const pps = width / (D / 1e6);
   const x = (us: number) => usToPx(us, pps);
@@ -110,6 +113,12 @@ export function Timeline({ expanded, onToggleLanes }: { expanded: boolean; onTog
     seek(clamp(pxToUs(clientX - left, pps), 0, D));
   };
 
+  /** A click on a block outside the playhead moves the playhead into it, so the preview shows it. */
+  const seekInto = (r: Range) => {
+    const ph = useEditorStore.getState().playheadUs;
+    if (ph < r.startUs || ph >= r.endUs) seek(r.startUs + Math.min(500_000, (r.endUs - r.startUs) / 2));
+  };
+
   const snapTargets = (skip: { kind: Kind; id: string }) => {
     const t = [0, D, playheadUs];
     for (const z of project.edits.zooms) if (!(skip.kind === "zoom" && skip.id === z.id)) t.push(z.startUs, z.endUs);
@@ -118,6 +127,7 @@ export function Timeline({ expanded, onToggleLanes }: { expanded: boolean; onTog
     if (vertical) for (const h of holds) if (!(skip.kind === "frame" && skip.id === h.id)) t.push(h.startUs, h.endUs);
     for (const st of strokes) if (!(skip.kind === "drawing" && skip.id === st.id)) t.push(st.startUs, st.endUs);
     for (const cs of curSecs) if (!(skip.kind === "cursor" && skip.id === cs.id)) t.push(cs.startUs, cs.endUs);
+    for (const k of keyBlocks) if (!(skip.kind === "key" && skip.id === k.id)) t.push(k.startUs, k.endUs);
     return t;
   };
 
@@ -164,6 +174,8 @@ export function Timeline({ expanded, onToggleLanes }: { expanded: boolean; onTog
         ? updateHold(d.id, patch)
         : d.kind === "cursor"
           ? updateCursorSection(d.id, patch)
+          : d.kind === "key"
+          ? updateKeyItem(d.id, patch)
           : d.kind === "layout"
             ? updateScene(d.id, patch)
             : d.kind === "drawing"
@@ -203,7 +215,7 @@ export function Timeline({ expanded, onToggleLanes }: { expanded: boolean; onTog
   const cam = project.tracks.camera;
   /** A Later lane that this recording fills: computer sound, or the camera. */
   const real = (name: string) =>
-    (name === "System audio" && !!sys) || ((name === "Camera" || name === "Layout") && !!cam) || (name === "Captions" && hasWords) || (name === "Drawing" && strokes.length > 0);
+    (name === "System audio" && !!sys) || ((name === "Camera" || name === "Layout") && !!cam) || (name === "Captions" && hasWords) || (name === "Drawing" && strokes.length > 0) || (name === "Keys" && keyBlocks.length > 0);
   const nAuto = project.edits.zooms.filter((z) => z.origin === "auto").length;
   const nOwn = project.edits.zooms.length - nAuto;
   const nAi = project.edits.zooms.filter((z) => z.origin === "ai").length + project.edits.cuts.filter((c) => c.origin === "ai").length;
@@ -259,6 +271,7 @@ export function Timeline({ expanded, onToggleLanes }: { expanded: boolean; onTog
     ...project.edits.zooms.map((z): MainItem => ({ kind: "zoom", id: z.id, range: z, cls: z.origin === "auto" ? "blk-sug" : "blk-zoom", label: labels.get(z.id) ?? "Zoom", ai: z.origin === "ai" })),
     ...(cam ? scenes.map((sc): MainItem => ({ kind: "layout", id: sc.id, range: sc, cls: `blk-lay${sc.origin === "live" ? " live" : ""}`, label: LAYOUT_LABEL[sc.layout] })) : []),
     ...curSecs.map((cs): MainItem => ({ kind: "cursor", id: cs.id, range: cs, cls: "blk-cur", label: cursorBlockLabel(cs) })),
+    ...keyBlocks.map((k): MainItem => ({ kind: "key", id: k.id, range: k, cls: `blk-key${k.hidden ? " hid" : ""}`, label: keyComboLabel(k), onDown: () => seekInto(k) })),
     ...strokes.map((st): MainItem => ({
       kind: "drawing", id: st.id, range: st, cls: "blk-draw", label: STROKE_LABEL[st.tool], color: st.color,
       // The playhead moves into the stroke so the preview shows it.
@@ -369,7 +382,7 @@ export function Timeline({ expanded, onToggleLanes }: { expanded: boolean; onTog
           <div className="lb" style={{ height: rows.zoom }}>Zoom</div>
           {vertical && <div className="lb" style={{ height: rows.later }}>Vertical</div>}
           <div className="lb" style={{ height: rows.later }}>Cursor</div>
-          {LATER_LANES.map((name) =>
+          {laterLanes.map((name) =>
             real(name) ? (
               <div key={name} className="lb" style={{ height: rows.later }}>{name}</div>
             ) : (
@@ -480,7 +493,7 @@ export function Timeline({ expanded, onToggleLanes }: { expanded: boolean; onTog
                 );
               })}
             </div>
-            {LATER_LANES.map((name) =>
+            {laterLanes.map((name) =>
               name === "System audio" && sys ? (
                 // The computer's sound keeps the System audio lane's place and height.
                 <div key={name} className="tk" style={{ height: rows.later }}>
@@ -549,6 +562,38 @@ export function Timeline({ expanded, onToggleLanes }: { expanded: boolean; onTog
                         <i className="g r" />
                         {handle("drawing", st.id, "start", st, w)}
                         {handle("drawing", st.id, "end", st, w)}
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : name === "Keys" && keyBlocks.length > 0 ? (
+                // Logged shortcuts (DESIGN-SYSTEM.md "Keys lane"): the layout block's geometry, paper fill; hidden ones dashed.
+                <div key={name} className="tk" style={{ height: rows.later }} data-testid="keys-lane">
+                  {keyBlocks.map((k) => {
+                    const r = rangeOf("key", k.id, k);
+                    const sel = selection?.kind === "key" && selection.id === k.id;
+                    const w = Math.max(4, x(r.endUs - r.startUs));
+                    const pad = rows.later > 30 ? 6 : 3;
+                    const label = keyComboLabel(k);
+                    return (
+                      <div
+                        key={k.id}
+                        data-testid={`key-${k.id}`}
+                        onPointerDown={(e) => {
+                          onBlockDown(e, "key", k.id, "move", k);
+                          seekInto(k);
+                        }}
+                        onPointerMove={onBlockMove}
+                        onPointerUp={onBlockUp}
+                        className={`blk blk-key${k.hidden ? " hid" : ""}${sel ? " sel" : ""}`}
+                        style={{ left: x(r.startUs), width: w, top: pad, height: rows.later - 2 * pad }}
+                        title={label}
+                      >
+                        <i className="g l" />
+                        {w >= labelPx(label, false) + 16 && <span>{label}</span>}
+                        <i className="g r" />
+                        {handle("key", k.id, "start", k, w)}
+                        {handle("key", k.id, "end", k, w)}
                       </div>
                     );
                   })}
