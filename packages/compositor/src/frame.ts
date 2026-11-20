@@ -53,7 +53,7 @@ export function frameAt(
     const inner = framedBox(project, box, out);
     const f = opts?.fill ? null : containRect(srcW, srcH, inner);
     into = f ? { x: f.dx, y: f.dy, w: f.dw, h: f.dh } : inner;
-    background = { style: bg.style, frame: into, radius: bg.radius, shadow: bg.shadow };
+    background = { style: bg.style, gradient: bg.gradient, frame: into, radius: bg.radius, shadow: bg.shadow };
   }
   const dstRect = containRect(srcRect.sw, srcRect.sh, into);
 

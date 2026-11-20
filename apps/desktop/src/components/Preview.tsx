@@ -15,6 +15,7 @@ import { readFirstFrameUs } from "../playback/firstFrame";
 import { screenErrorText } from "../playback/screenError";
 import { mmss } from "./timecode";
 import { tokenColors } from "./cameraColors";
+import { useBackgroundImage } from "../background/backgroundImage";
 import { ZoomOverlay } from "./ZoomOverlay";
 import { PathOverlay, usePathEditing } from "../camera/PathOverlay";
 import { CameraOverlay, useCameraDraft } from "./CameraOverlay";
@@ -133,9 +134,12 @@ export function Preview() {
   const blocks = useMemo(() => captionBlocks(project, words, look), [project, words, look]);
   const style = useRef<CaptionStyle | null>(null);
 
+  // Image background: decoded once per file, redrawn when it arrives.
+  const bgImage = useBackgroundImage(project, storage).image;
+
   // Latest values for the animation loop without restarting it.
-  const live = useRef({ project, segs, editing: false, blocks, look, vertical, strokeId: null as string | null });
-  live.current = { project, segs, editing: !!editingZoom && !vertical, blocks, look, vertical, strokeId: editingStroke?.id ?? null };
+  const live = useRef({ project, segs, editing: false, blocks, look, vertical, strokeId: null as string | null, bgImage: null as ImageBitmap | null });
+  live.current = { project, segs, editing: !!editingZoom && !vertical, blocks, look, vertical, strokeId: editingStroke?.id ?? null, bgImage };
 
   /** The project as the vertical preview shows it: with the aim being dragged applied. */
   const shownVertical = (p: Project): Project => {
@@ -161,7 +165,7 @@ export function Preview() {
     }
     const camera = camVideo && camVideo.readyState >= 2 ? { source: camVideo, size: { width: camVideo.videoWidth, height: camVideo.videoHeight } } : null;
     const drawings = { items: visibleStrokes(p, srcUs, strokeId), colors: tokenColors(), family: strokeFamily() };
-    const { crop } = drawVertical(ctx, { project: p, events, srcUs, screen: video, camera, colors: tokenColors(), captions, drawings });
+    const { crop } = drawVertical(ctx, { project: p, events, srcUs, screen: video, camera, colors: tokenColors(), captions, drawings, backdropImage: live.current.bgImage });
     lastCrop.current = crop;
     const aim = aimCanvasRef.current;
     const actx = aim?.getContext("2d");
@@ -210,7 +214,7 @@ export function Preview() {
         : null;
     const { strokeId } = live.current;
     const drawings = editing ? null : { items: visibleStrokes(p, srcUs, strokeId), colors: tokenColors(), family: strokeFamily() };
-    drawFrame(ctx, video, frameAt(shown, events, srcUs, lay?.screen), p.output, camera, tokenColors(), drawings);
+    drawFrame(ctx, video, frameAt(shown, events, srcUs, lay?.screen), p.output, camera, tokenColors(), drawings, live.current.bgImage);
     // Captions: the same layout and drawing as the export (DESIGN-SYSTEM.md "Captions in the video").
     const { blocks: bl, look: lk, segs: sg } = live.current;
     const tOut = bl.length ? sourceToOutput(sg, srcUs) : null;
@@ -277,6 +281,7 @@ export function Preview() {
   useEffect(draw, [project, editingZoom?.id, editingStroke?.id, blocks, look, vertical]);
   // A stroke dragged on the preview is drawn where it is going.
   useEffect(() => useStrokeDraft.subscribe(() => draw()), []);
+  useEffect(() => draw(), [bgImage]);
   // So is the camera bubble.
   useEffect(() => useCameraDraft.subscribe(() => draw()), []);
   // Text strokes use the display font; draw again once it loaded.

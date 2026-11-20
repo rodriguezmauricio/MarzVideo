@@ -25,8 +25,8 @@ describe("backgroundPx", () => {
     expect(backgroundPx(raw(), OUT)).toBeNull();
   });
   it("margin, radius and shadow scale with the output's short side", () => {
-    expect(backgroundPx(raw(on()), OUT)).toEqual({ style: "grid", pad: 64, radius: 16, shadow: { blur: 40, offsetY: 12, alpha: 0.5 } });
-    expect(backgroundPx(raw(on({ padding: "L", corners: "square", shadow: false })), { width: 1280, height: 720 })).toEqual({ style: "grid", pad: 64, radius: 0, shadow: null });
+    expect(backgroundPx(raw(on()), OUT)).toEqual({ style: "grid", gradient: "ink-accent", pad: 64, radius: 16, shadow: { blur: 40, offsetY: 12, alpha: 0.5 } });
+    expect(backgroundPx(raw(on({ padding: "L", corners: "square", shadow: false })), { width: 1280, height: 720 })).toEqual({ style: "grid", gradient: "ink-accent", pad: 64, radius: 0, shadow: null });
     expect(backgroundPx(raw(on({ padding: "S" })), VERTICAL_SIZE)!.pad).toBe(40);
   });
 });

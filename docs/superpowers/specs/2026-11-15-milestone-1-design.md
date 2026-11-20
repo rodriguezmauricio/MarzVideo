@@ -149,6 +149,11 @@ bubble sits in `corner` (which still picks the side column's side). Older builds
   (optional) `{ "style": "off" | "ink" | "paper" | "glow" | "grid", "padding": "S" | "M" | "L", "corners": "square" | "round",
   "shadow": bool }`. Missing = off (the screen fills the frame, as before); a missing or unknown field reads as its default
   (padding M, corners round, shadow on) and the raw object is kept on save. One background per project.
+  Image, blur and gradient (2026-11-19, design `2026-11-19-background-image-blur-design.md`): `style` also takes `"gradient" | "image" |
+  "blur"`; optional `"gradient": "ink-accent" | "ink-paper" | "paper-accent"` (missing or unknown = ink-accent) and `"image":
+  "assets/<name>.jpg|jpeg|png"` (a path inside the project folder; anything else reads as no image). An older build reads the new styles as
+  off. New optional folder `assets/` in the `.marz` folder, written only by the app (the picked image, named `background-<8 hex of
+  SHA-256>.<ext>`); raw tracks are never touched.
 - Tolerant readers: an unknown zoom or cut `origin` reads as `"manual"`, an unknown `easing` as
   `"easeInOutCubic"`, an unknown cut `reason` as none; the original value is written back on save unless the
   editor changed that field. Older projects open as before; `version` stays 1.

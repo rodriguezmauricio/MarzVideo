@@ -1,5 +1,5 @@
 import { createReadStream, existsSync, statSync } from "node:fs";
-import { rename, writeFile } from "node:fs/promises";
+import { mkdir, rename, writeFile } from "node:fs/promises";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { resolve, sep } from "node:path";
 import type { Plugin } from "vite";
@@ -9,9 +9,17 @@ const TYPES: Record<string, string> = {
   ".wav": "audio/wav",
   ".json": "application/json",
   ".jsonl": "text/plain; charset=utf-8",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".png": "image/png",
 };
 
-/** Dev only: serves samples/<name>.marz/* at /projects/<name>/* with Range support. Only project.json is writable. */
+/** Writable besides project.json: a background image the editor copied in (design 2026-11-19-background-image-blur). */
+const ASSET_PUT = /^assets\/background-[0-9a-f]{8}\.(jpg|png)$/;
+const MAX_ASSET_BYTES = 40 * 1024 * 1024;
+
+/** Dev only: serves samples/<name>.marz/* at /projects/<name>/* with Range support. Only project.json and a
+ *  background image under assets/ are writable. */
 export function projectsPlugin(samplesDir: string): Plugin {
   return {
     name: "marz-projects",
@@ -43,6 +51,24 @@ export function projectsHandler(samplesDir: string) {
     const file = resolve(root, `${name}.marz`, rel);
     if (!file.startsWith(root + sep)) {
       res.statusCode = 403;
+      return res.end();
+    }
+
+    if (req.method === "PUT" && ASSET_PUT.test(rel)) {
+      const chunks: Buffer[] = [];
+      let size = 0;
+      for await (const c of req) {
+        size += (c as Buffer).length;
+        if (size > MAX_ASSET_BYTES) {
+          res.statusCode = 413;
+          return res.end();
+        }
+        chunks.push(c as Buffer);
+      }
+      await mkdir(resolve(file, ".."), { recursive: true });
+      await writeFile(`${file}.tmp`, Buffer.concat(chunks));
+      await rename(`${file}.tmp`, file);
+      res.statusCode = 204;
       return res.end();
     }
 

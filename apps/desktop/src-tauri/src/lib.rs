@@ -3,6 +3,7 @@
 mod ai;
 mod archive;
 mod audio;
+mod background;
 mod checklist;
 mod close;
 mod export;
@@ -46,6 +47,7 @@ pub fn run() {
             projects::write_project_json,
             projects::recover_project,
             projects::discard_project,
+            background::pick_background_image,
             thumbs::project_thumb,
             recorder::open_recorder,
             recorder::close_recorder,

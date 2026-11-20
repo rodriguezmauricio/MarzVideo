@@ -9,5 +9,7 @@ export function createTauriStorage(dir: string): ProjectStorage {
     readText: (path) => invoke<string>("read_text", { dir, path }),
     fileUrl: (path) => convertFileSrc(`${dir}${sep}${path}`),
     writeProjectJson: (text) => invoke<void>("write_project_json", { dir, text }),
+    // The dialog and the copy run in Rust (background.rs): the page never hands over a source path.
+    pickBackgroundImage: () => invoke<string | null>("pick_background_image", { dir }),
   };
 }

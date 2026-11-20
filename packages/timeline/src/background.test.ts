@@ -12,7 +12,7 @@ const base = parseProject({
 describe("setBackground", () => {
   it("turns a background on with the default options", () => {
     const p = setBackground({ style: "glow" })(base);
-    expect(backgroundEdits(p)).toEqual({ style: "glow", padding: "M", corners: "round", shadow: true });
+    expect(backgroundEdits(p)).toEqual({ style: "glow", padding: "M", corners: "round", shadow: true, gradient: "ink-accent", image: null });
     expect(p.edits.background).toEqual({ style: "glow" });
   });
 
@@ -25,5 +25,18 @@ describe("setBackground", () => {
   it("keeps fields this build cannot read", () => {
     const p = { ...base, edits: { ...base.edits, background: { style: "ink", blur: 3 } } };
     expect(setBackground({ padding: "L" })(p).edits.background).toEqual({ style: "ink", blur: 3, padding: "L" });
+  });
+});
+
+describe("setBackground with an image", () => {
+  it("sets the image and the style in one step, and a second pick of the same file changes nothing", () => {
+    const p = setBackground({ style: "image", image: "assets/background-1a2b3c4d.jpg" })(base);
+    expect(p.edits.background).toEqual({ style: "image", image: "assets/background-1a2b3c4d.jpg" });
+    expect(setBackground({ image: "assets/background-1a2b3c4d.jpg" })(p)).toBe(p);
+  });
+
+  it("picks a gradient pair", () => {
+    const p = setBackground({ style: "gradient", gradient: "ink-paper" })(base);
+    expect(backgroundEdits(p)).toMatchObject({ style: "gradient", gradient: "ink-paper" });
   });
 });
