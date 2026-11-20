@@ -1,3 +1,4 @@
+import { exportBackgroundImage } from "../background/backgroundImage";
 import { canvasMeasure, captionLayout, cameraLayerFor, cameraMediaUs, drawCaptions, drawFrame, frameAt, layoutAt, strokesAt, verticalLayoutAt, type CaptionBlock, type CaptionLookOpts, type CaptionStyle } from "@marz/compositor";
 import { cameraEdits, drawingStrokes, verticalEdits, type MarzEvent, type Project } from "@marz/format";
 import { drawVertical } from "../vertical/drawVertical";
@@ -113,6 +114,8 @@ export async function exportProject(opts: ExportOptions): Promise<ExportReport> 
   try {
     source = await createFrameSource(storage.fileUrl(project.tracks.screen.file));
     if (camShown && project.tracks.camera) camSource = await createFrameSource(storage.fileUrl(project.tracks.camera.file));
+    // Image background: decoded once; a missing file exports ink behind the frame, like the preview.
+    const backdropImage = await exportBackgroundImage(project, storage);
     await sink.begin(buildExportJob({ project, preset, projectDir: opts.projectDir, outPath: opts.outPath, cleanMic: opts.cleanMic }));
 
     encoder = new VideoEncoder({
@@ -145,7 +148,7 @@ export async function exportProject(opts: ExportOptions): Promise<ExportReport> 
           const camera = camFrame ? { source: camFrame, size: { width: camFrame.displayWidth, height: camFrame.displayHeight } } : null;
           const vcaps = caps && measure ? { ...caps, tOutUs: outputFrameUs(k, fps), measure } : null;
           const drawings = hasStrokes ? { items: strokesAt(project, srcUs), colors, family } : null;
-          drawVertical(encCtx, { project, events, srcUs, screen: frame, camera, colors, captions: vcaps, drawings, framing: "follow" });
+          drawVertical(encCtx, { project, events, srcUs, screen: frame, camera, colors, captions: vcaps, drawings, framing: "follow", backdropImage });
         } finally {
           frame.close();
           camFrame?.close();
@@ -157,7 +160,7 @@ export async function exportProject(opts: ExportOptions): Promise<ExportReport> 
         try {
           const camera = camFrame ? cameraLayerFor(project, lay, out, camFrame, { width: camFrame.displayWidth, height: camFrame.displayHeight }, colors) : null;
           const drawings = hasStrokes ? { items: strokesAt(project, srcUs), colors, family } : null;
-          drawFrame(compCtx, frame, frameAt(project, events, srcUs, lay.screen, { out }), out, camera, colors, drawings);
+          drawFrame(compCtx, frame, frameAt(project, events, srcUs, lay.screen, { out }), out, camera, colors, drawings, backdropImage);
         } finally {
           frame.close();
           camFrame?.close();

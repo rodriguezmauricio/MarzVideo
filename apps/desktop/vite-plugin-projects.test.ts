@@ -23,6 +23,20 @@ describe("dev projects middleware", () => {
     expect(readdirSync(join(root, "demo.marz"))).toEqual(["project.json"]);
   });
 
+  test("a background image PUT lands in assets/; any other file stays read-only", async () => {
+    const root = mkdtempSync(join(tmpdir(), "marz-dev-"));
+    mkdirSync(join(root, "demo.marz"));
+    const ok = put("/demo/assets/background-0a1b2c3d.png", "PNGDATA");
+    await projectsHandler(root)(ok.req as never, ok.res as never, () => {});
+    expect(ok.res.statusCode).toBe(204);
+    expect(readFileSync(join(root, "demo.marz", "assets", "background-0a1b2c3d.png"), "utf8")).toBe("PNGDATA");
+    for (const url of ["/demo/screen.mp4", "/demo/assets/other.png", "/demo/assets/background-0a1b2c3d.gif"]) {
+      const no = put(url, "x");
+      await projectsHandler(root)(no.req as never, no.res as never, () => {});
+      expect(no.res.statusCode, url).toBe(403);
+    }
+  });
+
   test("a failed write answers 500 instead of crashing the request", async () => {
     const root = mkdtempSync(join(tmpdir(), "marz-dev-"));
     const { req, res } = put("/gone/project.json", "{}");

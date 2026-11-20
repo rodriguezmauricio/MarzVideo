@@ -4,7 +4,7 @@ import type { FrameSpec } from "./frame";
 import { drawStrokes, type DrawLayer } from "./drawings";
 import type { ClickDraw } from "./cursor";
 import { drawCursorShape } from "./cursorShapes";
-import { BACKDROP_FALLBACK, paintBackdrop, type BackgroundDraw } from "./background";
+import { BACKDROP_FALLBACK, paintBackdrop, type BackdropSources, type BackgroundDraw } from "./background";
 import { roundedPath } from "./path";
 import { maskPath } from "./masks";
 
@@ -42,12 +42,13 @@ export function drawFrame(
   camera?: CameraLayer | null,
   clickColors?: ClickColors,
   drawings?: DrawLayer | null,
+  backdropImage?: CanvasImageSource | null,
 ): void {
   const { sx, sy, sw, sh } = mediaCrop(source, spec);
   const { dx, dy, dw, dh } = spec.dstRect;
   const bg = spec.background;
   if (bg) {
-    drawBackdropAndFrame(ctx, bg, out, clickColors);
+    drawBackdropAndFrame(ctx, bg, out, clickColors, { screen: source, image: backdropImage ?? null });
     ctx.save();
     roundedPath(ctx, bg.frame.x, bg.frame.y, bg.frame.w, bg.frame.h, bg.radius);
     ctx.clip();
@@ -163,9 +164,9 @@ export function drawClicks(ctx: Ctx, clicks: ClickDraw[], colors?: ClickColors):
 
 /** The backdrop over the whole output and the framed screen's shadow (an ink copy of the frame, under the
  *  picture, so only its shadow shows). */
-function drawBackdropAndFrame(ctx: Ctx, bg: BackgroundDraw, out: { width: number; height: number }, colors?: ClickColors): void {
+function drawBackdropAndFrame(ctx: Ctx, bg: BackgroundDraw, out: { width: number; height: number }, colors: ClickColors | undefined, sources: BackdropSources): void {
   const c = { ...BACKDROP_FALLBACK, ...colors };
-  paintBackdrop(ctx, bg.style, out, c);
+  paintBackdrop(ctx, { style: bg.style, gradient: bg.gradient }, out, c, sources);
   if (!bg.shadow) return;
   const { x, y, w, h } = bg.frame;
   ctx.save();

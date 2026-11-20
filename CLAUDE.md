@@ -146,6 +146,12 @@ Windows-first screen recorder + non-destructive editor (Tauri 2, Rust, React/TS)
   Four-screen intro on first start (skippable, "Show the intro again" in Settings). File settings in `settings.json` in the app
   config folder via `src-tauri/src/settings.rs` (archive folder stays in `archive-settings.json`); localStorage ones via
   `apps/desktop/src/settings/localSettings.ts`. Browser: `?settings=1`, `?onboarding=1`.
+- **Built (not merged, branch `claude/bg-image-blur-9ff3af`):** background image, blur and gradient (design
+  `docs/superpowers/specs/2026-11-19-background-image-blur-design.md`, plan `docs/superpowers/plans/2026-11-19-background-image-blur.md`).
+  Background styles Gradient (two brand tokens), Image (JPG/PNG copied to `assets/background-<hash>.<ext>` by the Rust command
+  `pick_background_image` in `src-tauri/src/background.rs`; the dev server accepts the same PUT for the sample) and Blur (the screen frame
+  blurred on a canvas 1/12 the size). Optional `edits.background.gradient` and `.image`. Checked: Edge at 1440 x 900 and 1280 x 720, browser
+  exports of both presets per style (ffprobe and frame grabs). Not checked: the Tauri app (Pick image dialog, app export).
 - **Not checked by hand yet:** the owner checks in `docs/spikes/2026-11-17-owner-checks.md` (clean 3-minute run,
   flash and beep sync, clicks, static screen, mic unplug, 60 Hz, real hotkeys), plus: open New recording once and
   look at the overlay, play an export in Windows Media Player, upload one export of each preset privately and

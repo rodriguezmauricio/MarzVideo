@@ -1,3 +1,4 @@
+import { checkImage, chooseFile } from "./pickImageFile";
 import type { ProjectStorage } from "./types";
 
 /** Browser/dev storage: the Vite dev server exposes samples/<name>.marz at /projects/<name>/. */
@@ -18,6 +19,14 @@ export function createHttpStorage(projectName: string): ProjectStorage {
         keepalive: true, // lets the final save on page close finish
       });
       if (!res.ok) throw new Error(`Could not save project.json (${res.status})`);
+    },
+    async pickBackgroundImage() {
+      const file = await chooseFile(".jpg,.jpeg,.png,image/jpeg,image/png");
+      if (!file) return null;
+      const { bytes, path } = await checkImage(file);
+      const res = await fetch(`${base}/${path}`, { method: "PUT", body: bytes as BodyInit });
+      if (!res.ok) throw new Error(`Could not copy the image (${res.status})`);
+      return path;
     },
   };
 }
