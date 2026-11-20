@@ -19,6 +19,7 @@ import {
   type AiModel,
 } from "./localSettings";
 import { AiRows, DeviceRows, Seg, Toggle } from "./rows";
+import { LookDefaultRow } from "../looks/LookDefaultRow";
 import { errorText, settingsApi, type FolderKind, type SettingsView } from "./settingsApi";
 
 const SECTIONS: { id: string; label: string; icon: IconName }[] = [
@@ -292,6 +293,7 @@ export function Settings() {
               <span className="st-head-r">Defaults for new recordings. The setup bar can still change them.</span>
             </div>
             <DeviceRows api={api} />
+            <LookDefaultRow />
           </section>
           <section className="st-sec" id="st-hotkeys">
             <div className="st-head">

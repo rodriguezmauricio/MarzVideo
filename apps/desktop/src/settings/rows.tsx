@@ -39,7 +39,7 @@ function Meter({ level }: { level: number }) {
   );
 }
 
-function Picker({ value, items, empty, label, onChange }: { value: string | null; items: { id: string; name: string }[]; empty: string; label: string; onChange: (id: string) => void }) {
+export function Picker({ value, items, empty, label, onChange }: { value: string | null; items: { id: string; name: string }[]; empty: string; label: string; onChange: (id: string) => void }) {
   const current = items.find((m) => m.id === value) ?? items[0];
   return (
     <label className="st-pick">

@@ -160,6 +160,15 @@ Windows-first screen recorder + non-destructive editor (Tauri 2, Rust, React/TS)
   `pick_background_image` in `src-tauri/src/background.rs`; the dev server accepts the same PUT for the sample) and Blur (the screen frame
   blurred on a canvas 1/12 the size). Optional `edits.background.gradient` and `.image`. Checked: Edge at 1440 x 900 and 1280 x 720, browser
   exports of both presets per style (ffprobe and frame grabs). Not checked: the Tauri app (Pick image dialog, app export).
+- **Built (not merged, branch `claude/scene-presets-02a719`):** scene presets ("looks") (design
+  `docs/superpowers/specs/2026-11-19-scene-presets-design.md`, plan `docs/superpowers/plans/2026-11-19-scene-presets.md`).
+  Project panel Look block (first): Save look stores the camera (mirror, shape incl. custom mask, size, corner or free
+  position, border, switch presets), the whole `edits.background` and both caption styles under a name; Apply writes them as
+  one undo step (scenes and Show camera stay); Delete. Settings, Devices, "Look": the default look, given to a take recorded
+  after it was picked when it first opens and nobody styled it yet. No format change: looks live in `looks.json` in the app
+  config folder (`src-tauri/src/looks.rs`), localStorage `marz.looks` in the browser. Code: `packages/timeline/src/looks.ts`,
+  `apps/desktop/src/looks`. Checked in Edge at 1440 x 900 and 1280 x 720 on the samples: save, apply, undo, default on a new
+  take, older take untouched. Not checked: the Tauri app (`looks.json` on disk).
 - **Not checked by hand yet:** the owner checks in `docs/spikes/2026-11-17-owner-checks.md` (clean 3-minute run,
   flash and beep sync, clicks, static screen, mic unplug, 60 Hz, real hotkeys), plus: open New recording once and
   look at the overlay, play an export in Windows Media Player, upload one export of each preset privately and

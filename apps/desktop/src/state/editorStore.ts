@@ -2,7 +2,9 @@ import { create } from "zustand";
 import { cameraScenes, checklistEdits, checklistItems, cursorSections, EMPTY_ARCHIVE_STATE, parseArchiveState, type ArchiveState, drawingStrokes, parseProject, verticalEdits, serializeProject, type CaptionPresetId, type MarzEvent, type Project, type Section, type Word } from "@marz/format";
 import type { Levels } from "@marz/autoedit";
 import type { AiStatus } from "../ai/runAiPass";
-import { History, importLiveChecklist, importLiveCursor, importLiveDrawings, importLiveLayouts, type Command } from "@marz/timeline";
+import { applyLook, History, importLiveChecklist, importLiveCursor, importLiveDrawings, importLiveLayouts, type Command } from "@marz/timeline";
+import { defaultLookFor } from "../looks/lookFile";
+import { looksApi } from "../looks/looksApi";
 import { createAutosave, type SaveStatus } from "../storage/autosave";
 import type { ProjectStorage } from "../storage/types";
 import { withMedia } from "../storage/withMedia";
@@ -72,6 +74,9 @@ type EditorState = {
   setCaptionPreset: (preset: CaptionPresetId) => void;
   /** Which inspector tab shows (Transcript only with a transcript, Checklist only with a checklist). */
   inspectorTab: InspectorTab;
+  /** The Look block's last line after a save, apply or the default look (cleared by the next edit). */
+  lookNote: string | null;
+  setLookNote: (note: string | null) => void;
   setInspectorTab: (tab: InspectorTab) => void;
   /** The word being fixed in place in the Transcript panel. */
   transcriptEditing: string | null;
@@ -128,6 +133,8 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     }
     set({ captionPreset });
   },
+  lookNote: null,
+  setLookNote: (lookNote) => set({ lookNote }),
   inspectorTab: "edit",
   setInspectorTab: (inspectorTab) => set({ inspectorTab }),
   transcriptEditing: null,
@@ -152,7 +159,13 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       const archive = await storage.readText("archive.json").then((t) => parseArchiveState(JSON.parse(t)), () => EMPTY_ARCHIVE_STATE);
       // Layout hotkeys pressed while recording become Live layout blocks the first time the take
       // opens (not an undo step; saved with the next autosave). Live drawing strokes and live hide cursor too.
-      const project = importLiveCursor(events)(importLiveChecklist(events)(importLiveDrawings(events)(importLiveLayouts(events)(read))));
+      const imported = importLiveCursor(events)(importLiveChecklist(events)(importLiveDrawings(events)(importLiveLayouts(events)(read))));
+      // The default look styles a fresh take the first time it opens (scene presets design), like the
+      // live imports: part of the opened state, saved by the next autosave. Never blocks the open.
+      const look = await looksApi()
+        .get()
+        .then((f) => defaultLookFor(f, read), () => null);
+      const project = look ? applyLook(look)(imported) : imported;
       // The first open of a take with a checklist topic not covered shows the Checklist tab (the flag after Stop).
       const firstCheck = !checklistEdits(read).liveImported && checklistEdits(project).liveImported === true;
       const flagChecklist = firstCheck && checklistItems(project).some((i) => i.atUs === null);
@@ -180,7 +193,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         // The "AI edit: ..." line stays until the next edit.
         const ai = get().ai;
         const clearDone = ai.status?.step === "done" || ai.status?.step === "nothing";
-        set({ project: p, selection: stillThere ? sel : null, ...(clearDone && !ai.running ? { ai: { ...ai, status: null } } : {}) });
+        set({ project: p, selection: stillThere ? sel : null, lookNote: null, ...(clearDone && !ai.running ? { ai: { ...ai, status: null } } : {}) });
         autosave?.schedule();
       });
       set({
@@ -201,6 +214,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         levels: null,
         ai: IDLE_AI,
         inspectorTab: flagChecklist ? "checklist" : "edit",
+        lookNote: look && project !== imported ? `Opened with ${look.name}, the default look.` : null,
       });
       if (project !== read) autosave.schedule();
     } catch (err) {
