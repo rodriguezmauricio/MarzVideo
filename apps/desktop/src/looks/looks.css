@@ -1,0 +1,11 @@
+/* Look block (DESIGN-SYSTEM.md Inspector, "Look block"). Tokens only. */
+.insp-look { margin-top: 18px; border-top: 1px solid var(--ink); }
+.insp-look .irow { border-top: 0; border-bottom: 1px solid var(--ink); }
+.insp-look .irow.k34 { min-height: 34px; }
+.look-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--font-mono); font-weight: 500; font-size: 11px; }
+.look-def { margin-left: 8px; font-weight: 400; }
+.look-acts { display: flex; gap: 12px; flex-shrink: 0; padding-left: 12px; }
+.look-input { display: block; width: 100%; margin-top: 12px; font-family: var(--font-mono); font-size: 11px; color: var(--ink); background: none; border: 0; border-bottom: 1px solid var(--ink); padding: 6px 0; outline-offset: 2px; }
+.look-input::placeholder { color: var(--faint-on-paper); }
+.insp-look .btns { margin-top: 12px; }
+.look-err { padding: 10px 0 0; font-size: 10px; color: var(--rec); }

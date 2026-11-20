@@ -1,5 +1,6 @@
 import { AudioBlock } from "./AudioBlock";
 import { BackgroundBlock } from "./BackgroundBlock";
+import { LookBlock } from "../looks/LookBlock";
 import { hasChecklist } from "@marz/format";
 import { ChecklistPanel } from "../checklist/ChecklistPanel";
 import { CursorBlock, CursorInspector } from "./CursorPanel";
@@ -572,6 +573,7 @@ export function Inspector({ compact = false }: { compact?: boolean }) {
         <div className="insp-scroll">
           <h2 className="insp-title">Project</h2>
           <div className="mut insp-sub">{selection?.kind === "camera" ? "Camera bubble selected" : "Nothing selected"}</div>
+          <LookBlock project={project} />
           <CursorBlock project={project} />
           {project.tracks.camera && <CameraBlock project={project} />}
           <VerticalBlock project={project} />

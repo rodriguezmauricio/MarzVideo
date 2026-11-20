@@ -7,6 +7,7 @@ mod checklist;
 mod close;
 mod export;
 mod export_copy;
+mod looks;
 mod projects;
 mod recorder;
 mod recording;
@@ -97,6 +98,8 @@ pub fn run() {
             archive::remove_raw_files,
             archive::restore_raw_files,
             settings::settings_get,
+            looks::looks_get,
+            looks::looks_set,
             settings::settings_pick_folder,
             settings::settings_reset_folder,
             settings::settings_use_drive,
